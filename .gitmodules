@@ -7,3 +7,6 @@
 [submodule "engine/3rdparty/imgui"]
 	path = engine/3rdparty/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "engine/3rdparty/spdlog"]
+	path = engine/3rdparty/spdlog
+	url = https://github.com/gabime/spdlog.git
