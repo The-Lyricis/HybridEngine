@@ -22,6 +22,7 @@ target_compile_options(${TARGET_NAME}
 # 链接依赖（是否 PUBLIC/PRIVATE 取决于对外头文件是否暴露这些库）
 target_link_libraries(${TARGET_NAME}
     PUBLIC glfw
+    PUBLIC glad
     PUBLIC imgui
 )
 # 包含目录
