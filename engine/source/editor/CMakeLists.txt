@@ -10,7 +10,7 @@ source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${EDITOR_HEADERS} ${EDITOR
 
 add_executable(${TARGET_NAME} ${EDITOR_HEADERS} ${EDITOR_SOURCES})
 
-# 让代码里能拿到“运行根目录”（你顶层定义的 BINARY_ROOT_DIR）
+# 让代码里能拿到“运行根目录”（顶层定义的 BINARY_ROOT_DIR）
 # 注意：这里会变成一个字符串宏，比如 TDA572_ROOT_DIR=".../bin"
 target_compile_definitions(${TARGET_NAME} PRIVATE TDA572_ROOT_DIR="${BINARY_ROOT_DIR}")
 
@@ -36,12 +36,12 @@ set(POST_BUILD_COMMANDS
     COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}"
 
     # 2) 把编译输出目录（exe/dll/pdb 等）复制到 bin
-    #    这样你可以直接从 ${BINARY_ROOT_DIR} 启动，不依赖 VS 的输出目录结构
+    #    这样可以直接从 ${BINARY_ROOT_DIR} 启动，不依赖 VS 的输出目录结构
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
             "${BINARY_ROOT_DIR}"
 
-    # 3) 拷贝 editor 资源（如果你有 engine/source/editor/resource）
+    # 3) 拷贝 editor 资源（如果有 engine/source/editor/resource）
     #    目标：${BINARY_ROOT_DIR}/resource
     COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}/resource"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -49,7 +49,7 @@ set(POST_BUILD_COMMANDS
             "${BINARY_ROOT_DIR}/resource"
 
     # 4) 拷贝引擎资产目录（engine/asset -> bin/asset）
-    #    ENGINE_ASSET_DIR 你在 engine 层设置为 "asset"
+    #    ENGINE_ASSET_DIR 在 engine 层设置为 "asset"
     COMMAND ${CMAKE_COMMAND} -E remove_directory
             "${BINARY_ROOT_DIR}/${ENGINE_ASSET_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
