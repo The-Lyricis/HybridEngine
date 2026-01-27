@@ -1,0 +1,12 @@
+#include <GLFW/glfw3.h>
+
+namespace Engine {
+	class EditorUI {
+	public:
+		void initialize();
+		void display();
+		bool isWindowShouldClose();
+		void cleanup();
+		GLFWwindow* window;
+	};
+}
