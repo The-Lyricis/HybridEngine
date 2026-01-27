@@ -10,7 +10,9 @@ if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
   message(FATAL_ERROR "In-source builds not allowed!")
 endif()
 
-set(ENGINE_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/engine")
-set(CMAKE_INSTALL_PREFIX "${ENGINE_ROOT_DIR}/../bin")
+set(PROJECT_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+# 让用户可通过 -DCMAKE_INSTALL_PREFIX=... 覆盖，默认放到 <repo>/bin
+set(CMAKE_INSTALL_PREFIX "${PROJECT_ROOT_DIR}/bin" CACHE PATH "Install prefix" FORCE)
+set(BINARY_ROOT_DIR "${CMAKE_INSTALL_PREFIX}")
 
 add_subdirectory(engine)

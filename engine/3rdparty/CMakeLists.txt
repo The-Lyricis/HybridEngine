@@ -7,13 +7,6 @@ if(NOT TARGET imgui)
     set_target_properties(imgui PROPERTIES FOLDER ${third_party_folder}/imgui)
 endif()
 
-if(NOT TARGET glm)
-    option(BUILD_STATIC_LIBS "" ON)
-    option(BUILD_TESTING "" OFF)
-    option(GLM_TEST_ENABLE "" OFF)
-    add_subdirectory(glm)
-    set_target_properties(glm_static PROPERTIES FOLDER ${third_party_folder}/glm)
-endif()
 
 if(NOT TARGET glfw)
     option(GLFW_BUILD_EXAMPLES "" OFF)
@@ -22,5 +15,10 @@ if(NOT TARGET glfw)
     option(GLFW_INSTALL "" OFF)
     add_subdirectory(glfw)
     set_target_properties(glfw PROPERTIES FOLDER ${third_party_folder}/glfw)
-    set_target_properties(update_mappings PROPERTIES FOLDER ${third_party_folder}/glfw)
+
+    if(TARGET update_mappings)
+        set_target_properties(update_mappings PROPERTIES FOLDER ${third_party_folder}/glfw)
+    endif()
 endif()
+
+
