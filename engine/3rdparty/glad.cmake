@@ -1,5 +1,5 @@
 # engine/3rdparty/glad.cmake
-set(glad_SOURCE_DIR_ ${CMAKE_CURRENT_LIST_DIR}/glad_generated)
+set(glad_SOURCE_DIR_ ${CMAKE_CURRENT_LIST_DIR}/glad)
 
 file(GLOB glad_c_sources CONFIGURE_DEPENDS
     "${glad_SOURCE_DIR_}/src/*.c"
