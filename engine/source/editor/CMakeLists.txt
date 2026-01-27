@@ -32,7 +32,7 @@ target_include_directories(${TARGET_NAME}
 # Post-build: 统一部署到 ${BINARY_ROOT_DIR}（目录不存在则跳过）
 # -------------------------
 
-# 1) 确保 bin 目录存在 + 拷贝编译输出到 bin
+# 1) bin 目录 + 拷贝输出
 add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -60,5 +60,3 @@ if(EXISTS "${ENGINE_ROOT_DIR}/${ENGINE_ASSET_DIR}")
                 "${BINARY_ROOT_DIR}/${ENGINE_ASSET_DIR}"
     )
 endif()
-
-add_custom_command(TARGET ${TARGET_NAME} POST_BUILD ${POST_BUILD_COMMANDS})
