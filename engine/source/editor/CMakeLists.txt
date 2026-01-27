@@ -29,32 +29,36 @@ target_include_directories(${TARGET_NAME}
 )
 
 # -------------------------
-# Post-build: 统一部署到 ${BINARY_ROOT_DIR}
+# Post-build: 统一部署到 ${BINARY_ROOT_DIR}（目录不存在则跳过）
 # -------------------------
-set(POST_BUILD_COMMANDS
-    # 1) 确保 bin 目录存在
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}"
 
-    # 2) 把编译输出目录（exe/dll/pdb 等）复制到 bin
-    #    这样可以直接从 ${BINARY_ROOT_DIR} 启动，不依赖 VS 的输出目录结构
+# 1) 确保 bin 目录存在 + 拷贝编译输出到 bin
+add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
             "${BINARY_ROOT_DIR}"
-
-    # 3) 拷贝 editor 资源（如果有 engine/source/editor/resource）
-    #    目标：${BINARY_ROOT_DIR}/resource
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}/resource"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_CURRENT_SOURCE_DIR}/resource"
-            "${BINARY_ROOT_DIR}/resource"
-
-    # 4) 拷贝引擎资产目录（engine/asset -> bin/asset）
-    #    ENGINE_ASSET_DIR 在 engine 层设置为 "asset"
-    COMMAND ${CMAKE_COMMAND} -E remove_directory
-            "${BINARY_ROOT_DIR}/${ENGINE_ASSET_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${ENGINE_ROOT_DIR}/${ENGINE_ASSET_DIR}"
-            "${BINARY_ROOT_DIR}/${ENGINE_ASSET_DIR}"
 )
+
+# 2) 拷贝 editor/resource（仅当存在）
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource")
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}/resource"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/resource"
+                "${BINARY_ROOT_DIR}/resource"
+    )
+endif()
+
+# 3) 拷贝 engine/asset（仅当存在）
+if(EXISTS "${ENGINE_ROOT_DIR}/${ENGINE_ASSET_DIR}")
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory
+                "${BINARY_ROOT_DIR}/${ENGINE_ASSET_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${ENGINE_ROOT_DIR}/${ENGINE_ASSET_DIR}"
+                "${BINARY_ROOT_DIR}/${ENGINE_ASSET_DIR}"
+    )
+endif()
 
 add_custom_command(TARGET ${TARGET_NAME} POST_BUILD ${POST_BUILD_COMMANDS})
