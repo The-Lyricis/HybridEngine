@@ -7,3 +7,9 @@
 [submodule "engine/3rdparty/glad"]
 	path = engine/3rdparty/glad
 	url = https://github.com/Dav1dde/glad.git
+[submodule "engine/3rdparty/engine/3rdparty/imgui"]
+	path = engine/3rdparty/engine/3rdparty/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "engine/3rdparty/imgui"]
+	path = engine/3rdparty/imgui
+	url = https://github.com/ocornut/imgui.git
