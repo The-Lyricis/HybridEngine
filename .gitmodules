@@ -4,9 +4,6 @@
 [submodule "engine/3rdparty/glm"]
 	path = engine/3rdparty/glm
 	url = https://github.com/g-truc/glm.git
-[submodule "engine/3rdparty/glad"]
-	path = engine/3rdparty/glad
-	url = https://github.com/Dav1dde/glad.git
 [submodule "engine/3rdparty/imgui"]
 	path = engine/3rdparty/imgui
 	url = https://github.com/ocornut/imgui.git
