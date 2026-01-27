@@ -24,6 +24,7 @@ target_link_libraries(${TARGET_NAME}
     PUBLIC glfw
     PUBLIC glad
     PUBLIC imgui
+    PUBLIC spdlog::spdlog
 )
 # 包含目录
 target_include_directories(${TARGET_NAME}

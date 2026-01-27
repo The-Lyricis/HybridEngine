@@ -29,3 +29,18 @@ if(NOT TARGET imgui)
     set_target_properties(imgui PROPERTIES FOLDER ${third_party_folder}/imgui)
 endif()
 
+# ---- spdlog ----
+if(NOT TARGET spdlog::spdlog AND NOT TARGET spdlog::spdlog_header_only)
+    option(SPDLOG_BUILD_EXAMPLE "" OFF)
+    option(SPDLOG_BUILD_TESTS "" OFF)
+    option(SPDLOG_INSTALL "" OFF)
+
+    add_subdirectory(spdlog)
+
+    if(TARGET spdlog)
+        set_target_properties(spdlog PROPERTIES FOLDER ${third_party_folder}/spdlog)
+    endif()
+    if(TARGET spdlog_header_only)
+        set_target_properties(spdlog_header_only PROPERTIES FOLDER ${third_party_folder}/spdlog)
+    endif()
+endif()
