@@ -8,7 +8,7 @@
 
 int main(int argc, char** argv)
 {
-    std::cout << "Starting TDA572 Engine..." << std::endl;
+    std::cout << "Starting Hybrid Engine..." << std::endl;
     
     Hybrid::HybridEngine engine;
 	Hybrid::EditorUI editorUI;

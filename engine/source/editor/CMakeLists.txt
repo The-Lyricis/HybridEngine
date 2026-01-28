@@ -22,7 +22,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 # MSVC 下关闭“警告当错误
 target_compile_options(${TARGET_NAME} PRIVATE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/WX->")
 
-target_link_libraries(${TARGET_NAME} PRIVATE TDA572Runtime)
+target_link_libraries(${TARGET_NAME} PRIVATE HybridRuntime)
 
 target_include_directories(${TARGET_NAME}
     PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
