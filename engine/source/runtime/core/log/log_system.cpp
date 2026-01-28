@@ -18,6 +18,7 @@ namespace Hybrid
 
 		// console sink
 		sinks.emplace_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+		// file sink
 		sinks.emplace_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(cfg.logfile, cfg.truncate_file));
 
 		sinks[0]->set_pattern(cfg.console_pattern);
@@ -26,12 +27,15 @@ namespace Hybrid
 		s_core = std::make_shared<spdlog::logger>("HYBRID_CORE", sinks.begin(), sinks.end());
 		s_client = std::make_shared<spdlog::logger>("HYBRID_CLIENT", sinks.begin(), sinks.end());
 
+		// register loggers
 		spdlog::register_logger(s_core);
 		spdlog::register_logger(s_client);
 
+		// set log levels
 		s_core->set_level(cfg.level);
 		s_client->set_level(cfg.level);
 
+		// set flush levels, flush means writing log messages to their targets immediately
 		s_core->flush_on(cfg.flush_level);
 		s_client->flush_on(cfg.flush_level);
 	}

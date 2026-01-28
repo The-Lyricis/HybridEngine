@@ -1,4 +1,4 @@
-set(TARGET_NAME TDA572Editor)
+set(TARGET_NAME HybridEditor)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -11,8 +11,8 @@ source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${EDITOR_HEADERS} ${EDITOR
 add_executable(${TARGET_NAME} ${EDITOR_HEADERS} ${EDITOR_SOURCES})
 
 # 让代码里能拿到“运行根目录”（顶层定义的 BINARY_ROOT_DIR）
-# 注意：这里会变成一个字符串宏，比如 TDA572_ROOT_DIR=".../bin"
-target_compile_definitions(${TARGET_NAME} PRIVATE TDA572_ROOT_DIR="${BINARY_ROOT_DIR}")
+# 注意：这里会变成一个字符串宏，比如 HYBRID_ROOT_DIR=".../bin"
+target_compile_definitions(${TARGET_NAME} PRIVATE HYBRID_ROOT_DIR="${BINARY_ROOT_DIR}")
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     CXX_STANDARD 17

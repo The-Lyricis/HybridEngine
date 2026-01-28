@@ -4,7 +4,7 @@ set(ENGINE_ASSET_DIR "asset")
 
 if(MSVC)
     add_compile_options("/MP")
-    set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT TDA572Editor)
+    set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT HybridEditor)
 endif()
 
 # Shaders 子目录 用到时再打开

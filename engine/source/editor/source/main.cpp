@@ -27,5 +27,6 @@ int main(int argc, char** argv)
     }
 	editorUI.cleanup();
     Hybrid::LogSystem::Shutdown();
+
     return 0;
 }

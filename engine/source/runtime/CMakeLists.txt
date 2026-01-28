@@ -1,4 +1,4 @@
-set(TARGET_NAME TDA572Runtime)
+set(TARGET_NAME HybridRuntime)
 
 # 头/源文件收集
 file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS "*.h")
