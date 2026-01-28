@@ -1,5 +1,5 @@
 #pragma once
-namespace Engine {
+namespace Hybrid {
 	class WindowSystem {
 	public:
 		void initialize();

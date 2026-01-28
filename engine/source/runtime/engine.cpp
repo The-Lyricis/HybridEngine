@@ -1,12 +1,12 @@
 #include "engine.h"
 
-namespace Engine {
+namespace Hybrid {
 
-    void Engine::initialize() {
+    void HybridEngine::initialize() {
         // Initialization code here
     }
 
-    void Engine::run() {
+    void HybridEngine::run() {
         // Main loop code here
     }
 

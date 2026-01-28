@@ -1,8 +1,8 @@
 #pragma once
 
-namespace Engine {
+namespace Hybrid {
 
-    class Engine {
+    class HybridEngine {
     public:
         void initialize();
         void run();
