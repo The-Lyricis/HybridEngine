@@ -2,6 +2,8 @@
 #include "runtime/function/render/surface_io.h"
 
 #include <GLFW/glfw3.h>
+#include <runtime/core/log/log_system.h>
+#include <iostream>
 
 namespace Hybrid
 {
@@ -109,9 +111,11 @@ namespace Hybrid
     }
 
     // ===== Callbacks =====
-    void InputSystem::onKey(int key, int /*scancode*/, int action, int /*mods*/)
+    void InputSystem::onKey(int key, int scancode, int action, int mods)
     {
         if (!isKeyInRange(key)) return;
+
+		std::cout <<  "Key event: key=" << key << ", scancode=" << scancode << ", action=" << action << ", mods=" << mods << std::endl;
 
         auto& st = m_keys[key];
 
