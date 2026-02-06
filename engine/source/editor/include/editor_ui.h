@@ -4,9 +4,10 @@ namespace Hybrid {
 	class EditorUI {
 	public:
 		void initialize();
+		void initialize(GLFWwindow* window);
 		void display();
 		bool isWindowShouldClose();
 		void cleanup();
-		GLFWwindow* window;
+		GLFWwindow* m_window;
 	};
 }
