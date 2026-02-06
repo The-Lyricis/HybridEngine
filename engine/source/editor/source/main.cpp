@@ -20,8 +20,8 @@ int main(int argc, char** argv)
 
 	std::shared_ptr<Hybrid::WindowSystem> window_system = std::make_shared<Hybrid::WindowSystem>(); //创建窗口系统实例
 	window_system->initialize(1280, 720, "Hybrid Engine Editor");
-	Hybrid::InputSystem inputSystem = Hybrid::InputSystem::get(); //获取输入系统单例
-    inputSystem.initialize(*window_system->getSurfaceIO());
+	
+    Hybrid::InputSystem::getInstance().initialize(*window_system->getSurfaceIO());
 	//window_system->getSurfaceIO()->setFocusMode(true); //启用焦点模式，允许捕获鼠标输入
     
 
@@ -37,23 +37,23 @@ int main(int argc, char** argv)
     HBD_INFO("Hybrid Engine Client Initialized.");
     while (!window_system->shouldClose()) {
 
-		inputSystem.tick(); //注意！先清空边沿事件，再 pollEvents() 以触发新的输入事件回调，最后在本帧逻辑中查询输入状态
+        Hybrid::InputSystem::getInstance().tick(); //注意！先清空边沿事件，再 pollEvents() 以触发新的输入事件回调，最后在本帧逻辑中查询输入状态
 
 		window_system->pollEvents(); //触发 GLFW 事件回调，更新输入系统状态
 
         editor_ui->display();
 
         // 边沿测试：按下 A 应只打印一次
-        if (inputSystem.wasKeyPressed(GLFW_KEY_A))
+        if (Hybrid::InputSystem::getInstance().wasKeyPressed(GLFW_KEY_A))
             std::cout << "KEY  A" << std::endl;
 
         // 持续测试：按住 W 时会持续触发
-        if (inputSystem.isKeyDown(GLFW_KEY_W))
+        if (Hybrid::InputSystem::getInstance().isKeyDown(GLFW_KEY_W))
             HBD_INFO("W Down (hold) OK");
 
         // 鼠标增量测试：移动鼠标应有变化（focus mode 下）
-        const double dx = inputSystem.getMouseDeltaX();
-        const double dy = inputSystem.getMouseDeltaY();
+        const double dx = Hybrid::InputSystem::getInstance().getMouseDeltaX();
+        const double dy = Hybrid::InputSystem::getInstance().getMouseDeltaY();
         if (dx != 0.0 || dy != 0.0)
             HBD_INFO("Mouse delta: dx={}, dy={}", dx, dy);
 
@@ -61,7 +61,7 @@ int main(int argc, char** argv)
         engine.run();
 
 
-        if (!inputSystem.isInputValid())
+        if (!Hybrid::InputSystem::getInstance().isInputValid())
 
         
     window_system->cleanup();

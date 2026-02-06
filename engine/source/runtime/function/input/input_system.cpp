@@ -126,6 +126,13 @@ namespace Hybrid
                 st.pressed = true;
 
             st.down = true;
+
+            m_last_key_event.key = key;
+            m_last_key_event.scancode = scancode;
+            m_last_key_event.mods = mods;
+            m_last_key_event.time_sec = glfwGetTime(); // 需要 <GLFW/glfw3.h>
+            m_last_key_event.valid = true;
+
         }
         else if (action == GLFW_RELEASE)
         {
@@ -186,6 +193,19 @@ namespace Hybrid
 
         m_last_mouse_x = x;
         m_last_mouse_y = y;
+    }
+
+    std::string InputSystem::getLastKeyName() const
+    {
+        if (!m_last_key_event.valid) return "(none)";
+
+        // glfwGetKeyName 只对可打印键（字母数字等）可靠；功能键可能返回 nullptr
+        const char* name = glfwGetKeyName(m_last_key_event.key, m_last_key_event.scancode);
+        if (name && name[0] != '\0')
+            return std::string(name);
+
+        // 不可打印键：返回 key code
+        return std::string("keycode=") + std::to_string(m_last_key_event.key);
     }
 
     //void InputSystem::onScroll(double xoffset, double yoffset)

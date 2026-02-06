@@ -1,9 +1,10 @@
-#include"editor_ui.h"
+#include "editor_ui.h"
 #include <imgui.h>
 
 #include <GLFW/glfw3.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
+#include "runtime/function/input/input_system.h"
 
 namespace Hybrid {
     void EditorUI::initialize(GLFWwindow* window) {
@@ -19,84 +20,77 @@ namespace Hybrid {
 
     void EditorUI::display() {
         if (!m_window) return;
-        
-        ImGui_ImplOpenGL3_NewFrame(); //通知opengl开始新的一帧
-        ImGui_ImplGlfw_NewFrame(); //通知glfw开始新的一帧
-        ImGui::NewFrame();//通知imgui开始新的一帧
-        
-        //以下是UI代码
-        ImGui::Begin("SaluteChickEngine"); //创建一个新窗口
-        ImGui::Text("Hello, engine"); //在窗口中显示文本
-        ImGui::End();//结束窗口定义
-        
-        ImGui::Render();//渲染数据
-        
-        int display_w = 0, display_h = 0;//定义宽高变量
-        glfwGetFramebufferSize(m_window, &display_w, &display_h);//获取窗口对应 framebuffer 的实际像素大小
-        glViewport(0, 0, display_w, display_h);//设置视口大小
-        glClear(GL_COLOR_BUFFER_BIT);//清除颜色缓冲区
-        
+
+        ImGui_ImplOpenGL3_NewFrame(); // 通知opengl开始新的一帧
+        ImGui_ImplGlfw_NewFrame();    // 通知glfw开始新的一帧
+        ImGui::NewFrame();            // 通知imgui开始新的一帧
+
+        // ===== UI =====
+        ImGuiIO& io = ImGui::GetIO();
+
+        // 1) 你的主面板：只负责面板内容，不再在里面画状态栏
+        ImGui::Begin("HybridEngine");
+        {
+            ImGui::Text("Hello, engine");
+        }
+        ImGui::End();
+
+        // 2) 全局底部状态栏：固定在主视口底部（不属于 SaluteChickEngine）
+        {
+            ImGuiViewport* vp = ImGui::GetMainViewport();
+
+            const float status_h = ImGui::GetFrameHeightWithSpacing();   // 状态栏高度
+            const ImVec2 pos(vp->Pos.x, vp->Pos.y + vp->Size.y - status_h);
+            const ImVec2 size(vp->Size.x, status_h);
+
+            ImGui::SetNextWindowPos(pos);
+            ImGui::SetNextWindowSize(size);
+
+            const ImGuiWindowFlags flags =
+                ImGuiWindowFlags_NoDecoration |
+                ImGuiWindowFlags_NoMove |
+                ImGuiWindowFlags_NoSavedSettings |
+                ImGuiWindowFlags_NoBringToFrontOnFocus |
+                ImGuiWindowFlags_NoFocusOnAppearing |
+                ImGuiWindowFlags_NoNav |
+                ImGuiWindowFlags_NoScrollbar |
+                ImGuiWindowFlags_NoScrollWithMouse;
+
+            // 可选：让状态栏不抢输入焦点
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+            ImGui::Begin("##BottomStatusBar", nullptr, flags);
+            {
+                // 左侧：LastKey
+                const std::string lastKey = InputSystem::getInstance().getLastKeyName(); // 按你实际单例入口调整
+                ImGui::Text("Last key: %s", lastKey.c_str());
+
+                // 右侧：FPS（右对齐）
+                char fpsBuf[64];
+                std::snprintf(fpsBuf, sizeof(fpsBuf), "FPS: %.1f", io.Framerate);
+
+                float fpsWidth = ImGui::CalcTextSize(fpsBuf).x;
+                float rightX = ImGui::GetContentRegionAvail().x - fpsWidth;
+                if (rightX > 0.0f)
+                    ImGui::SameLine(rightX);
+
+                ImGui::TextUnformatted(fpsBuf);
+            }
+            ImGui::End();
+
+            ImGui::PopStyleVar(2);
+        }
+        // ===== Render =====
+        ImGui::Render(); // 渲染数据
+
+        int display_w = 0, display_h = 0; // 定义宽高变量
+        glfwGetFramebufferSize(m_window, &display_w, &display_h); // 获取 framebuffer 的实际像素大小
+        glViewport(0, 0, display_w, display_h); // 设置视口大小
+        glClear(GL_COLOR_BUFFER_BIT); // 清除颜色缓冲区
+
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        //将 ImGui::Render() 生成的绘制数据交给 OpenGL3 后端进行实际渲染
-        //GetDrawData() 返回本帧 UI 的 draw lists 
-        
-        glfwSwapBuffers(m_window);//交换前后缓冲区
+
+        glfwSwapBuffers(m_window); // 交换前后缓冲区
     }
 }
-
-//namespace Hybrid
-//{
-//	void EditorUI::initialize()
-//	{
-//		if (!glfwInit())return; //glfw初始化
-//		window = glfwCreateWindow(800, 600, "ImGui Window", nullptr, nullptr); //创建一个glfw窗口
-//		glfwMakeContextCurrent(window); //设置当前线程上下文
-//		glfwSwapInterval(1); //设置交换间隔(启用垂直同步)
-//
-//		IMGUI_CHECKVERSION(); //检查imgui版本
-//		ImGui::CreateContext(); //创建imgui上下文
-//
-//		if (!ImGui_ImplGlfw_InitForOpenGL(window, true))return; //初始化imgui的glfw后端
-//		ImGui_ImplOpenGL3_Init("#version 330"); //初始化imgui的opengl3后端
-//	}
-//	void EditorUI::display()
-//	{
-//		if (!window) return;
-//
-//		glfwPollEvents(); //轮询窗口事件
-//
-//		ImGui_ImplOpenGL3_NewFrame(); //通知opengl开始新的一帧
-//		ImGui_ImplGlfw_NewFrame(); //通知glfw开始新的一帧
-//		ImGui::NewFrame();//通知imgui开始新的一帧
-//
-//		//以下是UI代码
-//		ImGui::Begin("SaluteChickEngine"); //创建一个新窗口
-//		ImGui::Text("Hello, engine"); //在窗口中显示文本
-//		ImGui::End();//结束窗口定义
-//
-//		ImGui::Render();//渲染数据
-//
-//		int display_w = 0, display_h = 0;//定义宽高变量
-//		glfwGetFramebufferSize(window, &display_w, &display_h);//获取窗口对应 framebuffer 的实际像素大小
-//		glViewport(0, 0, display_w, display_h);//设置视口大小
-//		glClear(GL_COLOR_BUFFER_BIT);//清除颜色缓冲区
-//
-//		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-//		//将 ImGui::Render() 生成的绘制数据交给 OpenGL3 后端进行实际渲染
-//		//GetDrawData() 返回本帧 UI 的 draw lists 
-//
-//		glfwSwapBuffers(window);//交换前后缓冲区
-//	}
-//	bool EditorUI::isWindowShouldClose()
-//	{
-//		return glfwWindowShouldClose(window);//检查窗口是否应该关闭
-//	}
-//	void EditorUI::cleanup()
-//	{
-//		ImGui_ImplOpenGL3_Shutdown();//关闭opengl3后端
-//		ImGui_ImplGlfw_Shutdown();//关闭glfw后端
-//		ImGui::DestroyContext();//销毁imgui上下文
-//		glfwDestroyWindow(window);//销毁窗口
-//		glfwTerminate();//终止glfw
-//	}
-//}
