@@ -36,25 +36,25 @@ int main(int argc, char** argv)
     while (!window_system->shouldClose()) {
         window_system->pollEvents();
         editor_ui->display();
+		inputSystem.tick(); // 每帧更新输入系统状态
         engine.run();
 
 
-        //if (!inputSystem.isInputValid())
-        //    HBD_INFO("输入初始化失败\n");
+        if (!inputSystem.isInputValid())
 
-        //// 边沿测试：按下 A 应只打印一次
-        //if (inputSystem.wasKeyPressed(GLFW_KEY_A))
-        //    HBD_INFO("A Pressed (edge) OK");
+        // 边沿测试：按下 A 应只打印一次
+        if (inputSystem.wasKeyPressed(GLFW_KEY_A))
+            HBD_INFO("A Pressed (edge) OK");
 
-        //// 持续测试：按住 W 时会持续触发
-        //if (inputSystem.isKeyDown(GLFW_KEY_W))
-        //    HBD_INFO("W Down (hold) OK");
+        // 持续测试：按住 W 时会持续触发
+        if (inputSystem.isKeyDown(GLFW_KEY_W))
+            HBD_INFO("W Down (hold) OK");
 
-        //// 鼠标增量测试：移动鼠标应有变化（focus mode 下）
-        //const double dx = inputSystem.getMouseDeltaX();
-        //const double dy = inputSystem.getMouseDeltaY();
-        //if (dx != 0.0 || dy != 0.0)
-        //    HBD_INFO("Mouse delta: dx={}, dy={}", dx, dy);
+        // 鼠标增量测试：移动鼠标应有变化（focus mode 下）
+        const double dx = inputSystem.getMouseDeltaX();
+        const double dy = inputSystem.getMouseDeltaY();
+        if (dx != 0.0 || dy != 0.0)
+            HBD_INFO("Mouse delta: dx={}, dy={}", dx, dy);
 
 
     }
