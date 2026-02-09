@@ -16,13 +16,13 @@ namespace Hybrid {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
-        // ¿ÉÑ¡£ºÄã¿ÉÒÔÔÚÕâÀïÉèÖÃ ImGui ·ç¸ñ
+        // åœ¨è¿™é‡Œè®¾ç½® ImGui é£æ ¼
         // ImGui::StyleColorsDark();
 
-        // ÈÃ ImGui °²×° GLFW »Øµ÷£¨ÄãÔ­±¾¾ÍÊÇ true£©
+        // è®© ImGui å®‰è£… GLFW å›è°ƒï¼ˆåŸæœ¬å°±æ˜¯ trueï¼‰
         ImGui_ImplGlfw_InitForOpenGL(m_window, true);
 
-        // Äã´´½¨µÄÊÇ 3.3 Core µÄ»°£¬ÓÃ 330
+        // 3.3 Core 
         ImGui_ImplOpenGL3_Init("#version 330");
 
         m_initialized = true;
@@ -109,8 +109,30 @@ namespace Hybrid {
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        // ×¢Òâ£ºswapBuffers ²»Ó¦¸ÃÔÚÕâÀï×ö£¨ÓÉ main ¿ØÖÆ¸üÇåÎú£©
-        // µ«ÈôÄãÏ£Íû UI Àà¹ÜÀí swap£¬Ò²¿ÉÒÔ·Å»ØÈ¥¡£
+        // æ³¨æ„ï¼šswapBuffers ä¸åº”è¯¥åœ¨è¿™é‡Œåšï¼ˆç”± main æ§åˆ¶æ›´æ¸…æ™°ï¼‰
     }
+
+    void Hybrid::EditorUI::drawViewport(uint32_t colorTextureID) {
+        ImGui::Begin("Viewport");
+
+        m_ViewportFocused = ImGui::IsWindowFocused();
+        m_ViewportHovered = ImGui::IsWindowHovered();
+
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        if (avail.x < 1.0f) avail.x = 1.0f;
+        if (avail.y < 1.0f) avail.y = 1.0f;
+        m_ViewportSize = { avail.x, avail.y };
+
+        // OpenGL çº¹ç†åˆ° ImGuiï¼šéœ€è¦ UV ç¿»è½¬
+        ImGui::Image(
+            (ImTextureID)(intptr_t)colorTextureID,
+            avail,
+            ImVec2(0, 1),
+            ImVec2(1, 0)
+        );
+
+        ImGui::End();
+    }
+
 
 } // namespace Hybrid

@@ -1,21 +1,15 @@
 #include <iostream>
 #include <memory>
-#include <string>
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
-#include "runtime/core/base/macro.h"
 #include "runtime/core/log/log_system.h"
 #include "runtime/function/window/window_system.h"
 #include "runtime/function/input/input_system.h"
 
-#include "runtime/function/render/renderer.h"
-#include "runtime/function/render/render_command.h"
-#include "runtime/function/render/vertex_array.h"
-#include "runtime/function/render/shader.h"
-
 #include "editor/include/editor_ui.h"
+#include "runtime/function/render/render_system.h"
 
 int main(int argc, char** argv) {
     std::cout << "Starting Hybrid Engine..." << std::endl;
@@ -27,107 +21,46 @@ int main(int argc, char** argv) {
 
     GLFWwindow* window = window_system->getGLFWWindow();
     if (!window) {
-        HBD_CORE_ERROR("GLFW window is null.");
         window_system->cleanup();
         Hybrid::LogSystem::Shutdown();
         return -1;
     }
 
-    // --- ¹Ø¼ü£ºÈ·±£µ±Ç°ÉÏÏÂÎÄ + gladLoadGL ³É¹¦ ---
     glfwMakeContextCurrent(window);
-
-    // ¿ÉÑ¡£º¹Øµô vsync ±ãÓÚ¿´Ö¡ÂÊ±ä»¯
-    // glfwSwapInterval(0);
 
     const int ver = gladLoadGL(glfwGetProcAddress);
     if (ver == 0) {
-        HBD_CORE_ERROR("gladLoadGL failed (returned 0).");
         window_system->cleanup();
         Hybrid::LogSystem::Shutdown();
         return -1;
     }
 
-    const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-    HBD_CORE_INFO("OpenGL Version: {}", glVersion ? glVersion : "null");
-
-    // ÊäÈëÏµÍ³³õÊ¼»¯
     Hybrid::InputSystem::getInstance().initialize(*window_system->getSurfaceIO());
 
-    // ³õÊ¼»¯ ImGui
     auto editor_ui = std::make_shared<Hybrid::EditorUI>();
     editor_ui->initialize(window);
 
-    // Renderer ³õÊ¼»¯£¨Ö»×öÒ»´Î£©
-    Hybrid::Renderer::Init();
+    Hybrid::RenderSystem render_system;
+    render_system.initialize(window);
 
-    // ---------- ´´½¨Èý½ÇÐÎ×ÊÔ´£¨Ö»´´½¨Ò»´Î£© ----------
-    static float s_TriVertices[] = {
-        // x,    y,    z,    r,   g,   b,   a
-        -0.5f, -0.5f, 0.0f, 1.f, 0.f, 0.f, 1.f,
-         0.5f, -0.5f, 0.0f, 0.f, 1.f, 0.f, 1.f,
-         0.0f,  0.5f, 0.0f, 0.f, 0.f, 1.f, 1.f,
-    };
-    static uint32_t s_TriIndices[] = { 0, 1, 2 };
-
-    auto vao = std::make_shared<Hybrid::VertexArray>();
-    auto vb = std::make_shared<Hybrid::VertexBuffer>(s_TriVertices, sizeof(s_TriVertices));
-    auto ib = std::make_shared<Hybrid::IndexBuffer>(s_TriIndices, 3);
-
-    vao->SetVertexBuffer(vb);
-    vao->SetIndexBuffer(ib);
-
-    const std::string vs = R"(
-#version 330 core
-layout(location=0) in vec3 aPos;
-layout(location=1) in vec4 aColor;
-out vec4 vColor;
-void main() {
-    vColor = aColor;
-    gl_Position = vec4(aPos, 1.0);
-}
-)";
-
-    const std::string fs = R"(
-#version 330 core
-in vec4 vColor;
-out vec4 FragColor;
-void main() {
-    FragColor = vColor;
-}
-)";
-
-    auto shader = std::make_shared<Hybrid::Shader>(vs, fs);
-
-    HBD_CORE_INFO("Hybrid Engine Initialized.");
-
-    // ---------------- Ö÷Ñ­»· ----------------
     while (!window_system->shouldClose()) {
-        // ÊäÈëÏµÍ³£ºÇå¿Õ±ßÑØ²¢ÊÕ¼¯ÐÂÊÂ¼þ
         Hybrid::InputSystem::getInstance().tick();
         window_system->pollEvents();
 
-        // 1) UI begin
         editor_ui->beginFrame();
         editor_ui->drawPanels();
 
-        // 2) Scene render£ºÉèÖÃ viewport + ÇåÆÁ + »­Èý½ÇÐÎ
-        int display_w = 0, display_h = 0;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
+        // UI å…ˆå¸ƒå±€ viewportï¼Œå¹¶è®°å½• viewport size
+        editor_ui->drawViewport(render_system.getSceneColorTexture());
 
-        Hybrid::RenderCommand::SetViewport(0, 0, display_w, display_h);
+        // RenderSystem æ ¹æ® viewport size æ¸²æŸ“ï¼Œå¹¶æ¸…å± backbuffer
+        render_system.renderFrame(editor_ui->getViewportSize(), window);
 
-        Hybrid::Renderer::BeginFrame({ 0.1f, 0.1f, 0.12f, 1.0f });
-        Hybrid::Renderer::Submit(vao, shader);
-        Hybrid::Renderer::EndFrame();
-
-        // 3) UI end£º°Ñ ImGui draw data »­µ½µ±Ç° backbuffer ÉÏ
+        // è¾“å‡º UI åˆ° backbufferï¼ˆåˆšåˆšå·²æ¸…å±ï¼‰
         editor_ui->endFrame();
-
-        // 4) Swap buffers£¨±ØÐëÓÉ main ¿ØÖÆ£¬±ÜÃâ UI ÄÚ²¿ÓÖÇåÆÁ/ÂÒÐò£©
         glfwSwapBuffers(window);
     }
 
-    // ------------- ÇåÀí -------------
     editor_ui->shutdown();
     window_system->cleanup();
     Hybrid::LogSystem::Shutdown();

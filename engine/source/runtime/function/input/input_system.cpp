@@ -21,7 +21,8 @@ namespace Hybrid
     {
         m_surface = &surface;
 
-        // ×¢²á»Øµ÷£¨Äã SurfaceIO ĞèÒªÌá¹©¶ÔÓ¦×¢²á½Ó¿Ú£©
+
+        // æ³¨å†Œå›è°ƒï¼ˆä½  SurfaceIO éœ€è¦æä¾›å¯¹åº”æ³¨å†Œæ¥å£ï¼‰
         surface.registerOnKeyFunc([this](int key, int scancode, int action, int mods) {
             this->onKey(key, scancode, action, mods);
             });
@@ -34,9 +35,9 @@ namespace Hybrid
             this->onCursorPos(x, y);
             });
 
-        //// Èç¹ûÄãµÄ SurfaceIO »¹Ã»ÓĞ¹öÂÖ/×Ö·û»Øµ÷½Ó¿Ú£¬½¨Òé²¹ÉÏ£º
+        //// å¦‚æœä½ çš„ SurfaceIO è¿˜æ²¡æœ‰æ»šè½®/å­—ç¬¦å›è°ƒæ¥å£ï¼Œå»ºè®®è¡¥ä¸Šï¼š
         //// registerOnScrollFunc / registerOnCharFunc
-        //// ÕâÀï¼ÙÉèÄãÒÑ¾­²¹Æë£¬»òÄã¿ÉÒÔ°ÑËüÃÇ·Åµ½ GLFW Ô­Éú callback ÖĞ
+        //// è¿™é‡Œå‡è®¾ä½ å·²ç»è¡¥é½ï¼Œæˆ–ä½ å¯ä»¥æŠŠå®ƒä»¬æ”¾åˆ° GLFW åŸç”Ÿ callback ä¸­
         //if constexpr (true)
         //{
         //    surface.registerOnScrollFunc([this](double xoff, double yoff) {
@@ -50,14 +51,14 @@ namespace Hybrid
 
     void InputSystem::tick()
     {
-        // 1) ¸üĞÂÊäÈëÓĞĞ§ĞÔ£¨²ßÂÔ¿É°´ÄãÒıÇæÂß¼­µ÷Õû£©
-        // Ê¾Àı£ºfocus mode ²ÅÓĞĞ§
+        // 1) æ›´æ–°è¾“å…¥æœ‰æ•ˆæ€§ï¼ˆç­–ç•¥å¯æŒ‰ä½ å¼•æ“é€»è¾‘è°ƒæ•´ï¼‰
+        // ç¤ºä¾‹ï¼šfocus mode æ‰æœ‰æ•ˆ
         if (m_surface)
             m_input_valid = m_surface->isFocusMode();
         else
             m_input_valid = true;
 
-        // 2) ÇåÀí±¾Ö¡±ßÑØ£¨pressed/released Ö»±£ÁôÒ»Ö¡£©
+        // 2) æ¸…ç†æœ¬å¸§è¾¹æ²¿ï¼ˆpressed/released åªä¿ç•™ä¸€å¸§ï¼‰
         for (auto& k : m_keys)
         {
             k.pressed = false;
@@ -69,7 +70,7 @@ namespace Hybrid
             b.released = false;
         }
 
-        // 3) ÇåÀíÊó±êÔöÁ¿Óë¹öÂÖÔöÁ¿¡¢ÎÄ±¾ÊäÈë£¨È«²¿ÊÇ¡°±¾Ö¡Á¿¡±£©
+        // 3) æ¸…ç†é¼ æ ‡å¢é‡ä¸æ»šè½®å¢é‡ã€æ–‡æœ¬è¾“å…¥ï¼ˆå…¨éƒ¨æ˜¯â€œæœ¬å¸§é‡â€ï¼‰
         m_mouse_delta_x = 0.0;
         m_mouse_delta_y = 0.0;
         m_scroll_delta_x = 0.0;
@@ -121,7 +122,7 @@ namespace Hybrid
 
         if (action == GLFW_PRESS)
         {
-            // Èç¹ûÖ®Ç°²»ÊÇ down£¬ÔòÕâÊÇ±ßÑØ pressed
+            // å¦‚æœä¹‹å‰ä¸æ˜¯ downï¼Œåˆ™è¿™æ˜¯è¾¹æ²¿ pressed
             if (!st.down)
                 st.pressed = true;
 
@@ -130,7 +131,7 @@ namespace Hybrid
             m_last_key_event.key = key;
             m_last_key_event.scancode = scancode;
             m_last_key_event.mods = mods;
-            m_last_key_event.time_sec = glfwGetTime(); // ĞèÒª <GLFW/glfw3.h>
+            m_last_key_event.time_sec = glfwGetTime(); // éœ€è¦ <GLFW/glfw3.h>
             m_last_key_event.valid = true;
 
         }
@@ -143,7 +144,7 @@ namespace Hybrid
         }
         else if (action == GLFW_REPEAT)
         {
-            // repeat Ò»°ã²»¶îÍâÉèÖÃ pressed
+            // repeat ä¸€èˆ¬ä¸é¢å¤–è®¾ç½® pressed
             st.down = true;
         }
     }
@@ -172,7 +173,7 @@ namespace Hybrid
     {
         if (!m_surface) return;
 
-        // Èô²»ÔÚ focus mode£¬Ôò²»ÀÛ¼ÆÏà¶ÔÒÆ¶¯£¬ÇÒÖØÖÃ init
+        // è‹¥ä¸åœ¨ focus modeï¼Œåˆ™ä¸ç´¯è®¡ç›¸å¯¹ç§»åŠ¨ï¼Œä¸”é‡ç½® init
         if (!m_surface->isFocusMode())
         {
             m_mouse_inited = false;
@@ -187,7 +188,7 @@ namespace Hybrid
             return;
         }
 
-        // ÀÛ¼Æ±¾Ö¡Ïà¶ÔÒÆ¶¯
+        // ç´¯è®¡æœ¬å¸§ç›¸å¯¹ç§»åŠ¨
         m_mouse_delta_x += (x - m_last_mouse_x);
         m_mouse_delta_y += (y - m_last_mouse_y);
 
@@ -199,12 +200,12 @@ namespace Hybrid
     {
         if (!m_last_key_event.valid) return "(none)";
 
-        // glfwGetKeyName Ö»¶Ô¿É´òÓ¡¼ü£¨×ÖÄ¸Êı×ÖµÈ£©¿É¿¿£»¹¦ÄÜ¼ü¿ÉÄÜ·µ»Ø nullptr
+        // glfwGetKeyName åªå¯¹å¯æ‰“å°é”®ï¼ˆå­—æ¯æ•°å­—ç­‰ï¼‰å¯é ï¼›åŠŸèƒ½é”®å¯èƒ½è¿”å› nullptr
         const char* name = glfwGetKeyName(m_last_key_event.key, m_last_key_event.scancode);
         if (name && name[0] != '\0')
             return std::string(name);
 
-        // ²»¿É´òÓ¡¼ü£º·µ»Ø key code
+        // ä¸å¯æ‰“å°é”®ï¼šè¿”å› key code
         return std::string("keycode=") + std::to_string(m_last_key_event.key);
     }
 
@@ -216,7 +217,7 @@ namespace Hybrid
 
     //void InputSystem::onChar(unsigned int codepoint)
     //{
-    //    // GLFW char callback ¸øµÄÊÇ Unicode codepoint£¨UTF-32£©
+    //    // GLFW char callback ç»™çš„æ˜¯ Unicode codepointï¼ˆUTF-32ï¼‰
     //    m_text_input.push_back(static_cast<char32_t>(codepoint));
     //}
 
