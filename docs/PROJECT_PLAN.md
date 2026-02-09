@@ -55,16 +55,12 @@ Hybrid Engine
   Phase 1.4 （物理系统，2 周）：包围盒/碰撞
   
   Phase 1.5 （音频系统，1 周）：包围盒/碰撞
-  
-  
 
 由于时间问题以下的交给课后实现
 
 - Phase 2.1（场景系统，5 周）：ECS/场景序列化/层级编辑
 - Phase 2.2（脚本系统，4 周）：Mono/C# 热重载/字段反射
 - Phase 2.3（编辑器完善，4 周）：Gizmo/Profiler/资产浏览
-  
-  
 
 ## 分计划
 
@@ -76,9 +72,9 @@ Hybrid Engine
 
 - [x] 日志系统（spdlog）
 
-- [ ] 事件系统（Event + Dispatcher + 窗口事件）
+- [x] 事件系统（Event + Dispatcher + 窗口事件）
 
-- [ ] Runtime 窗口系统（GLFW + GLAD + OpenGL Context）
+- [x] Runtime 窗口系统（GLFW + GLAD + OpenGL Context）
 
 - [ ] ImGui Layer（Runtime 统一封装）
 
@@ -96,15 +92,13 @@ Hybrid Engine
 
 ### Phase 1.3：输入系统
 
-- [ ] 键盘/鼠标输入
-- [ ] 输入事件
+- [x] 键盘/鼠标输入
+- [x] 输入事件
 - [ ] Action/Axis Mapping
 
 ### Phase 1.4：物理系统
 
 ### Phase 1.5：音频系统
-
-
 
 ## 2. 之后的计划
 
