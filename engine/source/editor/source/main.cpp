@@ -1,72 +1,134 @@
 #include <iostream>
-#include <imgui.h>
+#include <memory>
+#include <string>
 
-#include "runtime/engine.h"
-#include "editor/include/editor_ui.h"
-#include"runtime/function/input/input_system.h"
-#include"runtime/core/log/log_system.h"
-#include "runtime/function/window/window_system.h"
+#include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
-static void TestInputLogging();
+#include "runtime/core/log/log_system.h"
+#include "runtime/function/window/window_system.h"
+#include "runtime/function/input/input_system.h"
 
-int main(int argc, char** argv)
-{
+#include "runtime/function/render/renderer.h"
+#include "runtime/function/render/render_command.h"
+#include "runtime/function/render/vertex_array.h"
+#include "runtime/function/render/shader.h"
+
+#include "editor/include/editor_ui.h"
+
+int main(int argc, char** argv) {
     std::cout << "Starting Hybrid Engine..." << std::endl;
-    
-    Hybrid::HybridEngine engine;
-	
-	Hybrid::LogSystem::Init();
 
-	std::shared_ptr<Hybrid::WindowSystem> window_system = std::make_shared<Hybrid::WindowSystem>(); //创建窗口系统实例
-	window_system->initialize(1280, 720, "Hybrid Engine Editor");
-	
-    Hybrid::InputSystem::getInstance().initialize(*window_system->getSurfaceIO());
-	//window_system->getSurfaceIO()->setFocusMode(true); //启用焦点模式，允许捕获鼠标输入
-    
+    Hybrid::LogSystem::Init();
 
-	auto editor_ui = std::make_shared<Hybrid::EditorUI>(); //创建编辑器UI实例
-    editor_ui->initialize(window_system->getGLFWWindow());
+    auto window_system = std::make_shared<Hybrid::WindowSystem>();
+    window_system->initialize(1280, 720, "Hybrid Engine Editor");
 
-	
-
-    engine.initialize();
-	
-    
-    HBD_CORE_INFO("Hybrid Engine Initialized.");
-    HBD_INFO("Hybrid Engine Client Initialized.");
-    while (!window_system->shouldClose()) {
-
-        Hybrid::InputSystem::getInstance().tick(); //注意！先清空边沿事件，再 pollEvents() 以触发新的输入事件回调，最后在本帧逻辑中查询输入状态
-
-		window_system->pollEvents(); //触发 GLFW 事件回调，更新输入系统状态
-
-        editor_ui->display();
-
-        // 边沿测试：按下 A 应只打印一次
-        if (Hybrid::InputSystem::getInstance().wasKeyPressed(GLFW_KEY_A))
-            std::cout << "KEY  A" << std::endl;
-
-        // 持续测试：按住 W 时会持续触发
-        if (Hybrid::InputSystem::getInstance().isKeyDown(GLFW_KEY_W))
-            HBD_INFO("W Down (hold) OK");
-
-        // 鼠标增量测试：移动鼠标应有变化（focus mode 下）
-        const double dx = Hybrid::InputSystem::getInstance().getMouseDeltaX();
-        const double dy = Hybrid::InputSystem::getInstance().getMouseDeltaY();
-        if (dx != 0.0 || dy != 0.0)
-            HBD_INFO("Mouse delta: dx={}, dy={}", dx, dy);
-
+    GLFWwindow* window = window_system->getGLFWWindow();
+    if (!window) {
+        HBD_CORE_ERROR("GLFW window is null.");
+        window_system->cleanup();
+        Hybrid::LogSystem::Shutdown();
+        return -1;
     }
-        engine.run();
 
+    // --- 关键：确保当前上下文 + gladLoadGL 成功 ---
+    glfwMakeContextCurrent(window);
 
-        if (!Hybrid::InputSystem::getInstance().isInputValid())
+    // 可选：关掉 vsync 便于看帧率变化
+    // glfwSwapInterval(0);
 
-        
+    const int ver = gladLoadGL(glfwGetProcAddress);
+    if (ver == 0) {
+        HBD_CORE_ERROR("gladLoadGL failed (returned 0).");
+        window_system->cleanup();
+        Hybrid::LogSystem::Shutdown();
+        return -1;
+    }
+
+    const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    HBD_CORE_INFO("OpenGL Version: {}", glVersion ? glVersion : "null");
+
+    // 输入系统初始化
+    Hybrid::InputSystem::getInstance().initialize(*window_system->getSurfaceIO());
+
+    // 初始化 ImGui
+    auto editor_ui = std::make_shared<Hybrid::EditorUI>();
+    editor_ui->initialize(window);
+
+    // Renderer 初始化（只做一次）
+    Hybrid::Renderer::Init();
+
+    // ---------- 创建三角形资源（只创建一次） ----------
+    static float s_TriVertices[] = {
+        // x,    y,    z,    r,   g,   b,   a
+        -0.5f, -0.5f, 0.0f, 1.f, 0.f, 0.f, 1.f,
+         0.5f, -0.5f, 0.0f, 0.f, 1.f, 0.f, 1.f,
+         0.0f,  0.5f, 0.0f, 0.f, 0.f, 1.f, 1.f,
+    };
+    static uint32_t s_TriIndices[] = { 0, 1, 2 };
+
+    auto vao = std::make_shared<Hybrid::VertexArray>();
+    auto vb = std::make_shared<Hybrid::VertexBuffer>(s_TriVertices, sizeof(s_TriVertices));
+    auto ib = std::make_shared<Hybrid::IndexBuffer>(s_TriIndices, 3);
+
+    vao->SetVertexBuffer(vb);
+    vao->SetIndexBuffer(ib);
+
+    const std::string vs = R"(
+#version 330 core
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec4 aColor;
+out vec4 vColor;
+void main() {
+    vColor = aColor;
+    gl_Position = vec4(aPos, 1.0);
+}
+)";
+
+    const std::string fs = R"(
+#version 330 core
+in vec4 vColor;
+out vec4 FragColor;
+void main() {
+    FragColor = vColor;
+}
+)";
+
+    auto shader = std::make_shared<Hybrid::Shader>(vs, fs);
+
+    HBD_CORE_INFO("Hybrid Engine Initialized.");
+
+    // ---------------- 主循环 ----------------
+    while (!window_system->shouldClose()) {
+        // 输入系统：清空边沿并收集新事件
+        Hybrid::InputSystem::getInstance().tick();
+        window_system->pollEvents();
+
+        // 1) UI begin
+        editor_ui->beginFrame();
+        editor_ui->drawPanels();
+
+        // 2) Scene render：设置 viewport + 清屏 + 画三角形
+        int display_w = 0, display_h = 0;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+
+        Hybrid::RenderCommand::SetViewport(0, 0, display_w, display_h);
+
+        Hybrid::Renderer::BeginFrame({ 0.1f, 0.1f, 0.12f, 1.0f });
+        Hybrid::Renderer::Submit(vao, shader);
+        Hybrid::Renderer::EndFrame();
+
+        // 3) UI end：把 ImGui draw data 画到当前 backbuffer 上
+        editor_ui->endFrame();
+
+        // 4) Swap buffers（必须由 main 控制，避免 UI 内部又清屏/乱序）
+        glfwSwapBuffers(window);
+    }
+
+    // ------------- 清理 -------------
+    editor_ui->shutdown();
     window_system->cleanup();
     Hybrid::LogSystem::Shutdown();
-
     return 0;
 }
-

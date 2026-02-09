@@ -1,13 +1,27 @@
-#include <GLFW/glfw3.h>
+#pragma once
+#include <string>
+
+struct GLFWwindow;
 
 namespace Hybrid {
-	class EditorUI {
-	public:
-		void initialize();
-		void initialize(GLFWwindow* window);
-		void display();
-		bool isWindowShouldClose();
-		void cleanup();
-		GLFWwindow* m_window;
-	};
-}
+
+    class EditorUI {
+    public:
+        void initialize(GLFWwindow* window);
+        void shutdown();
+
+        // Ã¿Ö¡µ÷ÓÃ£ºBegin -> DrawPanels -> End
+        void beginFrame();
+        void drawPanels();
+        void endFrame();
+
+        bool isInitialized() const { return m_initialized; }
+
+    private:
+        GLFWwindow* m_window = nullptr;
+        bool m_initialized = false;
+
+        void drawBottomStatusBar();
+    };
+
+} // namespace Hybrid

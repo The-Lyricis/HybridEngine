@@ -23,6 +23,7 @@ target_compile_options(${TARGET_NAME}
 target_link_libraries(${TARGET_NAME}
     PUBLIC glfw
     PUBLIC glad
+    PUBLIC glm
     PUBLIC imgui
     PUBLIC spdlog::spdlog
 )

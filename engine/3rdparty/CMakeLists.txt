@@ -23,6 +23,15 @@ if(NOT TARGET glad)
     set_target_properties(glad PROPERTIES FOLDER ${third_party_folder}/glad)
 endif()
 
+# ---- glm (header-only) ----
+if(NOT TARGET glm)
+    add_library(glm INTERFACE)
+    target_include_directories(glm INTERFACE
+        ${CMAKE_CURRENT_LIST_DIR}/glm
+    )
+    set_target_properties(glm PROPERTIES FOLDER ${third_party_folder}/glm)
+endif()
+
 # ---- imgui ----
 if(NOT TARGET imgui)
     include(${CMAKE_CURRENT_LIST_DIR}/imgui.cmake)
