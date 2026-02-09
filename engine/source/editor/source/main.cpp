@@ -5,6 +5,7 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+#include "runtime/core/base/macro.h"
 #include "runtime/core/log/log_system.h"
 #include "runtime/function/window/window_system.h"
 #include "runtime/function/input/input_system.h"

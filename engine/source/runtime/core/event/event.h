@@ -1,4 +1,9 @@
 #pragma once
+
+#include "runtime/core/base/macro.h"
+
+#include <string>
+
 namespace Hybrid
 {
 	enum class EventType 

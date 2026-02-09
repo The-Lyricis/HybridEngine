@@ -1,4 +1,8 @@
 #pragma once
+#include "event.h"
+#include <string>
+#include <vector>
+
 namespace Hybrid
 {
     class Layer 
