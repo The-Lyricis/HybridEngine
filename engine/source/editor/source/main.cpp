@@ -12,6 +12,7 @@
 #include "runtime/core/event/application_event.h"
 #include "runtime/core/event/input_event.h"
 
+#include "runtime/function/input/input_layer.h"
 
 #include "editor/include/editor_ui.h"
 #include "runtime/function/render/render_system.h"
@@ -47,10 +48,12 @@ int main(int argc, char** argv)
     Hybrid::LogSystem::Init();
 
     Hybrid::LayerStack stack;
-    TestLayer layer("TestLayer");
-    OverlayLayer overlay("Overlay");
-    stack.PushLayer(&layer);
-    stack.PushOverlay(&overlay);
+    Hybrid::InputLayer input_layer;
+    // TestLayer layer("TestLayer");
+    // OverlayLayer overlay("Overlay");
+    stack.PushLayer(&input_layer);
+    // stack.PushLayer(&layer);
+    // stack.PushOverlay(&overlay);
 
     auto window_system = std::make_shared<Hybrid::WindowSystem>();
     window_system->initialize(1280, 720, "Hybrid Engine Editor");
@@ -73,14 +76,15 @@ int main(int argc, char** argv)
         return -1;
     }
     auto surface_io = window_system->getSurfaceIO();
-    surface_io->registerOnEventFunc([&stack](Hybrid::Event& e) {
+    surface_io->registerOnEventFunc([&](Hybrid::Event& e) {
+        input_layer.OnEvent(e); // phase 1: sample (ignore Handled)
         for (auto it = stack.rbegin(); it != stack.rend(); ++it)
         {
-            (*it)->OnEvent(e);
+            (*it)->OnEvent(e); // phase 2: dispatch (Handled can break)
             if (e.Handled)
                 break;
         }
-        });
+    });
 
     auto editor_ui = std::make_shared<Hybrid::EditorUI>();
     editor_ui->initialize(window);
@@ -91,6 +95,7 @@ int main(int argc, char** argv)
 
     while (!window_system->shouldClose()) {
 
+        input_layer.OnUpdate(0.0f);
         window_system->pollEvents();
 
         editor_ui->beginFrame();
