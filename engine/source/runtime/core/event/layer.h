@@ -37,7 +37,7 @@ namespace Hybrid
         auto rend() { return m_Layers.rend(); }
     private:
         std::vector<Layer*> m_Layers;
-        size_t m_LayerInsertIndex = 0; // ÆÕÍ¨²ã²åÈëµã
+        size_t m_LayerInsertIndex = 0; // æ™®é€šå±‚æ’å…¥ç‚¹
     };
 
 }
