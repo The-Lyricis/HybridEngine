@@ -1,0 +1,35 @@
+# EditorConfig 官方网站: https://EditorConfig.org
+
+# 表示这是根配置文件，不要再往上层文件夹查找
+root = true
+
+# 对所有文件生效
+[*]
+# 【核心：解决乱码】使用 UTF-8 编码
+charset = utf-8
+# 结尾换行符类型 (Windows 用 crlf, Unix/Linux 用 lf)
+# 建议团队统一使用 lf，VS 和 Git 都能很好处理
+end_of_line = lf
+# 在文件末尾插入一个空行
+insert_final_newline = true
+# 删除行尾多余的空格
+trim_trailing_whitespace = true
+# 缩进风格：space（空格）或 tab（制表符）
+indent_style = space
+# 缩进大小
+indent_size = 4
+
+# 对特定后缀的文件进行微调
+[*.{json,yml,yaml}]
+indent_size = 2
+
+# 对 Markdown 文件不执行自动删除行尾空格（因为 MD 靠行尾双空格换行）
+[*.md]
+trim_trailing_whitespace = false
+
+# 针对 C# 文件的特殊规则 (Visual Studio 非常看重这些)
+[*.cs]
+# 建议 C# 也保持 4 空格缩进
+indent_size = 4
+# 强制要求使用 UTF-8 with BOM (Visual Studio 编译器对中文最友好的格式)
+charset = utf-8-bom
