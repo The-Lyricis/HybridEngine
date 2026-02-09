@@ -16,13 +16,13 @@ namespace Hybrid {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
-        // ¿ÉÑ¡£ºÄã¿ÉÒÔÔÚÕâÀïÉèÖÃ ImGui ·ç¸ñ
+        // å¯é€‰ï¼šä½ å¯ä»¥åœ¨è¿™é‡Œè®¾ç½® ImGui é£æ ¼
         // ImGui::StyleColorsDark();
 
-        // ÈÃ ImGui °²×° GLFW »Øµ÷£¨ÄãÔ­±¾¾ÍÊÇ true£©
+        // è®© ImGui å®‰è£… GLFW å›è°ƒï¼ˆä½ åŸæœ¬å°±æ˜¯ trueï¼‰
         ImGui_ImplGlfw_InitForOpenGL(m_window, true);
 
-        // Äã´´½¨µÄÊÇ 3.3 Core µÄ»°£¬ÓÃ 330
+        // ä½ åˆ›å»ºçš„æ˜¯ 3.3 Core çš„è¯ï¼Œç”¨ 330
         ImGui_ImplOpenGL3_Init("#version 330");
 
         m_initialized = true;
@@ -73,18 +73,18 @@ namespace Hybrid {
 
         ImGui::Begin("##BottomStatusBar", nullptr, flags);
         {
-            const std::string lastKey = InputSystem::getInstance().getLastKeyName();
-            ImGui::Text("Last key: %s", lastKey.c_str());
+            //const std::string lastKey = InputSystem::getInstance().getLastKeyName();
+            //ImGui::Text("Last key: %s", lastKey.c_str());
 
-            char fpsBuf[64];
-            std::snprintf(fpsBuf, sizeof(fpsBuf), "FPS: %.1f", io.Framerate);
+            //char fpsBuf[64];
+            //std::snprintf(fpsBuf, sizeof(fpsBuf), "FPS: %.1f", io.Framerate);
 
-            const float fpsWidth = ImGui::CalcTextSize(fpsBuf).x;
-            const float rightX = ImGui::GetContentRegionAvail().x - fpsWidth;
-            if (rightX > 0.0f)
-                ImGui::SameLine(rightX);
+            //const float fpsWidth = ImGui::CalcTextSize(fpsBuf).x;
+            //const float rightX = ImGui::GetContentRegionAvail().x - fpsWidth;
+            //if (rightX > 0.0f)
+            //    ImGui::SameLine(rightX);
 
-            ImGui::TextUnformatted(fpsBuf);
+            //ImGui::TextUnformatted(fpsBuf);
         }
         ImGui::End();
 
@@ -109,8 +109,8 @@ namespace Hybrid {
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        // ×¢Òâ£ºswapBuffers ²»Ó¦¸ÃÔÚÕâÀï×ö£¨ÓÉ main ¿ØÖÆ¸üÇåÎú£©
-        // µ«ÈôÄãÏ£Íû UI Àà¹ÜÀí swap£¬Ò²¿ÉÒÔ·Å»ØÈ¥¡£
+        // æ³¨æ„ï¼šswapBuffers ä¸åº”è¯¥åœ¨è¿™é‡Œåšï¼ˆç”± main æ§åˆ¶æ›´æ¸…æ™°ï¼‰
+        // ä½†è‹¥ä½ å¸Œæœ› UI ç±»ç®¡ç† swapï¼Œä¹Ÿå¯ä»¥æ”¾å›å»ã€‚
     }
 
 } // namespace Hybrid

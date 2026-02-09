@@ -8,7 +8,11 @@
 #include "runtime/core/base/macro.h"
 #include "runtime/core/log/log_system.h"
 #include "runtime/function/window/window_system.h"
-#include "runtime/function/input/input_system.h"
+
+#include "runtime/core/event/event.h"
+#include "runtime/core/event/layer.h"
+#include "runtime/core/event/application_event.h"
+#include "runtime/core/event/input_event.h"
 
 #include "runtime/function/render/renderer.h"
 #include "runtime/function/render/render_command.h"
@@ -17,30 +21,59 @@
 
 #include "editor/include/editor_ui.h"
 
-int main(int argc, char** argv) {
+class TestLayer : public Hybrid::Layer
+{
+public:
+    using Layer::Layer;
+
+    void OnEvent(Hybrid::Event& e) override
+    {
+        std::cout << "[TestLayer] " << e.ToString() << "\n";
+        if (e.GetEventType() == Hybrid::EventType::KeyPressed)
+            e.Handled = true;
+    }
+};
+
+class OverlayLayer : public Hybrid::Layer
+{
+public:
+    using Layer::Layer;
+
+    void OnEvent(Hybrid::Event& e) override
+    {
+        std::cout << "[Overlay] " << e.ToString() << "\n";
+    }
+};
+
+int main(int argc, char** argv)
+{
     std::cout << "Starting Hybrid Engine..." << std::endl;
 
     Hybrid::LogSystem::Init();
+
+    Hybrid::LayerStack stack;
+    TestLayer layer("TestLayer");
+    OverlayLayer overlay("Overlay");
+    stack.PushLayer(&layer);
+    stack.PushOverlay(&overlay);
 
     auto window_system = std::make_shared<Hybrid::WindowSystem>();
     window_system->initialize(1280, 720, "Hybrid Engine Editor");
 
     GLFWwindow* window = window_system->getGLFWWindow();
-    if (!window) {
+    if (!window)
+    {
         HBD_CORE_ERROR("GLFW window is null.");
         window_system->cleanup();
         Hybrid::LogSystem::Shutdown();
         return -1;
     }
 
-    // --- 关键：确保当前上下文 + gladLoadGL 成功 ---
     glfwMakeContextCurrent(window);
 
-    // 可选：关掉 vsync 便于看帧率变化
-    // glfwSwapInterval(0);
-
     const int ver = gladLoadGL(glfwGetProcAddress);
-    if (ver == 0) {
+    if (ver == 0)
+    {
         HBD_CORE_ERROR("gladLoadGL failed (returned 0).");
         window_system->cleanup();
         Hybrid::LogSystem::Shutdown();
@@ -50,19 +83,22 @@ int main(int argc, char** argv) {
     const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
     HBD_CORE_INFO("OpenGL Version: {}", glVersion ? glVersion : "null");
 
-    // 输入系统初始化
-    Hybrid::InputSystem::getInstance().initialize(*window_system->getSurfaceIO());
+    auto surface_io = window_system->getSurfaceIO();
+    surface_io->registerOnEventFunc([&stack](Hybrid::Event& e) {
+        for (auto it = stack.rbegin(); it != stack.rend(); ++it)
+        {
+            (*it)->OnEvent(e);
+            if (e.Handled)
+                break;
+        }
+    });
 
-    // 初始化 ImGui
     auto editor_ui = std::make_shared<Hybrid::EditorUI>();
     editor_ui->initialize(window);
 
-    // Renderer 初始化（只做一次）
     Hybrid::Renderer::Init();
 
-    // ---------- 创建三角形资源（只创建一次） ----------
     static float s_TriVertices[] = {
-        // x,    y,    z,    r,   g,   b,   a
         -0.5f, -0.5f, 0.0f, 1.f, 0.f, 0.f, 1.f,
          0.5f, -0.5f, 0.0f, 0.f, 1.f, 0.f, 1.f,
          0.0f,  0.5f, 0.0f, 0.f, 0.f, 1.f, 1.f,
@@ -100,17 +136,13 @@ void main() {
 
     HBD_CORE_INFO("Hybrid Engine Initialized.");
 
-    // ---------------- 主循环 ----------------
-    while (!window_system->shouldClose()) {
-        // 输入系统：清空边沿并收集新事件
-        Hybrid::InputSystem::getInstance().tick();
+    while (!window_system->shouldClose())
+    {
         window_system->pollEvents();
 
-        // 1) UI begin
         editor_ui->beginFrame();
         editor_ui->drawPanels();
 
-        // 2) Scene render：设置 viewport + 清屏 + 画三角形
         int display_w = 0, display_h = 0;
         glfwGetFramebufferSize(window, &display_w, &display_h);
 
@@ -120,14 +152,11 @@ void main() {
         Hybrid::Renderer::Submit(vao, shader);
         Hybrid::Renderer::EndFrame();
 
-        // 3) UI end：把 ImGui draw data 画到当前 backbuffer 上
         editor_ui->endFrame();
 
-        // 4) Swap buffers（必须由 main 控制，避免 UI 内部又清屏/乱序）
         glfwSwapBuffers(window);
     }
 
-    // ------------- 清理 -------------
     editor_ui->shutdown();
     window_system->cleanup();
     Hybrid::LogSystem::Shutdown();

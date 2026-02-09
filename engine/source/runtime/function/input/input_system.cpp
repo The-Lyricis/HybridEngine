@@ -1,223 +1,223 @@
-#include "runtime/function/input/input_system.h"
-#include "runtime/function/render/surface_io.h"
-
-#include <GLFW/glfw3.h>
-#include <runtime/core/log/log_system.h>
-#include <iostream>
-
-namespace Hybrid
-{
-    // ===== Range check =====
-    bool InputSystem::isKeyInRange(int key)
-    {
-        return key >= 0 && key <= kMaxKeys;
-    }
-    bool InputSystem::isMouseButtonInRange(int btn)
-    {
-        return btn >= 0 && btn <= kMaxMouse;
-    }
-
-    void InputSystem::initialize(SurfaceIO& surface)
-    {
-        m_surface = &surface;
-
-        // ×¢²á»Øµ÷£¨Äã SurfaceIO ĞèÒªÌá¹©¶ÔÓ¦×¢²á½Ó¿Ú£©
-        surface.registerOnKeyFunc([this](int key, int scancode, int action, int mods) {
-            this->onKey(key, scancode, action, mods);
-            });
-
-        surface.registerOnMouseButtonFunc([this](int button, int action, int mods) {
-            this->onMouseButton(button, action, mods);
-            });
-
-        surface.registerOnCursorPosFunc([this](double x, double y) {
-            this->onCursorPos(x, y);
-            });
-
-        //// Èç¹ûÄãµÄ SurfaceIO »¹Ã»ÓĞ¹öÂÖ/×Ö·û»Øµ÷½Ó¿Ú£¬½¨Òé²¹ÉÏ£º
-        //// registerOnScrollFunc / registerOnCharFunc
-        //// ÕâÀï¼ÙÉèÄãÒÑ¾­²¹Æë£¬»òÄã¿ÉÒÔ°ÑËüÃÇ·Åµ½ GLFW Ô­Éú callback ÖĞ
-        //if constexpr (true)
-        //{
-        //    surface.registerOnScrollFunc([this](double xoff, double yoff) {
-        //        this->onScroll(xoff, yoff);
-        //        });
-        //    surface.registerOnCharFunc([this](unsigned int codepoint) {
-        //        this->onChar(codepoint);
-        //        });
-        //}
-    }
-
-    void InputSystem::tick()
-    {
-        // 1) ¸üĞÂÊäÈëÓĞĞ§ĞÔ£¨²ßÂÔ¿É°´ÄãÒıÇæÂß¼­µ÷Õû£©
-        // Ê¾Àı£ºfocus mode ²ÅÓĞĞ§
-        if (m_surface)
-            m_input_valid = m_surface->isFocusMode();
-        else
-            m_input_valid = true;
-
-        // 2) ÇåÀí±¾Ö¡±ßÑØ£¨pressed/released Ö»±£ÁôÒ»Ö¡£©
-        for (auto& k : m_keys)
-        {
-            k.pressed = false;
-            k.released = false;
-        }
-        for (auto& b : m_mouse)
-        {
-            b.pressed = false;
-            b.released = false;
-        }
-
-        // 3) ÇåÀíÊó±êÔöÁ¿Óë¹öÂÖÔöÁ¿¡¢ÎÄ±¾ÊäÈë£¨È«²¿ÊÇ¡°±¾Ö¡Á¿¡±£©
-        m_mouse_delta_x = 0.0;
-        m_mouse_delta_y = 0.0;
-        m_scroll_delta_x = 0.0;
-        m_scroll_delta_y = 0.0;
-        m_text_input.clear();
-    }
-
-    // ===== Query =====
-    bool InputSystem::isKeyDown(int glfw_key) const
-    {
-        if (!isKeyInRange(glfw_key)) return false;
-        return m_keys[glfw_key].down;
-    }
-    bool InputSystem::wasKeyPressed(int glfw_key) const
-    {
-        if (!isKeyInRange(glfw_key)) return false;
-        return m_keys[glfw_key].pressed;
-    }
-    bool InputSystem::wasKeyReleased(int glfw_key) const
-    {
-        if (!isKeyInRange(glfw_key)) return false;
-        return m_keys[glfw_key].released;
-    }
-
-    bool InputSystem::isMouseDown(int glfw_button) const
-    {
-        if (!isMouseButtonInRange(glfw_button)) return false;
-        return m_mouse[glfw_button].down;
-    }
-    bool InputSystem::wasMousePressed(int glfw_button) const
-    {
-        if (!isMouseButtonInRange(glfw_button)) return false;
-        return m_mouse[glfw_button].pressed;
-    }
-    bool InputSystem::wasMouseReleased(int glfw_button) const
-    {
-        if (!isMouseButtonInRange(glfw_button)) return false;
-        return m_mouse[glfw_button].released;
-    }
-
-    // ===== Callbacks =====
-    void InputSystem::onKey(int key, int scancode, int action, int mods)
-    {
-        if (!isKeyInRange(key)) return;
-
-		std::cout <<  "Key event: key=" << key << ", scancode=" << scancode << ", action=" << action << ", mods=" << mods << std::endl;
-
-        auto& st = m_keys[key];
-
-        if (action == GLFW_PRESS)
-        {
-            // Èç¹ûÖ®Ç°²»ÊÇ down£¬ÔòÕâÊÇ±ßÑØ pressed
-            if (!st.down)
-                st.pressed = true;
-
-            st.down = true;
-
-            m_last_key_event.key = key;
-            m_last_key_event.scancode = scancode;
-            m_last_key_event.mods = mods;
-            m_last_key_event.time_sec = glfwGetTime(); // ĞèÒª <GLFW/glfw3.h>
-            m_last_key_event.valid = true;
-
-        }
-        else if (action == GLFW_RELEASE)
-        {
-            if (st.down)
-                st.released = true;
-
-            st.down = false;
-        }
-        else if (action == GLFW_REPEAT)
-        {
-            // repeat Ò»°ã²»¶îÍâÉèÖÃ pressed
-            st.down = true;
-        }
-    }
-
-    void InputSystem::onMouseButton(int button, int action, int /*mods*/)
-    {
-        if (!isMouseButtonInRange(button)) return;
-
-        auto& st = m_mouse[button];
-
-        if (action == GLFW_PRESS)
-        {
-            if (!st.down)
-                st.pressed = true;
-            st.down = true;
-        }
-        else if (action == GLFW_RELEASE)
-        {
-            if (st.down)
-                st.released = true;
-            st.down = false;
-        }
-    }
-
-    void InputSystem::onCursorPos(double x, double y)
-    {
-        if (!m_surface) return;
-
-        // Èô²»ÔÚ focus mode£¬Ôò²»ÀÛ¼ÆÏà¶ÔÒÆ¶¯£¬ÇÒÖØÖÃ init
-        if (!m_surface->isFocusMode())
-        {
-            m_mouse_inited = false;
-            return;
-        }
-
-        if (!m_mouse_inited)
-        {
-            m_last_mouse_x = x;
-            m_last_mouse_y = y;
-            m_mouse_inited = true;
-            return;
-        }
-
-        // ÀÛ¼Æ±¾Ö¡Ïà¶ÔÒÆ¶¯
-        m_mouse_delta_x += (x - m_last_mouse_x);
-        m_mouse_delta_y += (y - m_last_mouse_y);
-
-        m_last_mouse_x = x;
-        m_last_mouse_y = y;
-    }
-
-    std::string InputSystem::getLastKeyName() const
-    {
-        if (!m_last_key_event.valid) return "(none)";
-
-        // glfwGetKeyName Ö»¶Ô¿É´òÓ¡¼ü£¨×ÖÄ¸Êı×ÖµÈ£©¿É¿¿£»¹¦ÄÜ¼ü¿ÉÄÜ·µ»Ø nullptr
-        const char* name = glfwGetKeyName(m_last_key_event.key, m_last_key_event.scancode);
-        if (name && name[0] != '\0')
-            return std::string(name);
-
-        // ²»¿É´òÓ¡¼ü£º·µ»Ø key code
-        return std::string("keycode=") + std::to_string(m_last_key_event.key);
-    }
-
-    //void InputSystem::onScroll(double xoffset, double yoffset)
-    //{
-    //    m_scroll_delta_x += xoffset;
-    //    m_scroll_delta_y += yoffset;
-    //}
-
-    //void InputSystem::onChar(unsigned int codepoint)
-    //{
-    //    // GLFW char callback ¸øµÄÊÇ Unicode codepoint£¨UTF-32£©
-    //    m_text_input.push_back(static_cast<char32_t>(codepoint));
-    //}
-
-} // namespace Pilot
+//#include "runtime/function/input/input_system.h"
+//#include "runtime/function/render/surface_io.h"
+//
+//#include <GLFW/glfw3.h>
+//#include <runtime/core/log/log_system.h>
+//#include <iostream>
+//
+//namespace Hybrid
+//{
+//    // ===== Range check =====
+//    bool InputSystem::isKeyInRange(int key)
+//    {
+//        return key >= 0 && key <= kMaxKeys;
+//    }
+//    bool InputSystem::isMouseButtonInRange(int btn)
+//    {
+//        return btn >= 0 && btn <= kMaxMouse;
+//    }
+//
+//    void InputSystem::initialize(SurfaceIO& surface)
+//    {
+//        m_surface = &surface;
+//
+//        // æ³¨å†Œå›è°ƒï¼ˆä½  SurfaceIO éœ€è¦æä¾›å¯¹åº”æ³¨å†Œæ¥å£ï¼‰
+//        surface.registerOnKeyFunc([this](int key, int scancode, int action, int mods) {
+//            this->onKey(key, scancode, action, mods);
+//            });
+//
+//        surface.registerOnMouseButtonFunc([this](int button, int action, int mods) {
+//            this->onMouseButton(button, action, mods);
+//            });
+//
+//        surface.registerOnCursorPosFunc([this](double x, double y) {
+//            this->onCursorPos(x, y);
+//            });
+//
+//        //// å¦‚æœä½ çš„ SurfaceIO è¿˜æ²¡æœ‰æ»šè½®/å­—ç¬¦å›è°ƒæ¥å£ï¼Œå»ºè®®è¡¥ä¸Šï¼š
+//        //// registerOnScrollFunc / registerOnCharFunc
+//        //// è¿™é‡Œå‡è®¾ä½ å·²ç»è¡¥é½ï¼Œæˆ–ä½ å¯ä»¥æŠŠå®ƒä»¬æ”¾åˆ° GLFW åŸç”Ÿ callback ä¸­
+//        //if constexpr (true)
+//        //{
+//        //    surface.registerOnScrollFunc([this](double xoff, double yoff) {
+//        //        this->onScroll(xoff, yoff);
+//        //        });
+//        //    surface.registerOnCharFunc([this](unsigned int codepoint) {
+//        //        this->onChar(codepoint);
+//        //        });
+//        //}
+//    }
+//
+//    void InputSystem::tick()
+//    {
+//        // 1) æ›´æ–°è¾“å…¥æœ‰æ•ˆæ€§ï¼ˆç­–ç•¥å¯æŒ‰ä½ å¼•æ“é€»è¾‘è°ƒæ•´ï¼‰
+//        // ç¤ºä¾‹ï¼šfocus mode æ‰æœ‰æ•ˆ
+//        if (m_surface)
+//            m_input_valid = m_surface->isFocusMode();
+//        else
+//            m_input_valid = true;
+//
+//        // 2) æ¸…ç†æœ¬å¸§è¾¹æ²¿ï¼ˆpressed/released åªä¿ç•™ä¸€å¸§ï¼‰
+//        for (auto& k : m_keys)
+//        {
+//            k.pressed = false;
+//            k.released = false;
+//        }
+//        for (auto& b : m_mouse)
+//        {
+//            b.pressed = false;
+//            b.released = false;
+//        }
+//
+//        // 3) æ¸…ç†é¼ æ ‡å¢é‡ä¸æ»šè½®å¢é‡ã€æ–‡æœ¬è¾“å…¥ï¼ˆå…¨éƒ¨æ˜¯â€œæœ¬å¸§é‡â€ï¼‰
+//        m_mouse_delta_x = 0.0;
+//        m_mouse_delta_y = 0.0;
+//        m_scroll_delta_x = 0.0;
+//        m_scroll_delta_y = 0.0;
+//        m_text_input.clear();
+//    }
+//
+//    // ===== Query =====
+//    bool InputSystem::isKeyDown(int glfw_key) const
+//    {
+//        if (!isKeyInRange(glfw_key)) return false;
+//        return m_keys[glfw_key].down;
+//    }
+//    bool InputSystem::wasKeyPressed(int glfw_key) const
+//    {
+//        if (!isKeyInRange(glfw_key)) return false;
+//        return m_keys[glfw_key].pressed;
+//    }
+//    bool InputSystem::wasKeyReleased(int glfw_key) const
+//    {
+//        if (!isKeyInRange(glfw_key)) return false;
+//        return m_keys[glfw_key].released;
+//    }
+//
+//    bool InputSystem::isMouseDown(int glfw_button) const
+//    {
+//        if (!isMouseButtonInRange(glfw_button)) return false;
+//        return m_mouse[glfw_button].down;
+//    }
+//    bool InputSystem::wasMousePressed(int glfw_button) const
+//    {
+//        if (!isMouseButtonInRange(glfw_button)) return false;
+//        return m_mouse[glfw_button].pressed;
+//    }
+//    bool InputSystem::wasMouseReleased(int glfw_button) const
+//    {
+//        if (!isMouseButtonInRange(glfw_button)) return false;
+//        return m_mouse[glfw_button].released;
+//    }
+//
+//    // ===== Callbacks =====
+//    void InputSystem::onKey(int key, int scancode, int action, int mods)
+//    {
+//        if (!isKeyInRange(key)) return;
+//
+//		std::cout <<  "Key event: key=" << key << ", scancode=" << scancode << ", action=" << action << ", mods=" << mods << std::endl;
+//
+//        auto& st = m_keys[key];
+//
+//        if (action == GLFW_PRESS)
+//        {
+//            // å¦‚æœä¹‹å‰ä¸æ˜¯ downï¼Œåˆ™è¿™æ˜¯è¾¹æ²¿ pressed
+//            if (!st.down)
+//                st.pressed = true;
+//
+//            st.down = true;
+//
+//            m_last_key_event.key = key;
+//            m_last_key_event.scancode = scancode;
+//            m_last_key_event.mods = mods;
+//            m_last_key_event.time_sec = glfwGetTime(); // éœ€è¦ <GLFW/glfw3.h>
+//            m_last_key_event.valid = true;
+//
+//        }
+//        else if (action == GLFW_RELEASE)
+//        {
+//            if (st.down)
+//                st.released = true;
+//
+//            st.down = false;
+//        }
+//        else if (action == GLFW_REPEAT)
+//        {
+//            // repeat ä¸€èˆ¬ä¸é¢å¤–è®¾ç½® pressed
+//            st.down = true;
+//        }
+//    }
+//
+//    void InputSystem::onMouseButton(int button, int action, int /*mods*/)
+//    {
+//        if (!isMouseButtonInRange(button)) return;
+//
+//        auto& st = m_mouse[button];
+//
+//        if (action == GLFW_PRESS)
+//        {
+//            if (!st.down)
+//                st.pressed = true;
+//            st.down = true;
+//        }
+//        else if (action == GLFW_RELEASE)
+//        {
+//            if (st.down)
+//                st.released = true;
+//            st.down = false;
+//        }
+//    }
+//
+//    void InputSystem::onCursorPos(double x, double y)
+//    {
+//        if (!m_surface) return;
+//
+//        // è‹¥ä¸åœ¨ focus modeï¼Œåˆ™ä¸ç´¯è®¡ç›¸å¯¹ç§»åŠ¨ï¼Œä¸”é‡ç½® init
+//        if (!m_surface->isFocusMode())
+//        {
+//            m_mouse_inited = false;
+//            return;
+//        }
+//
+//        if (!m_mouse_inited)
+//        {
+//            m_last_mouse_x = x;
+//            m_last_mouse_y = y;
+//            m_mouse_inited = true;
+//            return;
+//        }
+//
+//        // ç´¯è®¡æœ¬å¸§ç›¸å¯¹ç§»åŠ¨
+//        m_mouse_delta_x += (x - m_last_mouse_x);
+//        m_mouse_delta_y += (y - m_last_mouse_y);
+//
+//        m_last_mouse_x = x;
+//        m_last_mouse_y = y;
+//    }
+//
+//    std::string InputSystem::getLastKeyName() const
+//    {
+//        if (!m_last_key_event.valid) return "(none)";
+//
+//        // glfwGetKeyName åªå¯¹å¯æ‰“å°é”®ï¼ˆå­—æ¯æ•°å­—ç­‰ï¼‰å¯é ï¼›åŠŸèƒ½é”®å¯èƒ½è¿”å› nullptr
+//        const char* name = glfwGetKeyName(m_last_key_event.key, m_last_key_event.scancode);
+//        if (name && name[0] != '\0')
+//            return std::string(name);
+//
+//        // ä¸å¯æ‰“å°é”®ï¼šè¿”å› key code
+//        return std::string("keycode=") + std::to_string(m_last_key_event.key);
+//    }
+//
+//    //void InputSystem::onScroll(double xoffset, double yoffset)
+//    //{
+//    //    m_scroll_delta_x += xoffset;
+//    //    m_scroll_delta_y += yoffset;
+//    //}
+//
+//    //void InputSystem::onChar(unsigned int codepoint)
+//    //{
+//    //    // GLFW char callback ç»™çš„æ˜¯ Unicode codepointï¼ˆUTF-32ï¼‰
+//    //    m_text_input.push_back(static_cast<char32_t>(codepoint));
+//    //}
+//
+//} // namespace Pilot

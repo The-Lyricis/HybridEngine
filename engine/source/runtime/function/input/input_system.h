@@ -1,110 +1,110 @@
-#pragma once
-#include <array>
-#include <cstdint>
-#include <functional>
-#include <vector>
-#include <string>
-#include <type_traits>
-#include <runtime/function/render/surface_io.h>
-
-#include "runtime/core/base/singleton.h" // ÄãµÄ Singleton<T> ËùÔÚÍ·ÎÄ¼şÂ·¾¶£ºÇë°´¹¤³ÌÊµ¼Êµ÷Õû
-
-struct GLFWwindow; // Ç°ÖÃÉùÃ÷
-
-namespace Hybrid
-{
-    struct LastKeyEvent
-    {
-        int key = -1;
-        int scancode = 0;
-        int mods = 0;
-        double time_sec = 0.0;
-        bool valid = false;
-    };
-
-    class InputSystem : public Singleton<InputSystem>
-    {
-        // ÔÊĞí Singleton<InputSystem>::getInstance() ·ÃÎÊË½ÓĞ¹¹Ôì
-        friend class Singleton<InputSystem>;
-
-    public:
-
-        // ³õÊ¼»¯£º×¢²á»Øµ÷¡£±ØĞëÔÚ´´½¨ window / SurfaceIO ºóµ÷ÓÃÒ»´Î
-        void initialize(SurfaceIO& surface);
-
-        // Ã¿Ö¡µ÷ÓÃ£ºÇåÀí pressed/released ±ßÑØ¡¢ÇåÀíÊó±êÔöÁ¿¡¢¸üĞÂ focus ×´Ì¬µÈ
-        void tick();
-
-        // ====== ¼üÅÌ²éÑ¯£ºÖ§³ÖÈ«²¿ GLFW Key ======
-        bool isKeyDown(int glfw_key) const;
-        bool wasKeyPressed(int glfw_key) const;
-        bool wasKeyReleased(int glfw_key) const;
-
-        // ====== Êó±ê²éÑ¯£ºÖ§³ÖÈ«²¿ GLFW Mouse Button ======
-        bool isMouseDown(int glfw_button) const;
-        bool wasMousePressed(int glfw_button) const;
-        bool wasMouseReleased(int glfw_button) const;
-
-        // ====== Êó±êÒÆ¶¯/¹öÂÖ ======
-        double getMouseDeltaX() const { return m_mouse_delta_x; }
-        double getMouseDeltaY() const { return m_mouse_delta_y; }
-        double getScrollDeltaX() const { return m_scroll_delta_x; }
-        double getScrollDeltaY() const { return m_scroll_delta_y; }
-
-        // ====== ×Ö·ûÊäÈë£¨ÎÄ±¾ÊäÈë£©=====
-        const std::u32string& getTextInputBuffer() const { return m_text_input; }
-
-        // ====== ×´Ì¬£ºÊÇ·ñ½ÓÊÜÊäÈë ======
-        bool isInputValid() const { return m_input_valid; }
-
-        // ====== ×îºóÒ»´Î°´¼ü ======
-        const LastKeyEvent& getLastKeyEvent() const { return m_last_key_event; }
-        std::string getLastKeyName() const;
-
-    private:
-        // ÖØÒª£º¹¹Ôìº¯ÊıË½ÓĞ»¯£¬½ûÖ¹Íâ²¿¹¹Ôì£¬Ö»ÄÜÍ¨¹ı Singleton ´´½¨
-        InputSystem() = default;
-
-        // GLFW »Øµ÷Èë¿Ú£¨ÓÉ SurfaceIO µ÷ÓÃ£©
-        void onKey(int key, int scancode, int action, int mods);
-        void onMouseButton(int button, int action, int mods);
-        void onCursorPos(double x, double y);
-        void onScroll(double xoffset, double yoffset);
-        void onChar(unsigned int codepoint);
-
-        // °²È«¼ì²é
-        static bool isKeyInRange(int key);
-        static bool isMouseButtonInRange(int btn);
-
-    private:
-        struct ButtonState
-        {
-            bool down = false;
-            bool pressed = false;
-            bool released = false;
-        };
-
-        SurfaceIO* m_surface{ nullptr };
-
-        // GLFW ¹Ù·½¶¨Òå£ºGLFW_KEY_LAST, GLFW_MOUSE_BUTTON_LAST
-        static constexpr int kMaxKeys = 348;
-        static constexpr int kMaxMouse = 7;
-
-        std::array<ButtonState, kMaxKeys + 1>  m_keys{};
-        std::array<ButtonState, kMaxMouse + 1> m_mouse{};
-
-        bool   m_mouse_inited{ false };
-        double m_last_mouse_x{ 0.0 };
-        double m_last_mouse_y{ 0.0 };
-        double m_mouse_delta_x{ 0.0 };
-        double m_mouse_delta_y{ 0.0 };
-
-        double m_scroll_delta_x{ 0.0 };
-        double m_scroll_delta_y{ 0.0 };
-
-        std::u32string m_text_input;
-        bool m_input_valid{ true };
-
-        LastKeyEvent m_last_key_event;
-    };
-} // namespace Hybrid
+//#pragma once
+//#include <array>
+//#include <cstdint>
+//#include <functional>
+//#include <vector>
+//#include <string>
+//#include <type_traits>
+//#include <runtime/function/render/surface_io.h>
+//
+//#include "runtime/core/base/singleton.h" // ä½ çš„ Singleton<T> æ‰€åœ¨å¤´æ–‡ä»¶è·¯å¾„ï¼šè¯·æŒ‰å·¥ç¨‹å®é™…è°ƒæ•´
+//
+//struct GLFWwindow; // å‰ç½®å£°æ˜
+//
+//namespace Hybrid
+//{
+//    struct LastKeyEvent
+//    {
+//        int key = -1;
+//        int scancode = 0;
+//        int mods = 0;
+//        double time_sec = 0.0;
+//        bool valid = false;
+//    };
+//
+//    class InputSystem : public Singleton<InputSystem>
+//    {
+//        // å…è®¸ Singleton<InputSystem>::getInstance() è®¿é—®ç§æœ‰æ„é€ 
+//        friend class Singleton<InputSystem>;
+//
+//    public:
+//
+//        // åˆå§‹åŒ–ï¼šæ³¨å†Œå›è°ƒã€‚å¿…é¡»åœ¨åˆ›å»º window / SurfaceIO åè°ƒç”¨ä¸€æ¬¡
+//        void initialize(SurfaceIO& surface);
+//
+//        // æ¯å¸§è°ƒç”¨ï¼šæ¸…ç† pressed/released è¾¹æ²¿ã€æ¸…ç†é¼ æ ‡å¢é‡ã€æ›´æ–° focus çŠ¶æ€ç­‰
+//        void tick();
+//
+//        // ====== é”®ç›˜æŸ¥è¯¢ï¼šæ”¯æŒå…¨éƒ¨ GLFW Key ======
+//        bool isKeyDown(int glfw_key) const;
+//        bool wasKeyPressed(int glfw_key) const;
+//        bool wasKeyReleased(int glfw_key) const;
+//
+//        // ====== é¼ æ ‡æŸ¥è¯¢ï¼šæ”¯æŒå…¨éƒ¨ GLFW Mouse Button ======
+//        bool isMouseDown(int glfw_button) const;
+//        bool wasMousePressed(int glfw_button) const;
+//        bool wasMouseReleased(int glfw_button) const;
+//
+//        // ====== é¼ æ ‡ç§»åŠ¨/æ»šè½® ======
+//        double getMouseDeltaX() const { return m_mouse_delta_x; }
+//        double getMouseDeltaY() const { return m_mouse_delta_y; }
+//        double getScrollDeltaX() const { return m_scroll_delta_x; }
+//        double getScrollDeltaY() const { return m_scroll_delta_y; }
+//
+//        // ====== å­—ç¬¦è¾“å…¥ï¼ˆæ–‡æœ¬è¾“å…¥ï¼‰=====
+//        const std::u32string& getTextInputBuffer() const { return m_text_input; }
+//
+//        // ====== çŠ¶æ€ï¼šæ˜¯å¦æ¥å—è¾“å…¥ ======
+//        bool isInputValid() const { return m_input_valid; }
+//
+//        // ====== æœ€åä¸€æ¬¡æŒ‰é”® ======
+//        const LastKeyEvent& getLastKeyEvent() const { return m_last_key_event; }
+//        std::string getLastKeyName() const;
+//
+//    private:
+//        // é‡è¦ï¼šæ„é€ å‡½æ•°ç§æœ‰åŒ–ï¼Œç¦æ­¢å¤–éƒ¨æ„é€ ï¼Œåªèƒ½é€šè¿‡ Singleton åˆ›å»º
+//        InputSystem() = default;
+//
+//        // GLFW å›è°ƒå…¥å£ï¼ˆç”± SurfaceIO è°ƒç”¨ï¼‰
+//        void onKey(int key, int scancode, int action, int mods);
+//        void onMouseButton(int button, int action, int mods);
+//        void onCursorPos(double x, double y);
+//        void onScroll(double xoffset, double yoffset);
+//        void onChar(unsigned int codepoint);
+//
+//        // å®‰å…¨æ£€æŸ¥
+//        static bool isKeyInRange(int key);
+//        static bool isMouseButtonInRange(int btn);
+//
+//    private:
+//        struct ButtonState
+//        {
+//            bool down = false;
+//            bool pressed = false;
+//            bool released = false;
+//        };
+//
+//        SurfaceIO* m_surface{ nullptr };
+//
+//        // GLFW å®˜æ–¹å®šä¹‰ï¼šGLFW_KEY_LAST, GLFW_MOUSE_BUTTON_LAST
+//        static constexpr int kMaxKeys = 348;
+//        static constexpr int kMaxMouse = 7;
+//
+//        std::array<ButtonState, kMaxKeys + 1>  m_keys{};
+//        std::array<ButtonState, kMaxMouse + 1> m_mouse{};
+//
+//        bool   m_mouse_inited{ false };
+//        double m_last_mouse_x{ 0.0 };
+//        double m_last_mouse_y{ 0.0 };
+//        double m_mouse_delta_x{ 0.0 };
+//        double m_mouse_delta_y{ 0.0 };
+//
+//        double m_scroll_delta_x{ 0.0 };
+//        double m_scroll_delta_y{ 0.0 };
+//
+//        std::u32string m_text_input;
+//        bool m_input_valid{ true };
+//
+//        LastKeyEvent m_last_key_event;
+//    };
+//} // namespace Hybrid
