@@ -16,13 +16,13 @@ namespace Hybrid {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
-        // 可选：你可以在这里设置 ImGui 风格
+        // 在这里设置 ImGui 风格
         // ImGui::StyleColorsDark();
 
-        // 让 ImGui 安装 GLFW 回调（你原本就是 true）
+        // 让 ImGui 安装 GLFW 回调（原本就是 true）
         ImGui_ImplGlfw_InitForOpenGL(m_window, true);
 
-        // 你创建的是 3.3 Core 的话，用 330
+        // 3.3 Core 
         ImGui_ImplOpenGL3_Init("#version 330");
 
         m_initialized = true;
@@ -110,7 +110,29 @@ namespace Hybrid {
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         // 注意：swapBuffers 不应该在这里做（由 main 控制更清晰）
-        // 但若你希望 UI 类管理 swap，也可以放回去。
     }
+
+    void Hybrid::EditorUI::drawViewport(uint32_t colorTextureID) {
+        ImGui::Begin("Viewport");
+
+        m_ViewportFocused = ImGui::IsWindowFocused();
+        m_ViewportHovered = ImGui::IsWindowHovered();
+
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        if (avail.x < 1.0f) avail.x = 1.0f;
+        if (avail.y < 1.0f) avail.y = 1.0f;
+        m_ViewportSize = { avail.x, avail.y };
+
+        // OpenGL 纹理到 ImGui：需要 UV 翻转
+        ImGui::Image(
+            (ImTextureID)(intptr_t)colorTextureID,
+            avail,
+            ImVec2(0, 1),
+            ImVec2(1, 0)
+        );
+
+        ImGui::End();
+    }
+
 
 } // namespace Hybrid
