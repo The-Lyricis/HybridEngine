@@ -1,0 +1,24 @@
+#pragma once
+namespace Hybrid {
+    class ImGuiLayer : public Layer
+    {
+    public:
+        ImGuiLayer();
+        ~ImGuiLayer() override = default;
+
+        void OnAttach() override;
+        void OnDetach() override;
+        void OnEvent(Event& e) override;       // 可选：用于拦截输入
+        void OnImGuiRender() override;         // 可选：调试面板
+
+        void Begin();
+        void End();
+
+        void BlockEvents(bool block) { m_BlockEvents = block; }
+
+    private:
+        bool m_BlockEvents = true;             // 是否阻止游戏输入
+        float m_Time = 0.0f;                   // ImGui 内部时间
+    };
+
+} // namespace Hybrid

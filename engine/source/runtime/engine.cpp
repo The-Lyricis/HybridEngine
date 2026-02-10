@@ -2,11 +2,11 @@
 
 namespace Hybrid {
 
-    void HybridEngine::initialize() {
+    void HybridEngine::Init() {
         // Initialization code here
     }
 
-    void HybridEngine::run() {
+    void HybridEngine::Run() {
         // Main loop code here
     }
 
