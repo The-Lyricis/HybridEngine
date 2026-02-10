@@ -16,7 +16,29 @@
 
 #include "editor/include/editor_ui.h"
 #include "runtime/function/render/render_system.h"
+class TestLayer : public Hybrid::Layer
+{
+public:
+    using Layer::Layer;
 
+    void OnEvent(Hybrid::Event & e) override
+    {
+        std::cout << "[TestLayer] " << e.ToString() << "\n";
+        if (e.GetEventType() == Hybrid::EventType::KeyPressed)
+            e.Handled = true;
+    }
+};
+
+class OverlayLayer : public Hybrid::Layer
+{
+public:
+    using Layer::Layer;
+
+    void OnEvent(Hybrid::Event& e) override
+    {
+        std::cout << "[Overlay] " << e.ToString() << "\n";
+    }
+};
 // 计算 dt（秒）
 static float CalcDeltaTime()
 {
@@ -36,6 +58,10 @@ int main(int argc, char** argv)
 
     Hybrid::LayerStack stack;
     Hybrid::InputLayer input_layer;
+    TestLayer layer("TestLayer");
+    OverlayLayer overlay("Overlay");
+    stack.PushLayer(&layer);
+    stack.PushOverlay(&overlay);
     stack.PushLayer(&input_layer);
 
     auto window_system = std::make_shared<Hybrid::WindowSystem>();
@@ -80,7 +106,7 @@ int main(int argc, char** argv)
 
         const float dt = CalcDeltaTime();
 
-        // ✅ 每帧开始：清空边沿状态 + 清空 delta（必须在 pollEvents 之前）
+        // 每帧开始：清空边沿状态 + 清空 delta（必须在 pollEvents 之前）
         input_layer.OnUpdate(dt);        // 内部应调用 m_state.NewFrame()
 
         // 触发 GLFW 回调，回调里会把输入累加进 InputState
