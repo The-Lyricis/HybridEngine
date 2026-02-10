@@ -14,15 +14,15 @@ namespace Hybrid {
         }
 
         glfwMakeContextCurrent(m_window);
-        glfwSwapInterval(1); // ¿ªÆô´¹Ö±Í¬²½
+        glfwSwapInterval(1); // å¼€å¯å‚ç›´åŒæ­¥
 
-        // --- ºËĞÄ²½Öè£º³õÊ¼»¯ SurfaceIO ---
+        // --- æ ¸å¿ƒæ­¥éª¤ï¼šåˆå§‹åŒ– SurfaceIO ---
         m_surface_io = std::make_shared<SurfaceIO>(m_window);
 
-        // ¹Ø¼ü£º½« SurfaceIO ´æÈë´°¿ÚµÄ UserPointer
-        // ÕâÑù installGlfwCallbacks ÀïµÄ static_cast ²ÅÄÜÄÃµ½Êı¾İ
-        // ×¢Òâ£ºÕâÀïÎÒÃÇ´æµÄÊÇ m_cb_data µÄµØÖ·£¬ËüÔÚ SurfaceIO ÄÚ²¿¶¨Òå
-        // ¼ÙÉè SurfaceIO ¹¹Ôìº¯ÊıÀïÒÑ¾­´¦ÀíÁË£ºglfwSetWindowUserPointer(m_window, &m_cb_data);
+        // å…³é”®ï¼šå°† SurfaceIO å­˜å…¥çª—å£çš„ UserPointer
+        // è¿™æ · installGlfwCallbacks é‡Œçš„ static_cast æ‰èƒ½æ‹¿åˆ°æ•°æ®
+        // æ³¨æ„ï¼šè¿™é‡Œæˆ‘ä»¬å­˜çš„æ˜¯ m_cb_data çš„åœ°å€ï¼Œå®ƒåœ¨ SurfaceIO å†…éƒ¨å®šä¹‰
+        // å‡è®¾ SurfaceIO æ„é€ å‡½æ•°é‡Œå·²ç»å¤„ç†äº†ï¼šglfwSetWindowUserPointer(m_window, &m_cb_data);
     }
 
     void WindowSystem::cleanup() {

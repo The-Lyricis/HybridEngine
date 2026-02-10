@@ -12,7 +12,7 @@ namespace Hybrid {
 
         //Input Layer
         m_InputLayer = new InputLayer();
-        m_layerStack.pushLayer(m_InputLayer);
+        m_LayerStack.pushLayer(m_InputLayer);
 
         //EditorUI
         m_EditorUI = new EditorUI();
@@ -26,9 +26,31 @@ namespace Hybrid {
     void HybridEngine::run() {
         while (m_Running && !m_Window->shouldClose())
         {
+            float dt = calculateDeltaTime();
 
+            // phase 1: input state update
+            m_InputLayer->onUpdate(dt);
+
+            if (!m_Minimized)
+            {
+                // phase 2: logic update
+                for (Layer* layer : m_LayerStack)
+                    layer->onUpdate(dt);
+
+                // phase 3: UI
+                m_EditorUI->beginFrame();
+                m_EditorUI->drawPanels();
+                m_EditorUI->drawViewport(m_RenderSystem.getSceneColorTexture());
+
+                // phase 4: render
+
+
+                m_EditorUI->endFrame();
+            }
+
+            // phase 5: events & swap
+            m_Window->pollEvents();
+            glfwSwapBuffers(m_Window->getGLFWWindow());
         }
-
     }
-
 }

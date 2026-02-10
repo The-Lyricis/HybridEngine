@@ -21,7 +21,7 @@ class TestLayer : public Hybrid::Layer
 public:
     using Layer::Layer;
 
-    void OnEvent(Hybrid::Event & e) override
+    void onEvent(Hybrid::Event & e) override
     {
         std::cout << "[TestLayer] " << e.toString() << "\n";
         if (e.getEventType() == Hybrid::EventType::KeyPressed)
@@ -34,7 +34,7 @@ class OverlayLayer : public Hybrid::Layer
 public:
     using Layer::Layer;
 
-    void OnEvent(Hybrid::Event& e) override
+    void onEvent(Hybrid::Event& e) override
     {
         std::cout << "[Overlay] " << e.toString() << "\n";
     }

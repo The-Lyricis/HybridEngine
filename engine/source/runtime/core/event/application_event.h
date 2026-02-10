@@ -11,8 +11,8 @@ namespace Hybrid
     public:
         WindowResizeEvent(int width, int height) : m_Width(width), m_Height(height) {}
 
-        int GetWidth() const { return m_Width; }
-        int GetHeight() const { return m_Height; }
+        int getWidth() const { return m_Width; }
+        int getHeight() const { return m_Height; }
 
         std::string toString() const override
         {

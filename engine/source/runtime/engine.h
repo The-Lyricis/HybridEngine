@@ -25,7 +25,7 @@ namespace Hybrid {
         bool m_Minimized = false;   //用来判断窗口是否被最小化
 
         std::shared_ptr<WindowSystem> m_Window;
-        LayerStack m_layerStack;
+        LayerStack m_LayerStack;
 
         InputLayer* m_InputLayer = nullptr;
         EditorUI* m_EditorUI = nullptr;
