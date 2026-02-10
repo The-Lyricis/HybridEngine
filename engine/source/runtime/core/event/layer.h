@@ -11,11 +11,11 @@ namespace Hybrid
         Layer(const std::string& name = "Layer") : m_Name(name) {}
         virtual ~Layer() = default;
 
-        virtual void OnAttach() {}
-        virtual void OnDetach() {}
+        virtual void onAttach() {}
+        virtual void onDetach() {}
         virtual void onUpdate(float dt) {}
         virtual void onEvent(Event& e) {}
-        virtual void OnImGuiRender() {}
+        virtual void onImGuiRender() {}
 
         const std::string& GetName() const { return m_Name; }
     private:
