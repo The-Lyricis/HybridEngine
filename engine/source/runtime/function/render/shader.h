@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <cstdint>
+#include <glm/ext/matrix_float4x4.hpp>
 
 namespace Hybrid {
 
@@ -11,6 +12,7 @@ namespace Hybrid {
 
         void Bind() const;
         void Unbind() const;
+        void SetMat4(const std::string& name, const glm::mat4& m); // 4x4 matrix
 
     private:
         uint32_t m_RendererID = 0;

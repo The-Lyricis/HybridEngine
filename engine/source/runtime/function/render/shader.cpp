@@ -63,4 +63,10 @@ namespace Hybrid {
         glUseProgram(0);
     }
 
+    void Shader::SetMat4(const std::string& name, const glm::mat4& m) {
+        GLint loc = glGetUniformLocation(m_RendererID, name.c_str());
+        glUniformMatrix4fv(loc, 1, GL_FALSE, &m[0][0]);
+    }
+
+
 } // namespace Hybrid

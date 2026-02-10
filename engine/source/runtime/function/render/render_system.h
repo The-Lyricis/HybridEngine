@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <glm/vec2.hpp>
 
+#include "runtime/function/input/input_state.h"
+#include "runtime/function/render/editor_camera.h" // 你自己的相机类头文件路径
+
 namespace Hybrid {
 
     class Framebuffer;
@@ -14,23 +17,28 @@ namespace Hybrid {
         RenderSystem() = default;
         ~RenderSystem() = default;
 
-        // OpenGL 已初始化（gladLoadGL 成功）后调用
         void initialize(void* glfwWindowHandle);
 
-        // 每帧调用：根据 viewport size 渲染到 FBO，并准备好给 UI 展示的纹理
-        void renderFrame(const glm::vec2& viewportSize, void* glfwWindowHandle);
-
-        // 提供给 EditorUI::drawViewport 使用
         uint32_t getSceneColorTexture() const;
 
+        // ✅ M3：输入收敛为 InputState
+        void renderFrame(const glm::vec2& viewportSize,
+            void* glfwWindowHandle,
+            float dt,
+            bool viewportActive,
+            const InputState& input);
+
     private:
-        void createTriangleResources();
+        void createCubeResources();
         void ensureFramebufferSize(uint32_t w, uint32_t h);
 
     private:
         std::shared_ptr<Framebuffer> m_SceneFB;
-        std::shared_ptr<VertexArray> m_TriangleVAO;
-        std::shared_ptr<Shader> m_TriangleShader;
+
+        std::shared_ptr<VertexArray> m_CubeVAO;
+        std::shared_ptr<Shader>      m_CubeShader;
+
+        EditorCamera m_Camera;
 
         bool m_Initialized = false;
     };

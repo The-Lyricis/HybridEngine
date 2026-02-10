@@ -5,7 +5,6 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 
-#include "runtime/function/input/input_system.h"
 
 namespace Hybrid {
 
@@ -47,7 +46,7 @@ namespace Hybrid {
         ImGui::NewFrame();
     }
 
-    void EditorUI::drawBottomStatusBar() {
+    /*void EditorUI::drawBottomStatusBar() {
         ImGuiIO& io = ImGui::GetIO();
         ImGuiViewport* vp = ImGui::GetMainViewport();
 
@@ -73,23 +72,23 @@ namespace Hybrid {
 
         ImGui::Begin("##BottomStatusBar", nullptr, flags);
         {
-            //const std::string lastKey = InputSystem::getInstance().getLastKeyName();
-            //ImGui::Text("Last key: %s", lastKey.c_str());
+            const std::string lastKey = InputSystem::getInstance().getLastKeyName();
+            ImGui::Text("Last key: %s", lastKey.c_str());
 
-            //char fpsBuf[64];
-            //std::snprintf(fpsBuf, sizeof(fpsBuf), "FPS: %.1f", io.Framerate);
+            char fpsBuf[64];
+            std::snprintf(fpsBuf, sizeof(fpsBuf), "FPS: %.1f", io.Framerate);
 
-            //const float fpsWidth = ImGui::CalcTextSize(fpsBuf).x;
-            //const float rightX = ImGui::GetContentRegionAvail().x - fpsWidth;
-            //if (rightX > 0.0f)
-            //    ImGui::SameLine(rightX);
+            const float fpsWidth = ImGui::CalcTextSize(fpsBuf).x;
+            const float rightX = ImGui::GetContentRegionAvail().x - fpsWidth;
+            if (rightX > 0.0f)
+                ImGui::SameLine(rightX);
 
-            //ImGui::TextUnformatted(fpsBuf);
+            ImGui::TextUnformatted(fpsBuf);
         }
         ImGui::End();
 
         ImGui::PopStyleVar(2);
-    }
+    }*/
 
     void EditorUI::drawPanels() {
         if (!m_initialized) return;
@@ -101,7 +100,7 @@ namespace Hybrid {
         }
         ImGui::End();
 
-        drawBottomStatusBar();
+        //drawBottomStatusBar();
     }
 
     void EditorUI::endFrame() {
