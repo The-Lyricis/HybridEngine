@@ -1,11 +1,30 @@
 #include "engine.h"
 
+
 namespace Hybrid {
 
     void HybridEngine::initialize() {
         LogSystem::initialize();
         m_Window = std::make_shared<WindowSystem>();
         m_Window->initialize(1280, 720, "Hybrid Engine");
+
+        GLFWwindow* window = m_Window->getGLFWWindow();
+        if (!window) {
+            HBD_CORE_ERROR("GLFW window is null.");
+            m_Window->cleanup();
+            Hybrid::LogSystem::shutdown();
+            return;
+        }
+
+        glfwMakeContextCurrent(window);
+
+        const int ver = gladLoadGL(glfwGetProcAddress);
+        if (ver == 0) {
+            HBD_CORE_ERROR("gladLoadGL failed (returned 0).");
+            m_Window->cleanup();
+            Hybrid::LogSystem::shutdown();
+            return;
+        }
 
         auto surface_io = m_Window->getSurfaceIO();
         surface_io->registerOnEventFunc([this](Event& e) { onEvent(e); });

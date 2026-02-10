@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <glad/gl.h>
 
 #include "runtime/function/window/window_system.h"
 #include "runtime/core/event/layer.h"
@@ -24,7 +25,7 @@ namespace Hybrid{
         float calculateDeltaTime();
 
     private:
-        bool m_Running = false;
+        bool m_Running = true;
         bool m_Minimized = false;   //用来判断窗口是否被最小化
 
         std::shared_ptr<WindowSystem> m_Window;
