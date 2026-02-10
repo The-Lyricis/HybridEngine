@@ -43,7 +43,13 @@ namespace Hybrid {
                 m_EditorUI->drawViewport(m_RenderSystem.getSceneColorTexture());
 
                 // phase 4: render
-
+                m_RenderSystem.renderFrame(
+                    m_EditorUI->getViewportSize(),
+                    m_Window->getGLFWWindow(),
+                    dt,
+                    m_EditorUI->isViewportHovered() && m_EditorUI->isViewportFocused(),
+                    m_InputLayer->getState()
+                );
 
                 m_EditorUI->endFrame();
             }
@@ -52,5 +58,62 @@ namespace Hybrid {
             m_Window->pollEvents();
             glfwSwapBuffers(m_Window->getGLFWWindow());
         }
+    }
+    void HybridEngine::onEvent(Event& e)
+    {
+        // phase 1: input capture (ignore Handled)
+        if (m_InputLayer)
+            m_InputLayer->onEvent(e);
+
+        // phase 2: system events
+        EventDispatcher dispatcher(e);
+        dispatcher.dispatch<WindowCloseEvent>([this](WindowCloseEvent&) {
+            m_Running = false;
+            return true;
+            });
+
+        dispatcher.dispatch<WindowResizeEvent>([this](WindowResizeEvent& ev) {
+            if (ev.getWidth() == 0 || ev.getHeight() == 0)
+            {
+                m_Minimized = true;
+                return false;
+            }
+            m_Minimized = false;
+            // resize renderer's framebuffer if needed
+            
+            return false;
+            });
+
+        // phase 3: layer dispatch (Handled can break)
+        for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
+        {
+            (*it)->onEvent(e);
+            if (e.Handled)
+                break;
+        }
+    }
+
+    void HybridEngine::shutdown()
+    {
+        if (m_EditorUI)
+        {
+            m_EditorUI->shutdown();
+            delete m_EditorUI;
+            m_EditorUI = nullptr;
+        }
+
+        delete m_InputLayer;
+        m_InputLayer = nullptr;
+
+        m_Window->cleanup();
+        LogSystem::shutdown();
+    }
+
+    float HybridEngine::calculateDeltaTime()
+    {
+        float time = static_cast<float>(glfwGetTime());
+        float dt = time - m_LastTime;
+        m_LastTime = time;
+        return dt;
     }
 }

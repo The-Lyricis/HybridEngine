@@ -1,13 +1,16 @@
 #pragma once
-#include "core/event/event.h"
-#include "core/event/layer.h"
-#include "function/input/input_layer.h"
-#include "function/window/window_system.h"
-#include "function/render/render_system.h"
-#include <editor/include/editor_ui.h>
+#include <memory>
+
+#include "runtime/function/window/window_system.h"
+#include "runtime/core/event/layer.h"
+#include "runtime/core/event/application_event.h"
+#include "runtime/core/event/input_event.h"
+#include "runtime/function/input/input_layer.h"
+#include "runtime/function/render/render_system.h"
+#include "editor/include/editor_ui.h"
 
 
-namespace Hybrid {
+namespace Hybrid{
 
     class HybridEngine {
     public:
