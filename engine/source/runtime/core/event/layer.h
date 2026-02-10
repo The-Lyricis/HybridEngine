@@ -17,7 +17,7 @@ namespace Hybrid
         virtual void onEvent(Event& e) {}
         virtual void onImGuiRender() {}
 
-        const std::string& GetName() const { return m_Name; }
+        const std::string& getName() const { return m_Name; }
     private:
         std::string m_Name;
     };
