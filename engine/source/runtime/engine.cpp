@@ -12,7 +12,7 @@ namespace Hybrid {
 
         //Input Layer
         m_InputLayer = new InputLayer();
-        m_layerStack.PushLayer(m_InputLayer);
+        m_layerStack.pushLayer(m_InputLayer);
 
         //EditorUI
         m_EditorUI = new EditorUI();

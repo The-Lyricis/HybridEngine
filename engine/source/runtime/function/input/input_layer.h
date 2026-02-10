@@ -18,32 +18,32 @@ namespace Hybrid
         void onEvent(Event& e) override
         {
             EventDispatcher dispatcher(e);
-            dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent& ev) {
+            dispatcher.dispatch<KeyPressedEvent>([this](KeyPressedEvent& ev) {
                 if (!ev.IsRepeat())
                     m_state.onKey(ev.GetKeyCode(), true);
                 return false;
                 });
-            dispatcher.Dispatch<KeyReleasedEvent>([this](KeyReleasedEvent& ev) {
+            dispatcher.dispatch<KeyReleasedEvent>([this](KeyReleasedEvent& ev) {
                 m_state.onKey(ev.GetKeyCode(), false);
                 return false;
                 });
-            dispatcher.Dispatch<MouseButtonPressedEvent>([this](MouseButtonPressedEvent& ev) {
+            dispatcher.dispatch<MouseButtonPressedEvent>([this](MouseButtonPressedEvent& ev) {
                 m_state.onMouseButton(ev.GetMouseButton(), true);
                 return false;
                 });
-            dispatcher.Dispatch<MouseButtonReleasedEvent>([this](MouseButtonReleasedEvent& ev) {
+            dispatcher.dispatch<MouseButtonReleasedEvent>([this](MouseButtonReleasedEvent& ev) {
                 m_state.onMouseButton(ev.GetMouseButton(), false);
                 return false;
                 });
-            dispatcher.Dispatch<MouseMovedEvent>([this](MouseMovedEvent& ev) {
+            dispatcher.dispatch<MouseMovedEvent>([this](MouseMovedEvent& ev) {
                 m_state.onMouseMove(ev.GetX(), ev.GetY());
                 return false;
                 });
-            dispatcher.Dispatch<MouseScrolledEvent>([this](MouseScrolledEvent& ev) {
+            dispatcher.dispatch<MouseScrolledEvent>([this](MouseScrolledEvent& ev) {
                 m_state.onScroll(ev.GetXOffset(), ev.GetYOffset());
                 return false;
                 });
-            dispatcher.Dispatch<KeyTypedEvent>([this](KeyTypedEvent& ev) {
+            dispatcher.dispatch<KeyTypedEvent>([this](KeyTypedEvent& ev) {
                 m_state.onText(static_cast<char32_t>(ev.GetKeyCode()));
                 return false;
                 });
