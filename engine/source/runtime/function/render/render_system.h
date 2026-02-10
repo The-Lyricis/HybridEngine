@@ -21,7 +21,7 @@ namespace Hybrid {
 
         uint32_t getSceneColorTexture() const;
 
-        // ✅ M3：输入收敛为 InputState
+        //输入收敛为 InputState
         void renderFrame(const glm::vec2& viewportSize,
             void* glfwWindowHandle,
             float dt,
