@@ -54,7 +54,7 @@ int main(int argc, char** argv)
 {
     std::cout << "Starting Hybrid Engine..." << std::endl;
 
-    Hybrid::LogSystem::Init();
+    Hybrid::LogSystem::initialize();
 
     Hybrid::LayerStack stack;
     Hybrid::InputLayer input_layer;
@@ -71,7 +71,7 @@ int main(int argc, char** argv)
     if (!window) {
         HBD_CORE_ERROR("GLFW window is null.");
         window_system->cleanup();
-        Hybrid::LogSystem::Shutdown();
+        Hybrid::LogSystem::shutdown();
         return -1;
     }
 
@@ -81,17 +81,17 @@ int main(int argc, char** argv)
     if (ver == 0) {
         HBD_CORE_ERROR("gladLoadGL failed (returned 0).");
         window_system->cleanup();
-        Hybrid::LogSystem::Shutdown();
+        Hybrid::LogSystem::shutdown();
         return -1;
     }
 
     // 事件回调：InputLayer sample + LayerStack dispatch
     auto surface_io = window_system->getSurfaceIO();
     surface_io->registerOnEventFunc([&](Hybrid::Event& e) {
-        input_layer.OnEvent(e); // phase1: sample（采样输入到 InputState）
+        input_layer.onEvent(e); // phase1: sample（采样输入到 InputState）
         for (auto it = stack.rbegin(); it != stack.rend(); ++it)
         {
-            (*it)->OnEvent(e);    // phase2: dispatch（可 Handled 中断）
+            (*it)->onEvent(e);    // phase2: dispatch（可 Handled 中断）
             if (e.Handled) break;
         }
         });
@@ -107,7 +107,7 @@ int main(int argc, char** argv)
         const float dt = CalcDeltaTime();
 
         // 每帧开始：清空边沿状态 + 清空 delta（必须在 pollEvents 之前）
-        input_layer.OnUpdate(dt);        // 内部应调用 m_state.NewFrame()
+        input_layer.onUpdate(dt);        // 内部应调用 m_state.NewFrame()
 
         // 触发 GLFW 回调，回调里会把输入累加进 InputState
         window_system->pollEvents();
@@ -127,7 +127,7 @@ int main(int argc, char** argv)
             window,
             dt,
             viewportActive,
-            input_layer.GetState()
+            input_layer.getState()
         );
 
         editor_ui->endFrame();
@@ -136,6 +136,6 @@ int main(int argc, char** argv)
 
     editor_ui->shutdown();
     window_system->cleanup();
-    Hybrid::LogSystem::Shutdown();
+    Hybrid::LogSystem::shutdown();
     return 0;
 }

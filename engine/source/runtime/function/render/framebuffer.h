@@ -13,17 +13,17 @@ namespace Hybrid {
         explicit Framebuffer(const FramebufferSpec& spec);
         ~Framebuffer();
 
-        void Bind() const;
-        void Unbind() const;
+        void bind() const;
+        void unbind() const;
 
-        void Resize(uint32_t w, uint32_t h);
+        void resize(uint32_t w, uint32_t h);
 
-        uint32_t GetColorAttachmentRendererID() const { return m_ColorAttachment; }
-        uint32_t GetWidth() const { return m_Spec.width; }
-        uint32_t GetHeight() const { return m_Spec.height; }
+        uint32_t getColorAttachmentRendererID() const { return m_ColorAttachment; }
+        uint32_t getWidth() const { return m_Spec.width; }
+        uint32_t getHeight() const { return m_Spec.height; }
 
     private:
-        void Invalidate(); // 重新创建 GPU 资源
+        void invalidate(); // 重新创建 GPU 资源
 
     private:
         uint32_t m_FBO = 0;

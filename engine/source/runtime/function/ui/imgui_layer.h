@@ -6,15 +6,15 @@ namespace Hybrid {
         ImGuiLayer();
         ~ImGuiLayer() override = default;
 
-        void OnAttach() override;
-        void OnDetach() override;
-        void OnEvent(Event& e) override;       // 可选：用于拦截输入
-        void OnImGuiRender() override;         // 可选：调试面板
+        void onAttach() override;
+        void onDetach() override;
+        void onEvent(Event& e) override;       // 可选：用于拦截输入
+        void onImGuiRender() override;         // 可选：调试面板
 
-        void Begin();
-        void End();
+        void begin();
+        void end();
 
-        void BlockEvents(bool block) { m_BlockEvents = block; }
+        void blockEvents(bool block) { m_BlockEvents = block; }
 
     private:
         bool m_BlockEvents = true;             // 是否阻止游戏输入

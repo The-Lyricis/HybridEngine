@@ -5,12 +5,12 @@ namespace Hybrid {
 
     class RenderCommand {
     public:
-        static void Init();
-        static void SetViewport(int x, int y, int width, int height);
-        static void SetClearColor(const glm::vec4& color);
-        static void Clear();
+        static void initialize();
+        static void setViewport(int x, int y, int width, int height);
+        static void setClearColor(const glm::vec4& color);
+        static void clear();
 
-        static void DrawIndexed(unsigned int indexCount);
+        static void drawIndexed(unsigned int indexCount);
     };
 
 } // namespace Hybrid

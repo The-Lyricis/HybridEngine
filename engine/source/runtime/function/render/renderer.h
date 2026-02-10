@@ -9,10 +9,10 @@ namespace Hybrid {
 
     class Renderer {
     public:
-        static void Init();
-        static void BeginFrame(const glm::vec4& clearColor);
-        static void Submit(const std::shared_ptr<VertexArray>& va, const std::shared_ptr<Shader>& shader);
-        static void EndFrame();
+        static void initialize();
+        static void beginFrame(const glm::vec4& clearColor);
+        static void submit(const std::shared_ptr<VertexArray>& va, const std::shared_ptr<Shader>& shader);
+        static void endFrame();
     };
 
 } // namespace Hybrid

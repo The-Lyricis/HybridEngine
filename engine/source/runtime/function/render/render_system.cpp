@@ -19,7 +19,7 @@ namespace Hybrid {
     void RenderSystem::initialize(void* glfwWindowHandle) {
         if (m_Initialized) return;
 
-        Renderer::Init();
+        Renderer::initialize();
         createCubeResources();
 
         GLFWwindow* window = static_cast<GLFWwindow*>(glfwWindowHandle);
@@ -72,8 +72,8 @@ namespace Hybrid {
             (uint32_t)(sizeof(s_CubeIndices) / sizeof(uint32_t))
         );
 
-        m_CubeVAO->SetVertexBuffer(vb);
-        m_CubeVAO->SetIndexBuffer(ib);
+        m_CubeVAO->setVertexBuffer(vb);
+        m_CubeVAO->setIndexBuffer(ib);
 
         const std::string vs = R"(
 #version 330 core
@@ -112,7 +112,7 @@ void main() {
             m_SceneFB = std::make_shared<Framebuffer>(spec);
         }
         else {
-            m_SceneFB->Resize(w, h);
+            m_SceneFB->resize(w, h);
         }
 
         // 相机投影随 viewport 变化
@@ -120,7 +120,7 @@ void main() {
     }
 
     uint32_t RenderSystem::getSceneColorTexture() const {
-        return m_SceneFB ? m_SceneFB->GetColorAttachmentRendererID() : 0;
+        return m_SceneFB ? m_SceneFB->getColorAttachmentRendererID() : 0;
     }
 
     void RenderSystem::renderFrame(const glm::vec2& viewportSize,
@@ -135,20 +135,20 @@ void main() {
 
         // 2) 解析输入（GLFW key/button 常量）
         //    注意：只有 viewportActive 时才允许控制相机（避免 UI 输入冲突）
-        const bool rmbDown = viewportActive && input.IsMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
+        const bool rmbDown = viewportActive && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
 
-        const float mdx = viewportActive ? input.GetMouseDeltaX() : 0.0f;
-        const float mdy = viewportActive ? input.GetMouseDeltaY() : 0.0f;
+        const float mdx = viewportActive ? input.getMouseDeltaX() : 0.0f;
+        const float mdy = viewportActive ? input.getMouseDeltaY() : 0.0f;
 
         // 你可按喜好决定：滚轮是否只在 viewportActive 时生效
-        const float scrollY = viewportActive ? input.GetScrollDeltaY() : 0.0f;
+        const float scrollY = viewportActive ? input.getScrollDeltaY() : 0.0f;
 
-        const bool keyW = viewportActive && input.IsKeyDown(GLFW_KEY_W);
-        const bool keyA = viewportActive && input.IsKeyDown(GLFW_KEY_A);
-        const bool keyS = viewportActive && input.IsKeyDown(GLFW_KEY_S);
-        const bool keyD = viewportActive && input.IsKeyDown(GLFW_KEY_D);
-        const bool keyQ = viewportActive && input.IsKeyDown(GLFW_KEY_Q);
-        const bool keyE = viewportActive && input.IsKeyDown(GLFW_KEY_E);
+        const bool keyW = viewportActive && input.isKeyDown(GLFW_KEY_W);
+        const bool keyA = viewportActive && input.isKeyDown(GLFW_KEY_A);
+        const bool keyS = viewportActive && input.isKeyDown(GLFW_KEY_S);
+        const bool keyD = viewportActive && input.isKeyDown(GLFW_KEY_D);
+        const bool keyQ = viewportActive && input.isKeyDown(GLFW_KEY_Q);
+        const bool keyE = viewportActive && input.isKeyDown(GLFW_KEY_E);
 
         // 3) 更新相机（你的独立相机类）
         m_Camera.update(dt, viewportActive, rmbDown, mdx, mdy,
@@ -156,10 +156,10 @@ void main() {
             scrollY);
 
         // 4) 渲染到 FBO
-        m_SceneFB->Bind();
-        RenderCommand::SetViewport(0, 0, m_SceneFB->GetWidth(), m_SceneFB->GetHeight());
+        m_SceneFB->bind();
+        RenderCommand::setViewport(0, 0, m_SceneFB->getWidth(), m_SceneFB->getHeight());
 
-        Renderer::BeginFrame({ 0.1f, 0.1f, 0.12f, 1.0f });
+        Renderer::beginFrame({ 0.1f, 0.1f, 0.12f, 1.0f });
 
         // Model：旋转立方体（可视化验证 MVP）
         const float t = (float)glfwGetTime();
@@ -168,14 +168,14 @@ void main() {
         model = glm::rotate(model, t * 0.35f, glm::vec3(1, 0, 0));
 
         // 设置 uniform（要求 Shader::SetMat4 存在）
-        m_CubeShader->Bind();
-        m_CubeShader->SetMat4("u_ViewProjection", m_Camera.getViewProj());
-        m_CubeShader->SetMat4("u_Model", model);
+        m_CubeShader->bind();
+        m_CubeShader->setMat4("u_ViewProjection", m_Camera.getViewProj());
+        m_CubeShader->setMat4("u_Model", model);
 
-        Renderer::Submit(m_CubeVAO, m_CubeShader);
-        Renderer::EndFrame();
+        Renderer::submit(m_CubeVAO, m_CubeShader);
+        Renderer::endFrame();
 
-        m_SceneFB->Unbind();
+        m_SceneFB->unbind();
 
         // 5) 清屏默认帧缓冲（防 UI 拖影）
         GLFWwindow* window = static_cast<GLFWwindow*>(glfwWindowHandle);
@@ -183,9 +183,9 @@ void main() {
         glfwGetFramebufferSize(window, &display_w, &display_h);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        RenderCommand::SetViewport(0, 0, display_w, display_h);
-        RenderCommand::SetClearColor({ 0.08f, 0.08f, 0.09f, 1.0f });
-        RenderCommand::Clear();
+        RenderCommand::setViewport(0, 0, display_w, display_h);
+        RenderCommand::setClearColor({ 0.08f, 0.08f, 0.09f, 1.0f });
+        RenderCommand::clear();
     }
 
 } // namespace Hybrid

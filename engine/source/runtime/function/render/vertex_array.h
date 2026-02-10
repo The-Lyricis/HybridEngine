@@ -9,14 +9,14 @@ namespace Hybrid {
         VertexArray();
         ~VertexArray();
 
-        void Bind() const;
-        void Unbind() const;
+        void bind() const;
+        void unbind() const;
 
-        // M1 ¼ò»¯£ºÖ»Ö§³ÖÒ»¸ö VBO + Ò»¸ö IBO£¬ÇÒ²¼¾ÖĞ´ËÀ
-        void SetVertexBuffer(std::shared_ptr<VertexBuffer> vb);
-        void SetIndexBuffer(std::shared_ptr<IndexBuffer> ib);
+        // M1 ç®€åŒ–ï¼šåªæ”¯æŒä¸€ä¸ª VBO + ä¸€ä¸ª IBOï¼Œä¸”å¸ƒå±€å†™æ­»
+        void setVertexBuffer(std::shared_ptr<VertexBuffer> vb);
+        void setIndexBuffer(std::shared_ptr<IndexBuffer> ib);
 
-        uint32_t GetIndexCount() const;
+        uint32_t getIndexCount() const;
 
     private:
         uint32_t m_RendererID = 0;

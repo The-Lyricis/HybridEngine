@@ -10,7 +10,7 @@ namespace Hybrid
         static constexpr int kMaxKeys = 348;
         static constexpr int kMaxMouse = 7;
 
-        void NewFrame()
+        void newFrame()
         {
             for (auto& k : m_keys) { k.pressed = false; k.released = false; }
             for (auto& b : m_mouse) { b.pressed = false; b.released = false; }
@@ -21,7 +21,7 @@ namespace Hybrid
             m_text_input.clear();
         }
 
-        void OnKey(int key, bool isDown)
+        void onKey(int key, bool isDown)
         {
             if (key < 0 || key > kMaxKeys) return;
             auto& st = m_keys[key];
@@ -37,7 +37,7 @@ namespace Hybrid
             }
         }
 
-        void OnMouseButton(int button, bool isDown)
+        void onMouseButton(int button, bool isDown)
         {
             if (button < 0 || button > kMaxMouse) return;
             auto& st = m_mouse[button];
@@ -53,7 +53,7 @@ namespace Hybrid
             }
         }
 
-        void OnMouseMove(float x, float y)
+        void onMouseMove(float x, float y)
         {
             if (!m_mouse_inited)
             {
@@ -67,37 +67,37 @@ namespace Hybrid
             m_last_mouse_y = y;
         }
 
-        void OnScroll(float xoff, float yoff)
+        void onScroll(float xoff, float yoff)
         {
             m_scroll_delta_x += xoff;
             m_scroll_delta_y += yoff;
         }
 
-        void OnText(char32_t c)
+        void onText(char32_t c)
         {
             m_text_input.push_back(c);
         }
 
         // 查询
-        bool IsKeyDown(int key) const { return InRangeKey(key) ? m_keys[key].down : false; }
-        bool WasKeyPressed(int key) const { return InRangeKey(key) ? m_keys[key].pressed : false; }
-        bool WasKeyReleased(int key) const { return InRangeKey(key) ? m_keys[key].released : false; }
+        bool isKeyDown(int key) const { return inRangeKey(key) ? m_keys[key].down : false; }
+        bool wasKeyPressed(int key) const { return inRangeKey(key) ? m_keys[key].pressed : false; }
+        bool wasKeyReleased(int key) const { return inRangeKey(key) ? m_keys[key].released : false; }
 
-        bool IsMouseDown(int btn) const { return InRangeMouse(btn) ? m_mouse[btn].down : false; }
-        bool WasMousePressed(int btn) const { return InRangeMouse(btn) ? m_mouse[btn].pressed : false; }
-        bool WasMouseReleased(int btn) const { return InRangeMouse(btn) ? m_mouse[btn].released : false; }
+        bool isMouseDown(int btn) const { return inRangeMouse(btn) ? m_mouse[btn].down : false; }
+        bool wasMousePressed(int btn) const { return inRangeMouse(btn) ? m_mouse[btn].pressed : false; }
+        bool wasMouseReleased(int btn) const { return inRangeMouse(btn) ? m_mouse[btn].released : false; }
 
-        float GetMouseDeltaX() const { return m_mouse_delta_x; }
-        float GetMouseDeltaY() const { return m_mouse_delta_y; }
-        float GetScrollDeltaX() const { return m_scroll_delta_x; }
-        float GetScrollDeltaY() const { return m_scroll_delta_y; }
-        const std::u32string& GetTextInput() const { return m_text_input; }
+        float getMouseDeltaX() const { return m_mouse_delta_x; }
+        float getMouseDeltaY() const { return m_mouse_delta_y; }
+        float getScrollDeltaX() const { return m_scroll_delta_x; }
+        float getScrollDeltaY() const { return m_scroll_delta_y; }
+        const std::u32string& getTextInput() const { return m_text_input; }
 
     private:
         struct ButtonState { bool down = false; bool pressed = false; bool released = false; };
 
-        bool InRangeKey(int k) const { return k >= 0 && k <= kMaxKeys; }
-        bool InRangeMouse(int b) const { return b >= 0 && b <= kMaxMouse; }
+        bool inRangeKey(int k) const { return k >= 0 && k <= kMaxKeys; }
+        bool inRangeMouse(int b) const { return b >= 0 && b <= kMaxMouse; }
 
         std::array<ButtonState, kMaxKeys + 1> m_keys{};
         std::array<ButtonState, kMaxMouse + 1> m_mouse{};

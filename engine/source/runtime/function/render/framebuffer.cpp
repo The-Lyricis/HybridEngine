@@ -6,7 +6,7 @@ namespace Hybrid {
 
     Framebuffer::Framebuffer(const FramebufferSpec& spec)
         : m_Spec(spec) {
-        Invalidate();
+        invalidate();
     }
 
     Framebuffer::~Framebuffer() {
@@ -15,7 +15,7 @@ namespace Hybrid {
         if (m_FBO) glDeleteFramebuffers(1, &m_FBO);
     }
 
-    void Framebuffer::Invalidate() {
+    void Framebuffer::invalidate() {
         // 删除旧资源
         if (m_DepthStencilRBO) { glDeleteRenderbuffers(1, &m_DepthStencilRBO); m_DepthStencilRBO = 0; }
         if (m_ColorAttachment) { glDeleteTextures(1, &m_ColorAttachment); m_ColorAttachment = 0; }
@@ -54,22 +54,22 @@ namespace Hybrid {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    void Framebuffer::Bind() const {
+    void Framebuffer::bind() const {
         glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
     }
 
-    void Framebuffer::Unbind() const {
+    void Framebuffer::unbind() const {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    void Framebuffer::Resize(uint32_t w, uint32_t h) {
+    void Framebuffer::resize(uint32_t w, uint32_t h) {
         w = std::max(1u, w);
         h = std::max(1u, h);
         if (w == m_Spec.width && h == m_Spec.height) return;
 
         m_Spec.width = w;
         m_Spec.height = h;
-        Invalidate();
+        invalidate();
     }
 
 } // namespace Hybrid

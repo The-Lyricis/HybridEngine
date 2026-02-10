@@ -4,23 +4,23 @@
 
 namespace Hybrid {
 
-    void Renderer::Init() {
-        RenderCommand::Init();
+    void Renderer::initialize() {
+        RenderCommand::initialize();
     }
 
-    void Renderer::BeginFrame(const glm::vec4& clearColor) {
-        RenderCommand::SetClearColor(clearColor);
-        RenderCommand::Clear();
+    void Renderer::beginFrame(const glm::vec4& clearColor) {
+        RenderCommand::setClearColor(clearColor);
+        RenderCommand::clear();
     }
 
-    void Renderer::Submit(const std::shared_ptr<VertexArray>& va, const std::shared_ptr<Shader>& shader) {
-        shader->Bind();
-        va->Bind();
-        RenderCommand::DrawIndexed(va->GetIndexCount());
+    void Renderer::submit(const std::shared_ptr<VertexArray>& va, const std::shared_ptr<Shader>& shader) {
+        shader->bind();
+        va->bind();
+        RenderCommand::drawIndexed(va->getIndexCount());
     }
 
-    void Renderer::EndFrame() {
-        // M1 ¿ÕÊµÏÖ£»ºóĞø¿ÉÍ³¼Æ drawcall/Ìá½» GPU ÃüÁîµÈ
+    void Renderer::endFrame() {
+        // M1 ç©ºå®ç°ï¼›åç»­å¯ç»Ÿè®¡ drawcall/æäº¤ GPU å‘½ä»¤ç­‰
     }
 
 } // namespace Hybrid

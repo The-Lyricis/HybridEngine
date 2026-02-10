@@ -13,8 +13,8 @@ namespace Hybrid
 
         virtual void OnAttach() {}
         virtual void OnDetach() {}
-        virtual void OnUpdate(float dt) {}
-        virtual void OnEvent(Event& e) {}
+        virtual void onUpdate(float dt) {}
+        virtual void onEvent(Event& e) {}
         virtual void OnImGuiRender() {}
 
         const std::string& GetName() const { return m_Name; }

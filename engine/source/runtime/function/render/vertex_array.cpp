@@ -11,20 +11,20 @@ namespace Hybrid {
         glDeleteVertexArrays(1, &m_RendererID);
     }
 
-    void VertexArray::Bind() const {
+    void VertexArray::bind() const {
         glBindVertexArray(m_RendererID);
     }
 
-    void VertexArray::Unbind() const {
+    void VertexArray::unbind() const {
         glBindVertexArray(0);
     }
 
-    void VertexArray::SetVertexBuffer(std::shared_ptr<VertexBuffer> vb) {
+    void VertexArray::setVertexBuffer(std::shared_ptr<VertexBuffer> vb) {
         m_VertexBuffer = vb;
-        Bind();
-        vb->Bind();
+        bind();
+        vb->bind();
 
-        // ²¼¾Ö£ºpos(vec3) + color(vec4)
+        // å¸ƒå±€ï¼špos(vec3) + color(vec4)
         // stride = 7 floats
         const GLsizei stride = 7 * sizeof(float);
 
@@ -37,14 +37,14 @@ namespace Hybrid {
         glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (const void*)(3 * sizeof(float)));
     }
 
-    void VertexArray::SetIndexBuffer(std::shared_ptr<IndexBuffer> ib) {
+    void VertexArray::setIndexBuffer(std::shared_ptr<IndexBuffer> ib) {
         m_IndexBuffer = ib;
-        Bind();
-        ib->Bind(); // ×¢Òâ£ºEBO °ó¶¨ÊÇ VAO ×´Ì¬µÄÒ»²¿·Ö
+        bind();
+        ib->bind(); // æ³¨æ„ï¼šEBO ç»‘å®šæ˜¯ VAO çŠ¶æ€çš„ä¸€éƒ¨åˆ†
     }
 
-    uint32_t VertexArray::GetIndexCount() const {
-        return m_IndexBuffer ? m_IndexBuffer->GetCount() : 0;
+    uint32_t VertexArray::getIndexCount() const {
+        return m_IndexBuffer ? m_IndexBuffer->getCount() : 0;
     }
 
 } // namespace Hybrid

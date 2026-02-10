@@ -3,26 +3,26 @@
 
 namespace Hybrid {
 
-    void RenderCommand::Init() {
+    void RenderCommand::initialize() {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        glEnable(GL_DEPTH_TEST); // M1 画三角形不一定需要，但建议开着，后面直接用
+        glEnable(GL_DEPTH_TEST); // M1 鐢讳笁瑙掑舰涓嶄竴瀹氶渶瑕侊紝浣嗗缓璁紑鐫�锛屽悗闈㈢洿鎺ョ敤
     }
 
-    void RenderCommand::SetViewport(int x, int y, int width, int height) {
+    void RenderCommand::setViewport(int x, int y, int width, int height) {
         glViewport(x, y, width, height);
     }
 
-    void RenderCommand::SetClearColor(const glm::vec4& color) {
+    void RenderCommand::setClearColor(const glm::vec4& color) {
         glClearColor(color.r, color.g, color.b, color.a);
     }
 
-    void RenderCommand::Clear() {
+    void RenderCommand::clear() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 
-    void RenderCommand::DrawIndexed(unsigned int indexCount) {
+    void RenderCommand::drawIndexed(unsigned int indexCount) {
         glDrawElements(GL_TRIANGLES, (GLsizei)indexCount, GL_UNSIGNED_INT, nullptr);
     }
 

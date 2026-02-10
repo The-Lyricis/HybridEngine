@@ -23,11 +23,11 @@ namespace Hybrid
 			const char* file_pattern = "[%Y-%m-%d %T.%e] [%l] %n: %v";
 		};
 
-		static void Init(const Config& cfg = {});
-		static void Shutdown();
+		static void initialize(const Config& cfg = {});
+		static void shutdown();
 
-		static std::shared_ptr<spdlog::logger>& Core();
-		static std::shared_ptr<spdlog::logger>& Client();
+		static std::shared_ptr<spdlog::logger>& core();
+		static std::shared_ptr<spdlog::logger>& client();
 
 	private:
 		static std::shared_ptr<spdlog::logger> s_core;

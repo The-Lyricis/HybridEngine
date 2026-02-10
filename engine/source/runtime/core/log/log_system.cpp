@@ -9,7 +9,7 @@ namespace Hybrid
 	std::shared_ptr<spdlog::logger> LogSystem::s_core;
 	std::shared_ptr<spdlog::logger> LogSystem::s_client;
 
-	void LogSystem::Init(const Config& cfg)
+	void LogSystem::initialize(const Config& cfg)
 	{
 		if (s_core && s_client) // guard: already initialized
 			return;
@@ -39,7 +39,7 @@ namespace Hybrid
 		s_core->flush_on(cfg.flush_level);
 		s_client->flush_on(cfg.flush_level);
 	}
-	void LogSystem::Shutdown()
+	void LogSystem::shutdown()
 	{
 		if (!s_core && !s_client)
 			return;
@@ -50,11 +50,11 @@ namespace Hybrid
 		s_core.reset();
 		s_client.reset();
 	}
-	std::shared_ptr<spdlog::logger>& LogSystem::Core()
+	std::shared_ptr<spdlog::logger>& LogSystem::core()
 	{
 		return s_core;
 	}
-	std::shared_ptr<spdlog::logger>& LogSystem::Client()
+	std::shared_ptr<spdlog::logger>& LogSystem::client()
 	{
 		return s_client;
 	}

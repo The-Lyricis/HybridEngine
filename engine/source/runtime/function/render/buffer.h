@@ -8,8 +8,8 @@ namespace Hybrid {
         VertexBuffer(const void* data, uint32_t size);
         ~VertexBuffer();
 
-        void Bind() const;
-        void Unbind() const;
+        void bind() const;
+        void unbind() const;
 
     private:
         uint32_t m_RendererID = 0;
@@ -20,10 +20,10 @@ namespace Hybrid {
         IndexBuffer(const uint32_t* indices, uint32_t count);
         ~IndexBuffer();
 
-        void Bind() const;
-        void Unbind() const;
+        void bind() const;
+        void unbind() const;
 
-        uint32_t GetCount() const { return m_Count; }
+        uint32_t getCount() const { return m_Count; }
 
     private:
         uint32_t m_RendererID = 0;

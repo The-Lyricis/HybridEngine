@@ -13,11 +13,11 @@ namespace Hybrid {
         glDeleteBuffers(1, &m_RendererID);
     }
 
-    void VertexBuffer::Bind() const {
+    void VertexBuffer::bind() const {
         glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
     }
 
-    void VertexBuffer::Unbind() const {
+    void VertexBuffer::unbind() const {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
@@ -32,11 +32,11 @@ namespace Hybrid {
         glDeleteBuffers(1, &m_RendererID);
     }
 
-    void IndexBuffer::Bind() const {
+    void IndexBuffer::bind() const {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
     }
 
-    void IndexBuffer::Unbind() const {
+    void IndexBuffer::unbind() const {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 

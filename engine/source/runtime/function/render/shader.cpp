@@ -28,7 +28,7 @@ namespace Hybrid {
         }
     }
 
-    uint32_t Shader::Compile(uint32_t type, const std::string& src) {
+    uint32_t Shader::compile(uint32_t type, const std::string& src) {
         uint32_t id = glCreateShader(type);
         const char* csrc = src.c_str();
         glShaderSource(id, 1, &csrc, nullptr);
@@ -38,8 +38,8 @@ namespace Hybrid {
     }
 
     Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc) {
-        uint32_t vs = Compile(GL_VERTEX_SHADER, vertexSrc);
-        uint32_t fs = Compile(GL_FRAGMENT_SHADER, fragmentSrc);
+        uint32_t vs = compile(GL_VERTEX_SHADER, vertexSrc);
+        uint32_t fs = compile(GL_FRAGMENT_SHADER, fragmentSrc);
 
         m_RendererID = glCreateProgram();
         glAttachShader(m_RendererID, vs);
@@ -55,15 +55,15 @@ namespace Hybrid {
         glDeleteProgram(m_RendererID);
     }
 
-    void Shader::Bind() const {
+    void Shader::bind() const {
         glUseProgram(m_RendererID);
     }
 
-    void Shader::Unbind() const {
+    void Shader::unbind() const {
         glUseProgram(0);
     }
 
-    void Shader::SetMat4(const std::string& name, const glm::mat4& m) {
+    void Shader::setMat4(const std::string& name, const glm::mat4& m) {
         GLint loc = glGetUniformLocation(m_RendererID, name.c_str());
         glUniformMatrix4fv(loc, 1, GL_FALSE, &m[0][0]);
     }
