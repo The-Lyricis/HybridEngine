@@ -85,7 +85,7 @@ Hybrid Engine
 ### Phase 1.2：渲染基础
 
 - [ ] Shader 管理
-- [ ] Buffer/VertexArray/Framebuffer
+- [x] Buffer/VertexArray/Framebuffer
 - [ ] Texture 加载
 - [ ] 2D 渲染器
 - [ ] Camera 系统
