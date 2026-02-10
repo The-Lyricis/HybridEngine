@@ -27,7 +27,7 @@ namespace Hybrid
 
         bool IsRepeat() const { return m_IsRepeat; }
 
-        std::string ToString() const override
+        std::string toString() const override
         {
             std::stringstream ss;
             ss << "KeyPressedEvent: " << m_KeyCode << " (repeat=" << m_IsRepeat << ")";
@@ -45,7 +45,7 @@ namespace Hybrid
     public:
         explicit KeyReleasedEvent(int keycode) : KeyEvent(keycode) {}
 
-        std::string ToString() const override
+        std::string toString() const override
         {
             std::stringstream ss;
             ss << "KeyReleasedEvent: " << m_KeyCode;
@@ -60,7 +60,7 @@ namespace Hybrid
     public:
         explicit KeyTypedEvent(int keycode) : KeyEvent(keycode) {}
 
-        std::string ToString() const override
+        std::string toString() const override
         {
             std::stringstream ss;
             ss << "KeyTypedEvent: " << m_KeyCode;
@@ -78,7 +78,7 @@ namespace Hybrid
         float GetX() const { return m_MouseX; }
         float GetY() const { return m_MouseY; }
 
-        std::string ToString() const override
+        std::string toString() const override
         {
             std::stringstream ss;
             ss << "MouseMovedEvent: " << m_MouseX << ", " << m_MouseY;
@@ -101,7 +101,7 @@ namespace Hybrid
         float GetXOffset() const { return m_XOffset; }
         float GetYOffset() const { return m_YOffset; }
 
-        std::string ToString() const override
+        std::string toString() const override
         {
             std::stringstream ss;
             ss << "MouseScrolledEvent: " << m_XOffset << ", " << m_YOffset;
@@ -134,7 +134,7 @@ namespace Hybrid
     public:
         explicit MouseButtonPressedEvent(int button) : MouseButtonEvent(button) {}
 
-        std::string ToString() const override
+        std::string toString() const override
         {
             std::stringstream ss;
             ss << "MouseButtonPressedEvent: " << m_Button;
@@ -149,7 +149,7 @@ namespace Hybrid
     public:
         explicit MouseButtonReleasedEvent(int button) : MouseButtonEvent(button) {}
 
-        std::string ToString() const override
+        std::string toString() const override
         {
             std::stringstream ss;
             ss << "MouseButtonReleasedEvent: " << m_Button;

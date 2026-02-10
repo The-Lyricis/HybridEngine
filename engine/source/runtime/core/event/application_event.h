@@ -14,7 +14,7 @@ namespace Hybrid
         int GetWidth() const { return m_Width; }
         int GetHeight() const { return m_Height; }
 
-        std::string ToString() const override
+        std::string toString() const override
         {
             std::stringstream ss;
             ss << "WindowResizeEvent: " << m_Width << ", " << m_Height;

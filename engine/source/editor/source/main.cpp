@@ -23,8 +23,8 @@ public:
 
     void OnEvent(Hybrid::Event & e) override
     {
-        std::cout << "[TestLayer] " << e.ToString() << "\n";
-        if (e.GetEventType() == Hybrid::EventType::KeyPressed)
+        std::cout << "[TestLayer] " << e.toString() << "\n";
+        if (e.getEventType() == Hybrid::EventType::KeyPressed)
             e.Handled = true;
     }
 };
@@ -36,7 +36,7 @@ public:
 
     void OnEvent(Hybrid::Event& e) override
     {
-        std::cout << "[Overlay] " << e.ToString() << "\n";
+        std::cout << "[Overlay] " << e.toString() << "\n";
     }
 };
 // 计算 dt（秒）
@@ -60,9 +60,9 @@ int main(int argc, char** argv)
     Hybrid::InputLayer input_layer;
     TestLayer layer("TestLayer");
     OverlayLayer overlay("Overlay");
-    stack.PushLayer(&layer);
-    stack.PushOverlay(&overlay);
-    stack.PushLayer(&input_layer);
+    stack.pushLayer(&layer);
+    stack.pushOverlay(&overlay);
+    stack.pushLayer(&input_layer);
 
     auto window_system = std::make_shared<Hybrid::WindowSystem>();
     window_system->initialize(1280, 720, "Hybrid Engine Editor");

@@ -26,10 +26,10 @@ namespace Hybrid
     class LayerStack 
     {
     public:
-        void PushLayer(Layer* layer);
-        void PushOverlay(Layer* overlay);
-        void PopLayer(Layer* layer);
-        void PopOverlay(Layer* overlay);
+        void pushLayer(Layer* layer);
+        void pushOverlay(Layer* overlay);
+        void popLayer(Layer* layer);
+        void popOverlay(Layer* overlay);
 
         auto begin() { return m_Layers.begin(); }
         auto end() { return m_Layers.end(); }

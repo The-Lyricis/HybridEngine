@@ -37,11 +37,11 @@ namespace Hybrid
 	{
 	public:
 		bool Handled = false;
-		virtual EventType GetEventType() const = 0;
-		virtual const char* GetName() const = 0;
-		virtual int GetCategoryFlags() const = 0;
-		virtual std::string ToString() const { return GetName(); }
-		bool IsInCategory(EventCategory category) const { return GetCategoryFlags() & category; }
+		virtual EventType getEventType() const = 0;
+		virtual const char* getName() const = 0;
+		virtual int getCategoryFlags() const = 0;
+		virtual std::string toString() const { return getName(); }
+		bool isInCategory(EventCategory category) const { return getCategoryFlags() & category; }
 	};
 
 	class EventDispatcher 
@@ -50,9 +50,9 @@ namespace Hybrid
 		EventDispatcher(Event& e) : m_Event(e) {}
 
 		template<typename T, typename F>
-		bool Dispatch(const F& func)
+		bool dispatch(const F& func)
 		{
-			if (m_Event.GetEventType() == T::GetStaticType())
+			if (m_Event.getEventType() == T::GetStaticType())
 			{
 				m_Event.Handled |= func(static_cast<T&>(m_Event));
 				return true;
