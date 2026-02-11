@@ -48,14 +48,14 @@ namespace Hybrid {
             float dt = calculateDeltaTime();
 
             // phase 1: input state update
-            m_InputLayer->onUpdate(dt);
-
             if (!m_Minimized)
             {
                 // phase 2: logic update
                 for (Layer* layer : m_LayerStack)
                     layer->onUpdate(dt);
 
+                // 注意：事件轮询应该在所有层更新之后进行，以确保事件能被当帧更新的层捕获
+                m_Window->pollEvents();
                 // phase 3: UI
                 m_EditorUI->beginFrame();
                 m_EditorUI->drawPanels();
@@ -69,12 +69,10 @@ namespace Hybrid {
                     m_EditorUI->isViewportHovered() && m_EditorUI->isViewportFocused(),
                     m_InputLayer->getState()
                 );
-
                 m_EditorUI->endFrame();
             }
 
             // phase 5: events & swap
-            m_Window->pollEvents();
             glfwSwapBuffers(m_Window->getGLFWWindow());
         }
     }
