@@ -1,4 +1,4 @@
-# Hybrid Engine 开发计划
+﻿# Hybrid Engine 开发计划
 
 ## 技术选择
 
@@ -49,57 +49,41 @@ Hybrid Engine
 ##### Phase 1 (3周)
 
 - Phase 1.1（基础框架）：日志/事件/窗口/ImGui/引擎主循环
-
 - Phase 1.2（初步渲染实现）：Shader/Buffer/Camera/Renderer2D
-  
-
 - Phase 1.3（输入系统）：键鼠输入/Action Mapping
 
 ##### Phase 2 (2周)
 
 - Phase 2.1（资源系统）
-
-- Phase 2.1（初步场景）：ECS/场景序列化/层级编辑
-
-- Phase 2.2（进阶渲染实现）：着色/Texture
+- Phase 2.2（初步场景）：ECS/场景序列化/层级编辑
+- Phase 2.3（进阶渲染实现）：着色/Texture
 
 ##### Phase 3 (2周)
 
-- Phase 2.2 （物理系统，2 周）：包围盒/碰撞
-
-- Phase 2.3 （音频系统，1 周）
-
+- Phase 3.1（物理系统）：包围盒/碰撞
+- Phase 3.2（音频系统）
 
 ##### Phase 4（课后）
 
-- Phase 2.2（脚本系统，4 周）：Mono/C# 热重载/字段反射
-- Phase 2.3（编辑器完善，4 周）：Gizmo/Profiler/资产浏览
+- Phase 4.1（脚本系统）：Mono/C# 热重载/字段反射
+- Phase 4.2（编辑器完善）：Gizmo/Profiler/资产浏览
 
 
-
-## 分计划
-
-## 1.课程内需要完成第一部分
+## 分计划（与总计划一致，但更详细）
 
 ### Phase 1.1：基础框架
 
 - [x] CMake 构建系统配置
-
 - [x] 日志系统（spdlog）
-
 - [x] 事件系统（Event + Dispatcher + 窗口事件）
-
 - [x] Runtime 窗口系统（GLFW + GLAD + OpenGL Context）
-
 - [ ] ImGui Layer（Runtime 统一封装）
-
 - [x] 引擎主循环（运行、更新、渲染、退出）
-
 - 里程碑：窗口显示 + 日志输出 + 基础 UI
 
-### Phase 1.2：渲染基础
+### Phase 1.2：初步渲染实现
 
-- [ ] Shader 管理
+- [ ] Shader 管理（编译/链接/缓存）
 - [x] Buffer/VertexArray/Framebuffer
 - [ ] Texture 加载
 - [ ] 2D 渲染器
@@ -111,27 +95,43 @@ Hybrid Engine
 - [x] 输入事件
 - [ ] Action/Axis Mapping
 
-### Phase 1.4：物理系统
+### Phase 2.1：资源系统
 
-### Phase 1.5：音频系统
+- [ ] Asset Loader（纹理/模型/材质）
+- [ ] 资源路径与缓存策略
+- [ ] 资源热加载（可选）
 
-## 2. 之后的计划
-
-### Phase 4：场景系统
+### Phase 2.2：初步场景
 
 - [ ] ECS 基础
 - [ ] Transform/Renderer Component
 - [ ] 场景序列化（JSON）
 - [ ] Scene Hierarchy
 
-### Phase 5：脚本系统
+### Phase 2.3：进阶渲染实现
+
+- [ ] 基础光照/材质
+- [ ] Texture/采样与管理
+- [ ] RenderPass 组织（可选）
+
+### Phase 3.1：物理系统
+
+- [ ] 包围盒/碰撞检测
+- [ ] 基础刚体（可选）
+
+### Phase 3.2：音频系统
+
+- [ ] 播放/暂停/停止接口
+- [ ] 资源加载与管理（可选）
+
+### Phase 4.1：脚本系统
 
 - [ ] Mono 集成
-- [ ] C# 程序集加载/Lua 热更？/原生C++ 脚本集合
-- [ ] 热重载
+- [ ] C# 程序集加载/热重载
+- [ ] 字段反射与序列化
 - [ ] 脚本生命周期
 
-### Phase 6：编辑器完善
+### Phase 4.2：编辑器完善
 
 - [ ] Gizmo 系统
 - [ ] Inspector 面板
