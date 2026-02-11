@@ -46,21 +46,36 @@ Hybrid Engine
 
 ## 总计划
 
-- Phase 1.1（基础框架，2-3周）：日志/事件/窗口/ImGui/引擎主循环
+##### Phase 1 (3周)
 
-- Phase 1.2（渲染实现，3 周）：Shader/Buffer/Texture/Camera/Renderer2D
-  
-  Phase 1.3（输入系统，1 周）：键鼠输入/Action Mapping
-  
-  Phase 1.4 （物理系统，2 周）：包围盒/碰撞
-  
-  Phase 1.5 （音频系统，1 周）：包围盒/碰撞
+- Phase 1.1（基础框架）：日志/事件/窗口/ImGui/引擎主循环
 
-由于时间问题以下的交给课后实现
+- Phase 1.2（初步渲染实现）：Shader/Buffer/Camera/Renderer2D
+  
 
-- Phase 2.1（场景系统，5 周）：ECS/场景序列化/层级编辑
+- Phase 1.3（输入系统）：键鼠输入/Action Mapping
+
+##### Phase 2 (2周)
+
+- Phase 2.1（资源系统）
+
+- Phase 2.1（初步场景）：ECS/场景序列化/层级编辑
+
+- Phase 2.2（进阶渲染实现）：着色/Texture
+
+##### Phase 3 (2周)
+
+- Phase 2.2 （物理系统，2 周）：包围盒/碰撞
+
+- Phase 2.3 （音频系统，1 周）
+
+
+##### Phase 4（课后）
+
 - Phase 2.2（脚本系统，4 周）：Mono/C# 热重载/字段反射
 - Phase 2.3（编辑器完善，4 周）：Gizmo/Profiler/资产浏览
+
+
 
 ## 分计划
 
@@ -78,7 +93,7 @@ Hybrid Engine
 
 - [ ] ImGui Layer（Runtime 统一封装）
 
-- [ ] 引擎主循环（运行、更新、渲染、退出）
+- [x] 引擎主循环（运行、更新、渲染、退出）
 
 - 里程碑：窗口显示 + 日志输出 + 基础 UI
 
@@ -88,7 +103,7 @@ Hybrid Engine
 - [x] Buffer/VertexArray/Framebuffer
 - [ ] Texture 加载
 - [ ] 2D 渲染器
-- [ ] Camera 系统
+- [x] Camera 系统
 
 ### Phase 1.3：输入系统
 
