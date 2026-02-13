@@ -9,6 +9,8 @@
 #include "runtime/function/render/render_system.h"
 #include "runtime/function/render/graphics_context.h"
 #include "editor/include/editor_ui.h"
+#include "function/scene/scene_manager.h"
+#include "function/scene/scene.h"
 
 
 namespace Hybrid{
@@ -35,6 +37,7 @@ namespace Hybrid{
         InputLayer* m_InputLayer = nullptr;
         EditorUI* m_EditorUI = nullptr;
         RenderSystem m_RenderSystem;
+        SceneManager m_SceneManager;
 
         float m_LastTime = 0.0f;    //保存上一帧时间
     };

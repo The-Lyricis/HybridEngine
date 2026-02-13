@@ -39,6 +39,21 @@ namespace Hybrid {
         // RenderSystem 需要在 EditorUI 之后初始化，因为它可能依赖于 ImGui 的上下文
         m_RenderSystem.initialize(m_Window->getGLFWWindow());
 
+        // SceneSystem: create/load default scene
+        m_SceneManager.SetActiveScene(std::make_shared<Scene>());
+        auto scene = m_SceneManager.GetActiveScene();
+
+        //场景系统测试：创建一个实体并检查组件
+        scene->CreateEntity("Test Entity");
+
+        auto entity = scene->CreateEntity("Test Entity");
+
+        if (entity.HasComponent<Hybrid::TransformComponent>())
+        {
+            HBD_CORE_INFO("TransformComponent exists!");
+        }
+        //
+
     }
 
     void HybridEngine::run() {
@@ -52,6 +67,10 @@ namespace Hybrid {
                 // phase 2: logic update
                 for (Layer* layer : m_LayerStack)
                     layer->onUpdate(dt);
+
+                if (auto scene = m_SceneManager.GetActiveScene())
+                    scene->OnUpdate(dt);
+
 
                 // 注意：事件轮询应该在所有层更新之后进行，以确保事件能被当帧更新的层捕获
                 m_Window->pollEvents();
