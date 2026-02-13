@@ -24,6 +24,8 @@ namespace Hybrid {
         bool isViewportFocused() const { return m_ViewportFocused; }
         bool isViewportHovered() const { return m_ViewportHovered; }
 
+        bool useGameCamera() const { return m_UseGameCamera; }
+
     private:
         GLFWwindow* m_window = nullptr;
         bool m_initialized = false;
@@ -33,6 +35,8 @@ namespace Hybrid {
         glm::vec2 m_ViewportSize{ 0.0f, 0.0f };
         bool m_ViewportFocused = false;
         bool m_ViewportHovered = false;
+
+        bool m_UseGameCamera = false;
     };
 
 } // namespace Hybrid

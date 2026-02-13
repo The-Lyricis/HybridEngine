@@ -15,6 +15,20 @@ namespace Hybrid
 
         return entity;
     }
+    Entity Scene::CreateCameraEntity(const std::string& name, bool primary)
+    {
+        Entity e = CreateEntity(name);
+        auto& cam = e.AddComponent<CameraComponent>();
+        cam.Primary = primary;
+        return e;
+    }
+
+    Entity Scene::CreateRenderableEntity(const std::string& name)
+    {
+        Entity e = CreateEntity(name);
+        e.AddComponent<MeshRendererComponent>(); // 默认 primitive=0
+        return e;
+    }
 
     void Scene::DestroyEntity(Entity entity)
     {

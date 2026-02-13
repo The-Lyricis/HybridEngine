@@ -11,6 +11,7 @@ namespace Hybrid {
     class Framebuffer;
     class VertexArray;
     class Shader;
+    class Scene;
 
     // RenderSystem: owns scene resources and issues per-frame rendering.
     class RenderSystem {
@@ -20,6 +21,8 @@ namespace Hybrid {
 
         void initialize(void* glfwWindowHandle);
 
+        void setScene(std::shared_ptr<Scene> scene) { m_Scene = std::move(scene); }
+
         uint32_t getSceneColorTexture() const;
 
         //输入收敛为 InputState
@@ -27,15 +30,17 @@ namespace Hybrid {
             void* glfwWindowHandle,
             float dt,
             bool viewportActive,
-            const InputState& input);
+            const InputState& input,
+            bool useGameCamera);
 
     private:
         void createCubeResources();
         void ensureFramebufferSize(uint32_t w, uint32_t h);
 
     private:
-        std::shared_ptr<Framebuffer> m_SceneFB;
+        std::shared_ptr<Scene> m_Scene;
 
+        std::shared_ptr<Framebuffer> m_SceneFB;
         std::shared_ptr<VertexArray> m_CubeVAO;
         std::shared_ptr<Shader>      m_CubeShader;
 

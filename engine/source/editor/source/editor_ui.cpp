@@ -111,8 +111,29 @@ namespace Hybrid {
         // 注意：swapBuffers 不应该在这里做（由 main 控制更清晰）
     }
 
-    void Hybrid::EditorUI::drawViewport(uint32_t colorTextureID) {
+    void Hybrid::EditorUI::drawViewport(uint32_t colorTextureID)
+    {
         ImGui::Begin("Viewport");
+
+        // --- Toolbar: Camera Mode Toggle ---
+        {
+            // 显示当前模式
+            ImGui::TextUnformatted("Camera:");
+            ImGui::SameLine();
+
+            const char* modeText = m_UseGameCamera ? "Game" : "Editor";
+            ImGui::Text("%s", modeText);
+            ImGui::SameLine();
+
+            // 切换按钮
+            if (ImGui::Button(m_UseGameCamera ? "Switch to Editor Camera" : "Switch to Game Camera"))
+            {
+                m_UseGameCamera = !m_UseGameCamera;
+            }
+
+            // 分隔线，让 toolbar 和 viewport 内容视觉隔开
+            ImGui::Separator();
+        }
 
         m_ViewportFocused = ImGui::IsWindowFocused();
         m_ViewportHovered = ImGui::IsWindowHovered();
@@ -122,7 +143,6 @@ namespace Hybrid {
         if (avail.y < 1.0f) avail.y = 1.0f;
         m_ViewportSize = { avail.x, avail.y };
 
-        // OpenGL 纹理到 ImGui：需要 UV 翻转
         ImGui::Image(
             (ImTextureID)(intptr_t)colorTextureID,
             avail,
@@ -132,6 +152,5 @@ namespace Hybrid {
 
         ImGui::End();
     }
+}
 
-
-} // namespace Hybrid

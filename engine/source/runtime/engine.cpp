@@ -40,19 +40,50 @@ namespace Hybrid {
         m_RenderSystem.initialize(m_Window->getGLFWWindow());
 
         // SceneSystem: create/load default scene
-        m_SceneManager.SetActiveScene(std::make_shared<Scene>());
-        auto scene = m_SceneManager.GetActiveScene();
+        auto scene = std::make_shared<Scene>();
+        m_SceneManager.SetActiveScene(scene);
 
-        //场景系统测试：创建一个实体并检查组件
-        scene->CreateEntity("Test Entity");
-
-        auto entity = scene->CreateEntity("Test Entity");
-
-        if (entity.HasComponent<Hybrid::TransformComponent>())
+        // 1) 游戏相机（俯视）
         {
-            HBD_CORE_INFO("TransformComponent exists!");
+            auto cam = scene->CreateEntity("Game Camera");
+            cam.AddComponent<Hybrid::CameraComponent>(Hybrid::CameraComponent{ true, 45.0f, 0.1f, 500.0f });
+
+            auto& tr = cam.GetComponent<Hybrid::TransformComponent>();
+            tr.Position = { 0.0f, 12.0f, 12.0f };
+            tr.Rotation = { glm::radians(-45.0f), 0.0f, 0.0f }; // pitch=-45°, yaw=0, roll=0
+            tr.Scale = { 1.0f, 1.0f, 1.0f };
         }
-        //
+
+        // 2) 生成一组立方体
+        {
+            const int gridX = 5;
+            const int gridZ = 5;
+            const float spacing = 2.0f;
+
+            // 让网格以原点为中心
+            const float startX = -0.5f * (gridX - 1) * spacing;
+            const float startZ = -0.5f * (gridZ - 1) * spacing;
+
+            for (int z = 0; z < gridZ; ++z)
+            {
+                for (int x = 0; x < gridX; ++x)
+                {
+                    std::string name = "Cube_" + std::to_string(z) + "_" + std::to_string(x);
+                    auto cube = scene->CreateEntity(name);
+
+                    // MeshRenderer：使用内建立方体
+                    auto& mr = cube.AddComponent<Hybrid::MeshRendererComponent>();
+                    mr.Primitive = 0;
+
+                    // Transform：排布到网格
+                    auto& tr = cube.GetComponent<Hybrid::TransformComponent>();
+                    tr.Position = { startX + x * spacing, 0.0f, startZ + z * spacing };
+                    tr.Rotation = { 0.0f, 0.0f, 0.0f };
+                    tr.Scale = { 1.0f, 1.0f, 1.0f };
+                }
+            }
+        }
+        m_RenderSystem.setScene(scene);
 
     }
 
@@ -68,6 +99,7 @@ namespace Hybrid {
                 for (Layer* layer : m_LayerStack)
                     layer->onUpdate(dt);
 
+                // 场景更新
                 if (auto scene = m_SceneManager.GetActiveScene())
                     scene->OnUpdate(dt);
 
@@ -85,7 +117,8 @@ namespace Hybrid {
                     m_Window->getGLFWWindow(),
                     dt,
                     m_EditorUI->isViewportHovered() && m_EditorUI->isViewportFocused(),
-                    m_InputLayer->getState()
+                    m_InputLayer->getState(),
+                    m_EditorUI->useGameCamera()   // <-- 新增：UI 控制的模式
                 );
                 m_EditorUI->endFrame();
             }

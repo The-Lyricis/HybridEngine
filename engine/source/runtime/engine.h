@@ -29,6 +29,7 @@ namespace Hybrid{
     private:
         bool m_Running = true;
         bool m_Minimized = false;   //用来判断窗口是否被最小化
+        bool m_isPlayMode = false;   //编辑模式和游戏模式切换
 
         std::shared_ptr<WindowSystem> m_Window;
         std::unique_ptr<GraphicsContext> m_GraphicsContext;

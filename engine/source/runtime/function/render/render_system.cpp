@@ -7,13 +7,65 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/euler_angles.hpp>
+
 #include "runtime/function/render/renderer.h"
 #include "runtime/function/render/render_command.h"
 #include "runtime/function/render/vertex_array.h"
 #include "runtime/function/render/shader.h"
 #include "runtime/function/render/framebuffer.h"
+#include "runtime/function/scene/scene.h"
+#include "runtime/function/scene/components.h"
+
+
 
 namespace Hybrid {
+
+    namespace
+    {
+        // TransformComponent -> Model Matrix
+        static glm::mat4 BuildModel(const Hybrid::TransformComponent& tr)
+        {
+            glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
+            glm::mat4 R = glm::yawPitchRoll(tr.Rotation.y, tr.Rotation.x, tr.Rotation.z); // yaw, pitch, roll
+            glm::mat4 S = glm::scale(glm::mat4(1.0f), tr.Scale);
+            return T * R * S;
+        }
+
+        // Scene Camera (Transform + CameraComponent) -> ViewProjection
+        static bool TryGetSceneViewProj(Hybrid::Scene& scene, float aspect, glm::mat4& outViewProj)
+        {
+            auto& reg = scene.GetRegistry();
+            auto view = reg.view<Hybrid::TransformComponent, Hybrid::CameraComponent>();
+
+            entt::entity mainCam = entt::null;
+            for (auto e : view)
+            {
+                auto& cam = view.get<Hybrid::CameraComponent>(e);
+                if (cam.Primary)
+                {
+                    mainCam = e;
+                    break;
+                }
+            }
+            if (mainCam == entt::null) return false;
+
+            const auto& tr = reg.get<Hybrid::TransformComponent>(mainCam);
+            const auto& cam = reg.get<Hybrid::CameraComponent>(mainCam);
+
+            // Projection
+            glm::mat4 proj = glm::perspective(glm::radians(cam.FovY), aspect, cam.Near, cam.Far);
+
+            // View: inverse of camera world transform
+            glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
+            glm::mat4 R = glm::yawPitchRoll(tr.Rotation.y, tr.Rotation.x, tr.Rotation.z);
+            glm::mat4 viewMat = glm::inverse(T * R);
+
+            outViewProj = proj * viewMat;
+            return true;
+        }
+    }
 
     void RenderSystem::initialize(void* glfwWindowHandle) {
         if (m_Initialized) return;
@@ -129,57 +181,101 @@ void main() {
         void* glfwWindowHandle,
         float dt,
         bool viewportActive,
-        const InputState& input) {
+        const InputState& input,
+        bool useGameCamera)
+    {
         if (!m_Initialized) initialize(glfwWindowHandle);
 
         // 1) FBO 尺寸匹配 viewport
         ensureFramebufferSize((uint32_t)viewportSize.x, (uint32_t)viewportSize.y);
 
-        // 2) 解析输入（GLFW key/button 常量）
-        //    注意：只有 viewportActive 时才允许控制相机（避免 UI 输入冲突）
-        const bool rmbDown = viewportActive && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
+        // 2) 解析输入（只在 Editor 预览且 viewportActive 时更新 EditorCamera）
+        const bool rmbDown = (!useGameCamera) && viewportActive && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
 
-        const float mdx = viewportActive ? input.getMouseDeltaX() : 0.0f;
-        const float mdy = viewportActive ? input.getMouseDeltaY() : 0.0f;
+        const float mdx = (!useGameCamera && viewportActive) ? input.getMouseDeltaX() : 0.0f;
+        const float mdy = (!useGameCamera && viewportActive) ? input.getMouseDeltaY() : 0.0f;
+        const float scrollY = (!useGameCamera && viewportActive) ? input.getScrollDeltaY() : 0.0f;
 
-        // 你可按喜好决定：滚轮是否只在 viewportActive 时生效
-        const float scrollY = viewportActive ? input.getScrollDeltaY() : 0.0f;
+        const bool keyW = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_W);
+        const bool keyA = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_A);
+        const bool keyS = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_S);
+        const bool keyD = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_D);
+        const bool keyQ = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_Q);
+        const bool keyE = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_E);
 
-        const bool keyW = viewportActive && input.isKeyDown(GLFW_KEY_W);
-        const bool keyA = viewportActive && input.isKeyDown(GLFW_KEY_A);
-        const bool keyS = viewportActive && input.isKeyDown(GLFW_KEY_S);
-        const bool keyD = viewportActive && input.isKeyDown(GLFW_KEY_D);
-        const bool keyQ = viewportActive && input.isKeyDown(GLFW_KEY_Q);
-        const bool keyE = viewportActive && input.isKeyDown(GLFW_KEY_E);
+        // 3) 更新 Editor 预览相机（游戏相机不吃 Editor 输入）
+        if (!useGameCamera)
+        {
+            m_Camera.update(dt, viewportActive, rmbDown, mdx, mdy,
+                keyW, keyA, keyS, keyD, keyQ, keyE,
+                scrollY);
+        }
 
-        // 3) 更新相机（你的独立相机类）
-        m_Camera.update(dt, viewportActive, rmbDown, mdx, mdy,
-            keyW, keyA, keyS, keyD, keyQ, keyE,
-            scrollY);
+        // 4) 选择 ViewProjection：EditorCamera 或 Scene Primary Camera
+        glm::mat4 viewProj(1.0f);
 
-        // 4) 渲染到 FBO
+        const float aspect = (viewportSize.y > 0.0f) ? (viewportSize.x / viewportSize.y) : 1.0f;
+
+        if (useGameCamera)
+        {
+            if (!m_Scene)
+            {
+                // 没有场景：退回 editor camera
+                viewProj = m_Camera.getViewProj();
+            }
+            else
+            {
+                // Scene 相机优先；若没找到 Primary Camera，则退回 editor camera
+                if (!TryGetSceneViewProj(*m_Scene, aspect, viewProj))
+                    viewProj = m_Camera.getViewProj();
+            }
+        }
+        else
+        {
+            // Editor 预览
+            viewProj = m_Camera.getViewProj();
+        }
+
+        // 5) 渲染到 FBO
         m_SceneFB->bind();
         RenderCommand::setViewport(0, 0, m_SceneFB->getWidth(), m_SceneFB->getHeight());
 
         Renderer::beginFrame({ 0.1f, 0.1f, 0.12f, 1.0f });
 
-        // Model：旋转立方体（可视化验证 MVP）
-        const float t = (float)glfwGetTime();
-        glm::mat4 model(1.0f);
-        model = glm::rotate(model, t * 0.8f, glm::vec3(0, 1, 0));
-        model = glm::rotate(model, t * 0.35f, glm::vec3(1, 0, 0));
+        // 6) 从 Scene 读取可渲染实体并绘制 cube
+        if (m_Scene)
+        {
+            auto& registry = m_Scene->GetRegistry();
+            auto renderView = registry.view<Hybrid::TransformComponent, Hybrid::MeshRendererComponent>();
 
-        // 设置 uniform（要求 Shader::SetMat4 存在）
-        m_CubeShader->bind();
-        m_CubeShader->setMat4("u_ViewProjection", m_Camera.getViewProj());
-        m_CubeShader->setMat4("u_Model", model);
+            m_CubeShader->bind();
+            m_CubeShader->setMat4("u_ViewProjection", viewProj);
 
-        Renderer::submit(m_CubeVAO, m_CubeShader);
+            for (auto e : renderView)
+            {
+                const auto& tr = renderView.get<Hybrid::TransformComponent>(e);
+                const auto& mr = renderView.get<Hybrid::MeshRendererComponent>(e);
+
+                // 当前版本只处理 Primitive==0 的内建立方体
+                if (mr.Primitive != 0)
+                    continue;
+
+                glm::mat4 model = BuildModel(tr);
+                m_CubeShader->setMat4("u_Model", model);
+
+                Renderer::submit(m_CubeVAO, m_CubeShader);
+            }
+        }
+        else
+        {
+            // 没有 Scene：可选保底（不画任何东西）
+            // 或保留你原来的旋转 cube 作为 debug
+        }
+
         Renderer::endFrame();
-
         m_SceneFB->unbind();
 
-        // 5) 清屏默认帧缓冲（防 UI 拖影）
+        // 7) 清屏默认帧缓冲（防 UI 拖影）
         GLFWwindow* window = static_cast<GLFWwindow*>(glfwWindowHandle);
         int display_w = 0, display_h = 0;
         glfwGetFramebufferSize(window, &display_w, &display_h);
@@ -189,4 +285,8 @@ void main() {
         RenderCommand::clear();
     }
 
-} // namespace Hybrid
+
+
+    
+}
+

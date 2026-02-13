@@ -14,6 +14,9 @@ namespace Hybrid
         ~Scene() = default;
 
         Entity CreateEntity(const std::string& name = "Entity");
+        Entity CreateCameraEntity(const std::string& name = "Camera", bool primary = true);
+        Entity CreateRenderableEntity(const std::string& name = "Renderable");
+
         void DestroyEntity(Entity entity);
 
         void OnUpdate(float dt);
