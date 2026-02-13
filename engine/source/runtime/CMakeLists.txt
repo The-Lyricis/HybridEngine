@@ -26,6 +26,7 @@ target_link_libraries(${TARGET_NAME}
     PUBLIC glm
     PUBLIC imgui
     PUBLIC spdlog::spdlog
+    PUBLIC EnTT::EnTT
 )
 # 包含目录
 target_include_directories(${TARGET_NAME}

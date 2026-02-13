@@ -53,3 +53,20 @@ if(NOT TARGET spdlog::spdlog AND NOT TARGET spdlog::spdlog_header_only)
         set_target_properties(spdlog_header_only PROPERTIES FOLDER ${third_party_folder}/spdlog)
     endif()
 endif()
+
+# ---- entt (header-only, ECS) ----
+if(NOT TARGET EnTT::EnTT)
+    include(FetchContent)
+
+    FetchContent_Declare(
+        entt
+        GIT_REPOSITORY https://github.com/skypjack/entt.git
+        GIT_TAG v3.13.2
+    )
+
+    FetchContent_MakeAvailable(entt)
+
+    if(TARGET entt)
+    set_target_properties(entt PROPERTIES FOLDER ${third_party_folder}/entt)
+    endif()
+endif()
