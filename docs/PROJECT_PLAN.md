@@ -56,12 +56,12 @@ Hybrid Engine
 
 - Phase 2.1（资源系统）
 - Phase 2.2（初步场景）：ECS/场景序列化/层级编辑
-- Phase 2.3（进阶渲染实现）：着色/Texture
 
 ##### Phase 3 (2周)
 
 - Phase 3.1（物理系统）：包围盒/碰撞
 - Phase 3.2（音频系统）
+- Phase 3.3（进阶渲染实现）：着色/Texture
 
 ##### Phase 4（课后）
 
@@ -108,12 +108,6 @@ Hybrid Engine
 - [ ] 场景序列化（JSON）
 - [ ] Scene Hierarchy
 
-### Phase 2.3：进阶渲染实现
-
-- [ ] 基础光照/材质
-- [ ] Texture/采样与管理
-- [ ] RenderPass 组织（可选）
-
 ### Phase 3.1：物理系统
 
 - [ ] 包围盒/碰撞检测
@@ -123,6 +117,12 @@ Hybrid Engine
 
 - [ ] 播放/暂停/停止接口
 - [ ] 资源加载与管理（可选）
+
+### Phase 3.3：进阶渲染实现
+
+- [ ] 基础光照/材质
+- [ ] Texture/采样与管理
+- [ ] RenderPass 组织（可选）
 
 ### Phase 4.1：脚本系统
 

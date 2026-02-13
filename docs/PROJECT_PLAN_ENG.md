@@ -56,12 +56,12 @@ Hybrid Engine
 
 - Phase 2.1 (Resource system)
 - Phase 2.2 (Initial scene): ECS / scene serialization / hierarchy editing
-- Phase 2.3 (Advanced rendering): shading / texture
 
 ##### Phase 3 (2 weeks)
 
 - Phase 3.1 (Physics system): bounding volumes / collision
 - Phase 3.2 (Audio system)
+- Phase 3.3 (Advanced rendering): shading / texture
 
 ##### Phase 4 (After course)
 
@@ -108,12 +108,6 @@ Hybrid Engine
 - [ ] Scene serialization (JSON)
 - [ ] Scene Hierarchy
 
-### Phase 2.3: Advanced Rendering
-
-- [ ] Basic lighting/materials
-- [ ] Texture sampling/management
-- [ ] RenderPass organization (optional)
-
 ### Phase 3.1: Physics System
 
 - [ ] Bounding volumes / collision detection
@@ -123,6 +117,12 @@ Hybrid Engine
 
 - [ ] Play/pause/stop API
 - [ ] Resource loading & management (optional)
+
+### Phase 3.3: Advanced Rendering
+
+- [ ] Basic lighting/materials
+- [ ] Texture sampling/management
+- [ ] RenderPass organization (optional)
 
 ### Phase 4.1: Scripting System
 
