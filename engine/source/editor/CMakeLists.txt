@@ -1,14 +1,23 @@
-set(TARGET_NAME HybridEditor)
+﻿set(TARGET_NAME HybridEditor)
 
 set(CMAKE_CXX_STANDARD 17)
 
 file(GLOB EDITOR_HEADERS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h)
 file(GLOB EDITOR_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp)
 
+# Piccolo 风格：显式把 .rc 资源编进可执行文件，给 exe 设定图标
+set(APP_ICON_RC "${CMAKE_CURRENT_SOURCE_DIR}/resource/app_icon.rc")
+set(APP_ICON_ICO "${CMAKE_CURRENT_SOURCE_DIR}/resource/app_icon.ico")
+if(WIN32 AND EXISTS "${APP_ICON_RC}" AND EXISTS "${APP_ICON_ICO}")
+    set(EDITOR_RESOURCES "${APP_ICON_RC}")
+else()
+    set(EDITOR_RESOURCES "")
+endif()
+
 # IDE 分组：按当前目录树展示
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${EDITOR_HEADERS} ${EDITOR_SOURCES})
 
-add_executable(${TARGET_NAME} ${EDITOR_HEADERS} ${EDITOR_SOURCES})
+add_executable(${TARGET_NAME} ${EDITOR_HEADERS} ${EDITOR_SOURCES} ${EDITOR_RESOURCES})
 
 # 让代码里能拿到“运行根目录”（顶层定义的 BINARY_ROOT_DIR）
 # 注意：这里会变成一个字符串宏，比如 HYBRID_ROOT_DIR=".../bin"
