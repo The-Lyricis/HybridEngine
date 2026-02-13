@@ -1,7 +1,8 @@
 #pragma once
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <memory>
-#include <runtime/function/render/surface_io.h>
+#include <runtime/function/window/surface_io.h>
 
 
 namespace Hybrid {

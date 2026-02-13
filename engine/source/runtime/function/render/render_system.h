@@ -12,6 +12,7 @@ namespace Hybrid {
     class VertexArray;
     class Shader;
 
+    // RenderSystem: owns scene resources and issues per-frame rendering.
     class RenderSystem {
     public:
         RenderSystem() = default;

@@ -1,23 +1,21 @@
 #pragma once
 #include <string>
-#include <cstdint>
+#include <memory>
 #include <glm/ext/matrix_float4x4.hpp>
 
 namespace Hybrid {
 
+    // Shader: encapsulates GPU program plus uniform setters.
     class Shader {
     public:
-        Shader(const std::string& vertexSrc, const std::string& fragmentSrc);
-        ~Shader();
+        virtual ~Shader() = default;
 
-        void bind() const;
-        void unbind() const;
-        void setMat4
-        (const std::string& name, const glm::mat4& m); // 4x4 matrix
+        virtual void bind() const = 0;
+        virtual void unbind() const = 0;
 
-    private:
-        uint32_t m_RendererID = 0;
-        uint32_t compile(uint32_t type, const std::string& src);
+        virtual void setMat4(const std::string& name, const glm::mat4& m) = 0;
+
+        static std::shared_ptr<Shader> Create(const std::string& vsSource, const std::string& fsSource);
     };
 
 } // namespace Hybrid

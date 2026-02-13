@@ -1,50 +1,16 @@
 #include "vertex_array.h"
-#include <glad/gl.h>
+#include "renderer_api.h"
+#include "opengl/opengl_vertex_array.h"
 
 namespace Hybrid {
 
-    VertexArray::VertexArray() {
-        glGenVertexArrays(1, &m_RendererID);
-    }
-
-    VertexArray::~VertexArray() {
-        glDeleteVertexArrays(1, &m_RendererID);
-    }
-
-    void VertexArray::bind() const {
-        glBindVertexArray(m_RendererID);
-    }
-
-    void VertexArray::unbind() const {
-        glBindVertexArray(0);
-    }
-
-    void VertexArray::setVertexBuffer(std::shared_ptr<VertexBuffer> vb) {
-        m_VertexBuffer = vb;
-        bind();
-        vb->bind();
-
-        // 布局：pos(vec3) + color(vec4)
-        // stride = 7 floats
-        const GLsizei stride = 7 * sizeof(float);
-
-        // location 0: position
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (const void*)0);
-
-        // location 1: color
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (const void*)(3 * sizeof(float)));
-    }
-
-    void VertexArray::setIndexBuffer(std::shared_ptr<IndexBuffer> ib) {
-        m_IndexBuffer = ib;
-        bind();
-        ib->bind(); // 注意：EBO 绑定是 VAO 状态的一部分
-    }
-
-    uint32_t VertexArray::getIndexCount() const {
-        return m_IndexBuffer ? m_IndexBuffer->getCount() : 0;
+    std::shared_ptr<VertexArray> VertexArray::Create() {
+        switch (RendererAPI::getAPI()) {
+        case RendererAPI::API::OpenGL:
+            return std::make_shared<OpenGLVertexArray>();
+        default:
+            return nullptr;
+        }
     }
 
 } // namespace Hybrid

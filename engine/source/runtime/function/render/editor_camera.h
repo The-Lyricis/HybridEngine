@@ -3,6 +3,7 @@
 
 namespace Hybrid {
 
+    // EditorCamera: free-fly camera used by the editor viewport.
     class EditorCamera {
     public:
 

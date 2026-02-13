@@ -16,15 +16,14 @@ namespace Hybrid {
             return;
         }
 
-        glfwMakeContextCurrent(window);
-
-        const int ver = gladLoadGL(glfwGetProcAddress);
-        if (ver == 0) {
-            HBD_CORE_ERROR("gladLoadGL failed (returned 0).");
+        m_GraphicsContext = GraphicsContext::Create(window);
+        if (!m_GraphicsContext) {
+            HBD_CORE_ERROR("GraphicsContext creation failed.");
             m_Window->cleanup();
             Hybrid::LogSystem::shutdown();
             return;
         }
+        m_GraphicsContext->init();
 
         auto surface_io = m_Window->getSurfaceIO();
         surface_io->registerOnEventFunc([this](Event& e) { onEvent(e); });
@@ -73,7 +72,7 @@ namespace Hybrid {
             }
 
             // phase 5: events & swap
-            glfwSwapBuffers(m_Window->getGLFWWindow());
+            m_GraphicsContext->swapBuffers();
         }
     }
     void HybridEngine::onEvent(Event& e)

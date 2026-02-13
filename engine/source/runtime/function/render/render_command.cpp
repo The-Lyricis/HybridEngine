@@ -1,29 +1,28 @@
 #include "render_command.h"
-#include <glad/gl.h>
 
 namespace Hybrid {
 
-    void RenderCommand::initialize() {
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    std::unique_ptr<RendererAPI> RenderCommand::s_API;
 
-        glEnable(GL_DEPTH_TEST); // M1 画三角形不一定需要，但建议开着，后面直接用
+    void RenderCommand::initialize() {
+        s_API = RendererAPI::Create();
+        s_API->init();
     }
 
     void RenderCommand::setViewport(int x, int y, int width, int height) {
-        glViewport(x, y, width, height);
+        s_API->setViewport(x, y, width, height);
     }
 
     void RenderCommand::setClearColor(const glm::vec4& color) {
-        glClearColor(color.r, color.g, color.b, color.a);
+        s_API->setClearColor(color);
     }
 
     void RenderCommand::clear() {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        s_API->clear();
     }
 
     void RenderCommand::drawIndexed(unsigned int indexCount) {
-        glDrawElements(GL_TRIANGLES, (GLsizei)indexCount, GL_UNSIGNED_INT, nullptr);
+        s_API->drawIndexed(indexCount);
     }
 
 } // namespace Hybrid

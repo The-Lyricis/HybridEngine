@@ -1,27 +1,25 @@
 #pragma once
 #include <memory>
+#include <cstdint>
 #include "buffer.h"
 
 namespace Hybrid {
 
+    // VertexArray: gl-style VAO abstraction combining VBO + IBO.
     class VertexArray {
     public:
-        VertexArray();
-        ~VertexArray();
+        virtual ~VertexArray() = default;
 
-        void bind() const;
-        void unbind() const;
+        virtual void bind() const = 0;
+        virtual void unbind() const = 0;
 
-        // M1 简化：只支持一个 VBO + 一个 IBO，且布局写死
-        void setVertexBuffer(std::shared_ptr<VertexBuffer> vb);
-        void setIndexBuffer(std::shared_ptr<IndexBuffer> ib);
+        // M1 约定：只支持 1 个 VBO + 1 个 IBO，布局在实现里写死。
+        virtual void setVertexBuffer(std::shared_ptr<VertexBuffer> vb) = 0;
+        virtual void setIndexBuffer(std::shared_ptr<IndexBuffer> ib) = 0;
 
-        uint32_t getIndexCount() const;
+        virtual uint32_t getIndexCount() const = 0;
 
-    private:
-        uint32_t m_RendererID = 0;
-        std::shared_ptr<VertexBuffer> m_VertexBuffer;
-        std::shared_ptr<IndexBuffer>  m_IndexBuffer;
+        static std::shared_ptr<VertexArray> Create();
     };
 
 } // namespace Hybrid

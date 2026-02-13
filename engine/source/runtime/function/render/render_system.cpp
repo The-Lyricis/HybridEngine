@@ -1,6 +1,5 @@
 #include "render_system.h"
 
-#include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
@@ -29,7 +28,7 @@ namespace Hybrid {
         FramebufferSpec spec;
         spec.width = (uint32_t)std::max(1, w);
         spec.height = (uint32_t)std::max(1, h);
-        m_SceneFB = std::make_shared<Framebuffer>(spec);
+        m_SceneFB = Framebuffer::Create(spec);
 
         // 相机初始投影（后续每帧会随 viewport 变化）
         m_Camera.setViewportSize((float)spec.width, (float)spec.height);
@@ -65,9 +64,12 @@ namespace Hybrid {
             3, 2, 6,  6, 7, 3
         };
 
-        m_CubeVAO = std::make_shared<VertexArray>();
-        auto vb = std::make_shared<VertexBuffer>(s_CubeVertices, sizeof(s_CubeVertices));
-        auto ib = std::make_shared<IndexBuffer>(
+        m_CubeVAO = VertexArray::Create();
+        auto vb = VertexBuffer::Create(
+            s_CubeVertices,
+            static_cast<uint32_t>(sizeof(s_CubeVertices))
+        );
+        auto ib = IndexBuffer::Create(
             s_CubeIndices,
             (uint32_t)(sizeof(s_CubeIndices) / sizeof(uint32_t))
         );
@@ -100,7 +102,7 @@ void main() {
 }
 )";
 
-        m_CubeShader = std::make_shared<Shader>(vs, fs);
+        m_CubeShader = Shader::Create(vs, fs);
     }
 
     void RenderSystem::ensureFramebufferSize(uint32_t w, uint32_t h) {
@@ -109,7 +111,7 @@ void main() {
 
         if (!m_SceneFB) {
             FramebufferSpec spec{ w, h };
-            m_SceneFB = std::make_shared<Framebuffer>(spec);
+            m_SceneFB = Framebuffer::Create(spec);
         }
         else {
             m_SceneFB->resize(w, h);
@@ -182,7 +184,6 @@ void main() {
         int display_w = 0, display_h = 0;
         glfwGetFramebufferSize(window, &display_w, &display_h);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         RenderCommand::setViewport(0, 0, display_w, display_h);
         RenderCommand::setClearColor({ 0.08f, 0.08f, 0.09f, 1.0f });
         RenderCommand::clear();

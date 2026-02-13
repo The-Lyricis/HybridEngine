@@ -1,43 +1,25 @@
 #include "buffer.h"
-#include <glad/gl.h>
+#include "renderer_api.h"
+#include "opengl/opengl_buffer.h"
 
 namespace Hybrid {
 
-    VertexBuffer::VertexBuffer(const void* data, uint32_t size) {
-        glGenBuffers(1, &m_RendererID);
-        glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
-        glBufferData(GL_ARRAY_BUFFER, size, data, GL_STATIC_DRAW);
+    std::shared_ptr<VertexBuffer> VertexBuffer::Create(const void* data, uint32_t size) {
+        switch (RendererAPI::getAPI()) {
+        case RendererAPI::API::OpenGL:
+            return std::make_shared<OpenGLVertexBuffer>(data, size);
+        default:
+            return nullptr;
+        }
     }
 
-    VertexBuffer::~VertexBuffer() {
-        glDeleteBuffers(1, &m_RendererID);
-    }
-
-    void VertexBuffer::bind() const {
-        glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
-    }
-
-    void VertexBuffer::unbind() const {
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-    }
-
-    IndexBuffer::IndexBuffer(const uint32_t* indices, uint32_t count)
-        : m_Count(count) {
-        glGenBuffers(1, &m_RendererID);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, count * sizeof(uint32_t), indices, GL_STATIC_DRAW);
-    }
-
-    IndexBuffer::~IndexBuffer() {
-        glDeleteBuffers(1, &m_RendererID);
-    }
-
-    void IndexBuffer::bind() const {
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
-    }
-
-    void IndexBuffer::unbind() const {
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    std::shared_ptr<IndexBuffer> IndexBuffer::Create(const uint32_t* indices, uint32_t count) {
+        switch (RendererAPI::getAPI()) {
+        case RendererAPI::API::OpenGL:
+            return std::make_shared<OpenGLIndexBuffer>(indices, count);
+        default:
+            return nullptr;
+        }
     }
 
 } // namespace Hybrid

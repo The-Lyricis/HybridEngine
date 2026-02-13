@@ -7,6 +7,7 @@
 
 namespace Hybrid {
 
+    // Renderer: static façade driving the frame lifecycle.
     class Renderer {
     public:
         static void initialize();

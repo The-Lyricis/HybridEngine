@@ -1,6 +1,5 @@
 #pragma once
 #include <memory>
-#include <glad/gl.h>
 
 #include "runtime/function/window/window_system.h"
 #include "runtime/core/event/layer.h"
@@ -8,6 +7,7 @@
 #include "runtime/core/event/input_event.h"
 #include "runtime/function/input/input_layer.h"
 #include "runtime/function/render/render_system.h"
+#include "runtime/function/render/graphics_context.h"
 #include "editor/include/editor_ui.h"
 
 
@@ -29,6 +29,7 @@ namespace Hybrid{
         bool m_Minimized = false;   //用来判断窗口是否被最小化
 
         std::shared_ptr<WindowSystem> m_Window;
+        std::unique_ptr<GraphicsContext> m_GraphicsContext;
         LayerStack m_LayerStack;
 
         InputLayer* m_InputLayer = nullptr;

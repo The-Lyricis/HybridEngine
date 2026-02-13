@@ -1,0 +1,26 @@
+#pragma once
+#include "../vertex_array.h"
+
+namespace Hybrid {
+
+    // OpenGLVertexArray: manages VAO binding/state for OpenGL backend.
+    class OpenGLVertexArray final : public VertexArray {
+    public:
+        OpenGLVertexArray();
+        ~OpenGLVertexArray() override;
+
+        void bind() const override;
+        void unbind() const override;
+
+        void setVertexBuffer(std::shared_ptr<VertexBuffer> vb) override;
+        void setIndexBuffer(std::shared_ptr<IndexBuffer> ib) override;
+
+        uint32_t getIndexCount() const override;
+
+    private:
+        uint32_t m_RendererID = 0;
+        std::shared_ptr<VertexBuffer> m_VertexBuffer;
+        std::shared_ptr<IndexBuffer>  m_IndexBuffer;
+    };
+
+} // namespace Hybrid
