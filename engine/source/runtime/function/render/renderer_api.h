@@ -12,7 +12,7 @@ namespace Hybrid {
 
     class RendererAPI {
     public:
-        enum class API { None = 0, OpenGL = 1 };
+        enum class API { None = 0, OpenGL = 1, Vulkan = 2, DirectX12 = 3 , Metal = 4 };
 
         virtual ~RendererAPI() = default;
 
