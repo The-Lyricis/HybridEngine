@@ -53,3 +53,13 @@ if(NOT TARGET spdlog::spdlog AND NOT TARGET spdlog::spdlog_header_only)
         set_target_properties(spdlog_header_only PROPERTIES FOLDER ${third_party_folder}/spdlog)
     endif()
 endif()
+
+# ---- entt (submodule) ----
+if(NOT TARGET EnTT::EnTT AND NOT TARGET entt)
+    add_subdirectory(entt)
+endif()
+
+# VS 分组（注意：不要对 ALIAS 设置属性）
+if(TARGET entt)
+    set_target_properties(entt PROPERTIES FOLDER ${third_party_folder}/entt)
+endif()
