@@ -1,0 +1,13 @@
+<mxfile host="65bd71144e">
+    <diagram id="1RbGJGafxdKMRQ3UTpC0" name="Page-1">
+        <mxGraphModel dx="237" dy="325" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0" adaptiveColors="auto">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="3" value="&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;Hybrid Engine&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=2;fillWeight=4;hachureGap=8;hachureAngle=45;fillColor=#4D9900;sketch=1;" vertex="1" parent="1">
+                    <mxGeometry x="230" y="320" width="120" height="50" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
