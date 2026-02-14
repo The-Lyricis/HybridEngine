@@ -25,6 +25,7 @@ target_link_libraries(${TARGET_NAME}
     PUBLIC glad
     PUBLIC glm
     PUBLIC imgui
+    PUBLIC stb
     PUBLIC spdlog::spdlog
     PUBLIC EnTT::EnTT
 )

@@ -38,6 +38,15 @@ if(NOT TARGET imgui)
     set_target_properties(imgui PROPERTIES FOLDER ${third_party_folder}/imgui)
 endif()
 
+# ---- stb ----
+if(NOT TARGET stb)
+    add_library(stb INTERFACE)
+    target_include_directories(stb INTERFACE
+        ${CMAKE_CURRENT_LIST_DIR}/stb
+    )
+    set_target_properties(stb PROPERTIES FOLDER ${third_party_folder}/stb)
+endif()
+
 # ---- spdlog ----
 if(NOT TARGET spdlog::spdlog AND NOT TARGET spdlog::spdlog_header_only)
     option(SPDLOG_BUILD_EXAMPLE "" OFF)
