@@ -266,11 +266,6 @@ void main() {
                 Renderer::submit(m_CubeVAO, m_CubeShader);
             }
         }
-        else
-        {
-            // 没有 Scene：可选保底（不画任何东西）
-            // 或保留你原来的旋转 cube 作为 debug
-        }
 
         Renderer::endFrame();
         m_SceneFB->unbind();

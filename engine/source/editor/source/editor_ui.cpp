@@ -1,9 +1,9 @@
 #include "editor_ui.h"
 
-#include <imgui.h>
 #include <GLFW/glfw3.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
+#include <imgui_internal.h>
 
 
 namespace Hybrid {
@@ -15,8 +15,11 @@ namespace Hybrid {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; //启用docking
+
         // 在这里设置 ImGui 风格
-        // ImGui::StyleColorsDark();
+        ImGui::StyleColorsDark();
 
         // 让 ImGui 安装 GLFW 回调（原本就是 true）
         ImGui_ImplGlfw_InitForOpenGL(m_window, true);
@@ -46,62 +49,102 @@ namespace Hybrid {
         ImGui::NewFrame();
     }
 
-    /*void EditorUI::drawBottomStatusBar() {
-        ImGuiIO& io = ImGui::GetIO();
+    void EditorUI::drawPanels() {
+        if (!m_initialized) return;
+
+        drawDockSpaceRoot();
+
+        if (!m_DefaultLayoutBuilt || m_RequestResetLayout)
+        {
+            buildDefaultLayout();
+            m_DefaultLayoutBuilt = true;
+            m_RequestResetLayout = false;
+        }
+
+        ImGui::Begin("Hierarchy");  ImGui::Text("Hierarchy");  ImGui::End();
+        ImGui::Begin("Inspector");  ImGui::Text("Inspector");  ImGui::End();
+        ImGui::Begin("Project");    ImGui::Text("Project");    ImGui::End();
+
+        // 关键：Viewport 必须真的被 Begin 出来，DockBuilder 才能把它 dock 到中心
+        //drawViewport(0); // 在renderSystem中调用了
+    }
+
+    void EditorUI::drawDockSpaceRoot()
+    {
         ImGuiViewport* vp = ImGui::GetMainViewport();
 
-        const float status_h = ImGui::GetFrameHeightWithSpacing();
-        const ImVec2 pos(vp->Pos.x, vp->Pos.y + vp->Size.y - status_h);
-        const ImVec2 size(vp->Size.x, status_h);
+        ImGui::SetNextWindowPos(vp->Pos);
+        ImGui::SetNextWindowSize(vp->Size);
+        ImGui::SetNextWindowViewport(vp->ID);
 
-        ImGui::SetNextWindowPos(pos);
-        ImGui::SetNextWindowSize(size);
-
-        const ImGuiWindowFlags flags =
+        const ImGuiWindowFlags host_flags =
             ImGuiWindowFlags_NoDecoration |
             ImGuiWindowFlags_NoMove |
             ImGuiWindowFlags_NoSavedSettings |
             ImGuiWindowFlags_NoBringToFrontOnFocus |
-            ImGuiWindowFlags_NoFocusOnAppearing |
-            ImGuiWindowFlags_NoNav |
-            ImGuiWindowFlags_NoScrollbar |
-            ImGuiWindowFlags_NoScrollWithMouse;
+            ImGuiWindowFlags_NoNavFocus |
+            ImGuiWindowFlags_MenuBar |
+            ImGuiWindowFlags_NoDocking; // 宿主本身不允许被 dock
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
-        ImGui::Begin("##BottomStatusBar", nullptr, flags);
+        ImGui::Begin("##DockSpaceHost", nullptr, host_flags);
+
+        ImGui::PopStyleVar(3);
+
+        // DockSpace：所有子窗口（Hierarchy/Inspector/Viewport/Project）都停靠在这里
+        m_DockSpaceID = ImGui::GetID("HybridDockSpace");
+        ImGui::DockSpace(m_DockSpaceID, ImVec2(0, 0), ImGuiDockNodeFlags_None);
+
+        // 顶部菜单栏（先留空或简单写点）
+        if (ImGui::BeginMenuBar())
         {
-            const std::string lastKey = InputSystem::getInstance().getLastKeyName();
-            ImGui::Text("Last key: %s", lastKey.c_str());
-
-            char fpsBuf[64];
-            std::snprintf(fpsBuf, sizeof(fpsBuf), "FPS: %.1f", io.Framerate);
-
-            const float fpsWidth = ImGui::CalcTextSize(fpsBuf).x;
-            const float rightX = ImGui::GetContentRegionAvail().x - fpsWidth;
-            if (rightX > 0.0f)
-                ImGui::SameLine(rightX);
-
-            ImGui::TextUnformatted(fpsBuf);
+            if (ImGui::BeginMenu("File"))
+            {
+                ImGui::MenuItem("Exit");
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Window"))
+            {
+                if (ImGui::MenuItem("Reset Layout"))
+                {
+                    m_RequestResetLayout = true;
+                    m_DefaultLayoutBuilt = false;
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenuBar();
         }
+
         ImGui::End();
-
-        ImGui::PopStyleVar(2);
-    }*/
-
-    void EditorUI::drawPanels() {
-        if (!m_initialized) return;
-
-        ImGui::Begin("HybridEngine");
-        {
-            ImGui::Text("Hello, engine");
-            ImGui::Text("UI is rendering on top of the scene.");
-        }
-        ImGui::End();
-
-        //drawBottomStatusBar();
     }
+
+    void EditorUI::buildDefaultLayout()
+    {
+        if (m_DockSpaceID == 0) return; // Host 未创建则不建
+
+        ImGui::DockBuilderRemoveNode(m_DockSpaceID);
+        ImGui::DockBuilderAddNode(m_DockSpaceID, ImGuiDockNodeFlags_DockSpace);
+        ImGui::DockBuilderSetNodeSize(m_DockSpaceID, ImGui::GetMainViewport()->Size);
+
+        ImGuiID dock_main = m_DockSpaceID;
+        ImGuiID dock_left = 0, dock_right = 0, dock_bottom = 0, dock_center = 0;
+
+        ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Left, 0.20f, &dock_left, &dock_main);
+        ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Right, 0.25f, &dock_right, &dock_main);
+        ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Down, 0.25f, &dock_bottom, &dock_center);
+
+        ImGui::DockBuilderDockWindow("Hierarchy", dock_left);
+        ImGui::DockBuilderDockWindow("Inspector", dock_right);
+        ImGui::DockBuilderDockWindow("Project", dock_bottom);
+        ImGui::DockBuilderDockWindow("Viewport", dock_center);
+
+        ImGui::DockBuilderFinish(m_DockSpaceID);
+    }
+
+
 
     void EditorUI::endFrame() {
         if (!m_initialized) return;
