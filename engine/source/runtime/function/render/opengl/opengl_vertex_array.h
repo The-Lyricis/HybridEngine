@@ -3,11 +3,11 @@
 
 namespace Hybrid {
 
-    // OpenGLVertexArray: manages VAO binding/state for OpenGL backend.
-    class OpenGLVertexArray final : public VertexArray {
+    // GLVertexArray: manages VAO binding/state for OpenGL backend.
+    class GLVertexArray final : public VertexArray {
     public:
-        OpenGLVertexArray();
-        ~OpenGLVertexArray() override;
+        GLVertexArray();
+        ~GLVertexArray() override;
 
         void bind() const override;
         void unbind() const override;

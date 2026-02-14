@@ -4,11 +4,11 @@
 
 namespace Hybrid {
 
-    // OpenGLVertexBuffer: OpenGL implementation of VertexBuffer.
-    class OpenGLVertexBuffer final : public VertexBuffer {
+    // GLVertexBuffer: OpenGL implementation of VertexBuffer.
+    class GLVertexBuffer final : public VertexBuffer {
     public:
-        OpenGLVertexBuffer(const void* data, uint32_t size);
-        ~OpenGLVertexBuffer() override;
+        GLVertexBuffer(const void* data, uint32_t size);
+        ~GLVertexBuffer() override;
 
         void bind() const override;
         void unbind() const override;
@@ -18,11 +18,11 @@ namespace Hybrid {
         uint32_t m_RendererID = 0;
     };
 
-    // OpenGLIndexBuffer: OpenGL implementation of IndexBuffer.
-    class OpenGLIndexBuffer final : public IndexBuffer {
+    // GLIndexBuffer: OpenGL implementation of IndexBuffer.
+    class GLIndexBuffer final : public IndexBuffer {
     public:
-        OpenGLIndexBuffer(const uint32_t* indices, uint32_t count);
-        ~OpenGLIndexBuffer() override;
+        GLIndexBuffer(const uint32_t* indices, uint32_t count);
+        ~GLIndexBuffer() override;
 
         void bind() const override;
         void unbind() const override;

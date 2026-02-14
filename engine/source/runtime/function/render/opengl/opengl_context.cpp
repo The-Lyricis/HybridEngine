@@ -9,10 +9,10 @@
 
 namespace Hybrid {
 
-    OpenGLContext::OpenGLContext(GLFWwindow* window)
+    GLContext::GLContext(GLFWwindow* window)
         : m_Window(window) {}
 
-    void OpenGLContext::init() {
+    void GLContext::init() {
         glfwMakeContextCurrent(m_Window);
         int status = gladLoadGL(glfwGetProcAddress);
         if (status == 0) {
@@ -22,7 +22,7 @@ namespace Hybrid {
         glfwSwapInterval(1); // vsync on by default
     }
 
-    void OpenGLContext::swapBuffers() {
+    void GLContext::swapBuffers() {
         glfwSwapBuffers(m_Window);
     }
 

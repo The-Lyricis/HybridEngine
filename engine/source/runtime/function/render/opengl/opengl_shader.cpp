@@ -30,7 +30,7 @@ namespace Hybrid {
         }
     }
 
-    OpenGLShader::OpenGLShader(const std::string& vsSource, const std::string& fsSource) {
+    GLShader::GLShader(const std::string& vsSource, const std::string& fsSource) {
         auto compile = [](const std::string& src, GLenum type) {
             uint32_t id = glCreateShader(type);
             const char* csrc = src.c_str();
@@ -53,19 +53,19 @@ namespace Hybrid {
         glDeleteShader(fs);
     }
 
-    OpenGLShader::~OpenGLShader() {
+    GLShader::~GLShader() {
         glDeleteProgram(m_RendererID);
     }
 
-    void OpenGLShader::bind() const {
+    void GLShader::bind() const {
         glUseProgram(m_RendererID);
     }
 
-    void OpenGLShader::unbind() const {
+    void GLShader::unbind() const {
         glUseProgram(0);
     }
 
-    void OpenGLShader::setMat4(const std::string& name, const glm::mat4& m) {
+    void GLShader::setMat4(const std::string& name, const glm::mat4& m) {
         GLint loc = glGetUniformLocation(m_RendererID, name.c_str());
         glUniformMatrix4fv(loc, 1, GL_FALSE, &m[0][0]);
     }

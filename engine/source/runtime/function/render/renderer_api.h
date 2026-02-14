@@ -5,7 +5,7 @@
 /**
  * RendererAPI: abstract rendering backend interface.
  * Concrete implementations live in platform-specific files
- * (e.g. OpenGLRendererAPI). Upper layers should depend only
+ * (e.g. GLRendererAPI). Upper layers should depend only
  * on this interface.
  */
 namespace Hybrid {

@@ -8,7 +8,7 @@ namespace Hybrid {
     std::unique_ptr<GraphicsContext> GraphicsContext::Create(void* nativeWindow) {
         switch (RendererAPI::getAPI()) {
         case RendererAPI::API::OpenGL:
-            return std::make_unique<OpenGLContext>(static_cast<GLFWwindow*>(nativeWindow));
+            return std::make_unique<GLContext>(static_cast<GLFWwindow*>(nativeWindow));
         default:
             return nullptr;
         }

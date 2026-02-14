@@ -3,8 +3,8 @@
 
 namespace Hybrid {
 
-    // OpenGLRendererAPI: RendererAPI backed by modern OpenGL.
-    class OpenGLRendererAPI final : public RendererAPI {
+    // GLRendererAPI: RendererAPI backed by modern OpenGL.
+    class GLRendererAPI final : public RendererAPI {
     public:
         void init() override;
         void setViewport(int x, int y, int width, int height) override;

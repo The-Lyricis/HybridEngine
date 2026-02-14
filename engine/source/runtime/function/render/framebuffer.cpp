@@ -7,7 +7,7 @@ namespace Hybrid {
     std::shared_ptr<Framebuffer> Framebuffer::Create(const FramebufferSpec& spec) {
         switch (RendererAPI::getAPI()) {
         case RendererAPI::API::OpenGL:
-            return std::make_shared<OpenGLFramebuffer>(spec);
+            return std::make_shared<GLFramebuffer>(spec);
         default:
             return nullptr;
         }

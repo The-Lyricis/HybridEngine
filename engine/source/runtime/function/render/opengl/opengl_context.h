@@ -6,10 +6,10 @@ struct GLFWwindow;
 
 namespace Hybrid {
 
-    // OpenGLContext: owns a GLFW-backed GL context and swap chain.
-    class OpenGLContext final : public GraphicsContext {
+    // GLContext: owns a GLFW-backed GL context and swap chain.
+    class GLContext final : public GraphicsContext {
     public:
-        explicit OpenGLContext(GLFWwindow* window);
+        explicit GLContext(GLFWwindow* window);
 
         void init() override;
         void swapBuffers() override;

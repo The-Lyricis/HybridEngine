@@ -3,45 +3,45 @@
 
 namespace Hybrid {
 
-    OpenGLVertexBuffer::OpenGLVertexBuffer(const void* data, uint32_t size) {
+    GLVertexBuffer::GLVertexBuffer(const void* data, uint32_t size) {
         glGenBuffers(1, &m_RendererID);
         glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
         glBufferData(GL_ARRAY_BUFFER, size, data, GL_STATIC_DRAW);
     }
 
-    OpenGLVertexBuffer::~OpenGLVertexBuffer() {
+    GLVertexBuffer::~GLVertexBuffer() {
         glDeleteBuffers(1, &m_RendererID);
     }
 
-    void OpenGLVertexBuffer::bind() const {
+    void GLVertexBuffer::bind() const {
         glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
     }
 
-    void OpenGLVertexBuffer::unbind() const {
+    void GLVertexBuffer::unbind() const {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
-    void OpenGLVertexBuffer::setData(const void* data, uint32_t size) {
+    void GLVertexBuffer::setData(const void* data, uint32_t size) {
         glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
         glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
     }
 
-    OpenGLIndexBuffer::OpenGLIndexBuffer(const uint32_t* indices, uint32_t count)
+    GLIndexBuffer::GLIndexBuffer(const uint32_t* indices, uint32_t count)
         : m_Count(count) {
         glGenBuffers(1, &m_RendererID);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, count * sizeof(uint32_t), indices, GL_STATIC_DRAW);
     }
 
-    OpenGLIndexBuffer::~OpenGLIndexBuffer() {
+    GLIndexBuffer::~GLIndexBuffer() {
         glDeleteBuffers(1, &m_RendererID);
     }
 
-    void OpenGLIndexBuffer::bind() const {
+    void GLIndexBuffer::bind() const {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
     }
 
-    void OpenGLIndexBuffer::unbind() const {
+    void GLIndexBuffer::unbind() const {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 

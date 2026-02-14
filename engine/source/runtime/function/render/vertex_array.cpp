@@ -7,7 +7,7 @@ namespace Hybrid {
     std::shared_ptr<VertexArray> VertexArray::Create() {
         switch (RendererAPI::getAPI()) {
         case RendererAPI::API::OpenGL:
-            return std::make_shared<OpenGLVertexArray>();
+            return std::make_shared<GLVertexArray>();
         default:
             return nullptr;
         }

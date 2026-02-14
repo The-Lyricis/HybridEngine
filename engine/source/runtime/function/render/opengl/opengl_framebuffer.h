@@ -3,11 +3,11 @@
 
 namespace Hybrid {
 
-    // OpenGLFramebuffer: framebuffer object with color + depth-stencil.
-    class OpenGLFramebuffer final : public Framebuffer {
+    // GLFramebuffer: framebuffer object with color + depth-stencil.
+    class GLFramebuffer final : public Framebuffer {
     public:
-        explicit OpenGLFramebuffer(const FramebufferSpec& spec);
-        ~OpenGLFramebuffer() override;
+        explicit GLFramebuffer(const FramebufferSpec& spec);
+        ~GLFramebuffer() override;
 
         void bind() const override;
         void unbind() const override;

@@ -4,18 +4,18 @@
 
 namespace Hybrid {
 
-    OpenGLFramebuffer::OpenGLFramebuffer(const FramebufferSpec& spec)
+    GLFramebuffer::GLFramebuffer(const FramebufferSpec& spec)
         : m_Spec(spec) {
         invalidate();
     }
 
-    OpenGLFramebuffer::~OpenGLFramebuffer() {
+    GLFramebuffer::~GLFramebuffer() {
         if (m_DepthStencilRBO) glDeleteRenderbuffers(1, &m_DepthStencilRBO);
         if (m_ColorAttachment) glDeleteTextures(1, &m_ColorAttachment);
         if (m_FBO) glDeleteFramebuffers(1, &m_FBO);
     }
 
-    void OpenGLFramebuffer::invalidate() {
+    void GLFramebuffer::invalidate() {
         // delete old resources
         if (m_DepthStencilRBO) { glDeleteRenderbuffers(1, &m_DepthStencilRBO); m_DepthStencilRBO = 0; }
         if (m_ColorAttachment) { glDeleteTextures(1, &m_ColorAttachment); m_ColorAttachment = 0; }
@@ -51,15 +51,15 @@ namespace Hybrid {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    void OpenGLFramebuffer::bind() const {
+    void GLFramebuffer::bind() const {
         glBindFramebuffer(GL_FRAMEBUFFER, m_FBO);
     }
 
-    void OpenGLFramebuffer::unbind() const {
+    void GLFramebuffer::unbind() const {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    void OpenGLFramebuffer::resize(uint32_t w, uint32_t h) {
+    void GLFramebuffer::resize(uint32_t w, uint32_t h) {
         w = std::max(1u, w);
         h = std::max(1u, h);
         if (w == m_Spec.width && h == m_Spec.height) return;

@@ -11,7 +11,7 @@ namespace Hybrid {
 
     std::unique_ptr<RendererAPI> RendererAPI::Create() {
         switch (s_CurrentAPI) {
-        case API::OpenGL: return std::make_unique<OpenGLRendererAPI>();
+        case API::OpenGL: return std::make_unique<GLRendererAPI>();
         default: return nullptr;
         }
     }

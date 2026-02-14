@@ -4,11 +4,11 @@
 
 namespace Hybrid {
 
-    // OpenGLShader: GLSL program wrapper with uniform helpers.
-    class OpenGLShader final : public Shader {
+    // GLShader: GLSL program wrapper with uniform helpers.
+    class GLShader final : public Shader {
     public:
-        OpenGLShader(const std::string& vsSource, const std::string& fsSource);
-        ~OpenGLShader() override;
+        GLShader(const std::string& vsSource, const std::string& fsSource);
+        ~GLShader() override;
 
         void bind() const override;
         void unbind() const override;
