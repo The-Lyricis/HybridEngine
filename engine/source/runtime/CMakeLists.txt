@@ -1,6 +1,6 @@
 set(TARGET_NAME HybridRuntime)
 
-# 头/源文件收集
+# 收集源文件
 file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS "*.h")
 file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS "*.cpp")
 
@@ -14,12 +14,12 @@ set_target_properties(${TARGET_NAME} PROPERTIES
     FOLDER "Engine"
 )
 
-# MSVC：更严格的标准一致性
+# MSVC: /permissive-
 target_compile_options(${TARGET_NAME}
     PUBLIC "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->"
 )
 
-# 链接依赖（是否 PUBLIC/PRIVATE 取决于对外头文件是否暴露这些库）
+# 链接依赖
 target_link_libraries(${TARGET_NAME}
     PUBLIC glfw
     PUBLIC glad
@@ -29,8 +29,12 @@ target_link_libraries(${TARGET_NAME}
     PUBLIC spdlog::spdlog
     PUBLIC EnTT::EnTT
 )
+
 # 包含目录
 target_include_directories(${TARGET_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${ENGINE_ROOT_DIR}/source>
 )
+
+# 传递源码根目录给运行时（用于资源路径解析）
+target_compile_definitions(${TARGET_NAME} PRIVATE HYBRID_PROJECT_ROOT_DIR="${PROJECT_ROOT_DIR}")

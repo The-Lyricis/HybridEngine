@@ -14,7 +14,7 @@ namespace Hybrid
     class ResourceSystem
     {
     public:
-        void initialize(const std::filesystem::path& projectRoot);
+        void initialize();
 
         std::shared_ptr<IVirtualFileSystem> getVFS() const { return m_vfs; }
         std::shared_ptr<AssetRegistry> getRegistry() const { return m_registry; }

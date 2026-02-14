@@ -28,7 +28,7 @@ namespace Hybrid {
 
         // Resource System
         m_ResourceSystem = std::make_shared<ResourceSystem>();
-        m_ResourceSystem->initialize(std::filesystem::current_path());
+        m_ResourceSystem->initialize();
 
         auto surface_io = m_Window->getSurfaceIO();
         surface_io->registerOnEventFunc([this](Event& e) { onEvent(e); });

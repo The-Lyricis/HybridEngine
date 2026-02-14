@@ -1,11 +1,11 @@
-#include "opengl_texture2d_loader.h"
-
 #include <glad/gl.h>
+#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 #include "runtime/core/base/macro.h"
 #include "runtime/core/log/log_system.h"
 #include "runtime/function/render/opengl/opengl_texture.h"
+#include "opengl_texture2d_loader.h"
 
 namespace Hybrid
 {

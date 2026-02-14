@@ -1,34 +1,59 @@
 #include "resource_system.h"
 
+#include <vector>
+
 #include "runtime/core/base/macro.h"
 
 namespace Hybrid
 {
-    void ResourceSystem::initialize(const std::filesystem::path& projectRoot)
+    static std::filesystem::path CollectAssetRoot()
     {
-        // 1) VFS 初始化并挂载 asset 目录
-        m_vfs = std::make_shared<NativeFileSystem>();
-        std::filesystem::path assetRoot = projectRoot / "engine" / "asset";
-        m_vfs->mount("asset", assetRoot, /*priority*/ 0);
+        std::vector<std::filesystem::path> roots;
 
-        // 2) Registry
+#ifdef HYBRID_ROOT_DIR
+        roots.push_back(std::filesystem::path(HYBRID_ROOT_DIR) / "asset");
+#endif
+
+#ifdef HYBRID_PROJECT_ROOT_DIR
+        roots.push_back(std::filesystem::path(HYBRID_PROJECT_ROOT_DIR) / "engine" / "asset");
+#endif
+
+        for (auto& c : roots)
+        {
+            if (std::filesystem::exists(c))
+            {
+                return std::filesystem::canonical(c);
+            }
+        }
+        return {};
+    }
+
+    void ResourceSystem::initialize()
+    {
+        m_vfs      = std::make_shared<NativeFileSystem>();
         m_registry = std::make_shared<AssetRegistry>();
-        m_registry->setRoot(assetRoot);
 
-        // 3) AssetManager
+        const auto assetRoot = CollectAssetRoot();
+
+        if (assetRoot.empty())
+        {
+            HBD_CORE_ERROR("Asset root not found. Tried HYBRID_ROOT_DIR / HYBRID_PROJECT_ROOT_DIR.");
+        }
+        else
+        {
+            m_vfs->mount("asset", assetRoot, 0);
+            m_registry->setRoot(assetRoot);
+            HBD_CORE_INFO("ResourceSystem using asset root: {}", assetRoot.string());
+        }
+
         m_manager = std::make_shared<AssetManager>(m_vfs, m_registry);
-
-        // 4) 默认 Loader 注册
         registerDefaultLoaders();
-
-        HBD_CORE_INFO("ResourceSystem initialized. asset root = {}", assetRoot.string());
     }
 
     void ResourceSystem::registerDefaultLoaders()
     {
-        // OpenGL Texture2D
-        auto texLoader = std::make_shared<OpenglTexture2DLoader>();
-        m_manager->registerLoader<Texture>(AssetType::Texture2D, texLoader);
+        auto texLoader = std::make_shared<GLTexture2DLoader>();
+        m_manager->registerLoader<Texture>(texLoader);
     }
 } // namespace Hybrid
 
