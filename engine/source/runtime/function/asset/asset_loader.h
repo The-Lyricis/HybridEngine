@@ -18,7 +18,7 @@ namespace Hybrid
         virtual AssetType assetType() const = 0;
 
         // 从元数据 + VFS 构建运行时对象
-        virtual T load(const AssetMetadata& meta, IVirtualFileSystem& vfs) = 0;
+        virtual std::shared_ptr<T> load(const AssetMetadata& meta, IVirtualFileSystem& vfs) = 0;
     };
 } // namespace Hybrid
 

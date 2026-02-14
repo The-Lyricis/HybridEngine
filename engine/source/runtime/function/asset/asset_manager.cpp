@@ -24,25 +24,21 @@ namespace Hybrid
         m_state[id] = AssetState::Unloaded;
     }
 
-    std::shared_future<std::shared_ptr<void>> AssetManager::loadInternalAsync(std::type_index ti, AssetType type, AssetID id)
+    std::shared_future<std::shared_ptr<void>>
+        AssetManager::loadInternalAsync(std::type_index ti, AssetType type, AssetID id)
     {
-        // 先检查缓存 / in-flight
-        {
+        {   // cache / inflight 快速路径
             std::scoped_lock lock(m_mutex);
-            auto it_cache = m_cache.find(id);
-            if (it_cache != m_cache.end())
+            if (auto it = m_cache.find(id); it != m_cache.end())
             {
                 std::promise<std::shared_ptr<void>> ready;
-                ready.set_value(it_cache->second);
+                ready.set_value(it->second);
                 return ready.get_future().share();
             }
-
-            auto it = m_inFlight.find(id);
-            if (it != m_inFlight.end())
+            if (auto it = m_inFlight.find(id); it != m_inFlight.end())
                 return it->second;
         }
 
-        // 创建 promise/future，记录 in-flight
         auto promise_ptr = std::make_shared<std::promise<std::shared_ptr<void>>>();
         auto fut = promise_ptr->get_future().share();
         {
@@ -51,12 +47,33 @@ namespace Hybrid
             m_state[id] = AssetState::Loading;
         }
 
-        // 启动后台线程执行加载
         std::thread([this, promise_ptr, ti, type, id]()
+            {
+                std::shared_ptr<void> instance = nullptr;
+
+                try
+                {
+                    const AssetMetadata* meta = m_registry ? m_registry->find(id) : nullptr;
+                    if (meta && meta->is_valid)
                     {
-            auto result = loadInternal(ti, type, id);
-            promise_ptr->set_value(result); })
-            .detach();
+                        AssetMetadata meta_copy = *meta;     // 防热重载指针失效
+                        instance = performLoad(meta_copy, ti, type);
+                    }
+                }
+                catch (...)
+                {
+                    instance = nullptr;
+                }
+
+                {   // 先落状态/缓存，再 fulfill future，保证 future ready 时状态一致
+                    std::scoped_lock lock(m_mutex);
+                    if (instance) { m_cache[id] = instance; m_state[id] = AssetState::Loaded; }
+                    else { m_state[id] = AssetState::Failed; }
+                    m_inFlight.erase(id);
+                }
+
+                promise_ptr->set_value(instance);
+            }).detach();
 
         return fut;
     }
