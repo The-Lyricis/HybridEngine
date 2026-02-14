@@ -5,6 +5,7 @@
 #endif
 #include <GLFW/glfw3.h>
 #include <cstdio>
+#include "runtime/core/base/macro.h"
 
 namespace Hybrid {
 
@@ -15,7 +16,7 @@ namespace Hybrid {
         glfwMakeContextCurrent(m_Window);
         int status = gladLoadGL(glfwGetProcAddress);
         if (status == 0) {
-            std::fprintf(stderr, "gladLoadGL failed\n");
+             HBD_CORE_ERROR("Failed to initialize OpenGL context");
             return;
         }
         glfwSwapInterval(1); // vsync on by default

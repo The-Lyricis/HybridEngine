@@ -1,4 +1,5 @@
 #include "opengl_shader.h"
+#include "runtime/core/base/macro.h"
 #include <glad/gl.h>
 #include <vector>
 
@@ -13,6 +14,7 @@ namespace Hybrid {
             std::vector<char> msg(static_cast<size_t>(len) + 1);
             glGetShaderInfoLog(shader, len, &len, msg.data());
             // TODO: log message
+            HBD_CORE_ERROR("Shader compilation failed: {}", msg.data());
         }
     }
 
