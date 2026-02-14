@@ -1,4 +1,5 @@
 #include "engine.h"
+#include <filesystem>
 
 
 namespace Hybrid {
@@ -15,7 +16,7 @@ namespace Hybrid {
             Hybrid::LogSystem::shutdown();
             return;
         }
-
+        // GraphicsContext
         m_GraphicsContext = GraphicsContext::Create(window);
         if (!m_GraphicsContext) {
             HBD_CORE_ERROR("GraphicsContext creation failed.");
@@ -24,6 +25,10 @@ namespace Hybrid {
             return;
         }
         m_GraphicsContext->init();
+
+        // Resource System
+        m_ResourceSystem = std::make_shared<ResourceSystem>();
+        m_ResourceSystem->initialize(std::filesystem::current_path());
 
         auto surface_io = m_Window->getSurfaceIO();
         surface_io->registerOnEventFunc([this](Event& e) { onEvent(e); });
@@ -36,13 +41,14 @@ namespace Hybrid {
         m_EditorUI = new EditorUI();
         m_EditorUI->initialize(m_Window->getGLFWWindow());
 
-        // RenderSystem 需要在 EditorUI 之后初始化，因为它可能依赖于 ImGui 的上下文
+        // RenderSystem 
         m_RenderSystem.initialize(m_Window->getGLFWWindow());
 
-        // SceneSystem: create/load default scene
+        // SceneSystem
         auto scene = std::make_shared<Scene>();
         m_SceneManager.SetActiveScene(scene);
 
+        //--------------- 场景测试内容 ---------------
         // 1) 游戏相机（俯视）
         {
             auto cam = scene->CreateEntity("Game Camera");
