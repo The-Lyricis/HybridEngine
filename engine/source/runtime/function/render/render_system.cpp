@@ -17,6 +17,7 @@
 #include "runtime/function/render/framebuffer.h"
 #include "runtime/function/scene/scene.h"
 #include "runtime/function/scene/components.h"
+#include "runtime/core/base/macro.h"
 
 
 
