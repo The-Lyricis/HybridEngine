@@ -86,6 +86,8 @@ namespace Hybrid {
         m_Camera.setViewportSize((float)spec.width, (float)spec.height);
 
         m_Initialized = true;
+
+        HBD_CORE_TRACE("RenderSystem initialized");
     }
 
     void RenderSystem::createCubeResources() {

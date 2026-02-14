@@ -48,6 +48,7 @@ namespace Hybrid
 
         m_manager = std::make_shared<AssetManager>(m_vfs, m_registry);
         registerDefaultLoaders();
+        HBD_CORE_TRACE("ResourceSystem initialized");
     }
 
     void ResourceSystem::registerDefaultLoaders()

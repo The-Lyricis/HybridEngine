@@ -28,6 +28,7 @@ namespace Hybrid {
         ImGui_ImplOpenGL3_Init("#version 330");
 
         m_initialized = true;
+        HBD_CORE_TRACE("EditorUI initialized");
     }
 
     void EditorUI::shutdown() {
