@@ -39,4 +39,19 @@ namespace Hybrid
         auto fut = loadInternalAsync(typeid(T), meta->type, id);
         return AssetFuture<T>(std::move(fut));
     }
+
+    template <typename T> void AssetManager::setDefault(const std::shared_ptr<T>& def)
+    {
+        std::scoped_lock lock(m_mutex);
+        m_default[typeid(T)] = def;
+    }
+
+    template <typename T> std::shared_ptr<T> AssetManager::getDefault() const
+    {
+        std::scoped_lock lock(m_mutex);
+        auto it = m_default.find(typeid(T));
+        if (it != m_default.end())
+            return std::static_pointer_cast<T>(it->second);
+        return nullptr;
+    }
 } // namespace Hybrid

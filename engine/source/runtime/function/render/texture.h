@@ -1,11 +1,13 @@
-﻿#pragma once
+#pragma once
 #include <cstdint>
 #include <memory>
 
 namespace Hybrid {
 
-enum class TextureFormat { Unknown = 0, RGB8, RGBA8 };
+class Texture;                              // 先前置声明
+using TexturePtr = std::shared_ptr<Texture>; // 再定义别名（shared_ptr 支持不完整类型）
 
+enum class TextureFormat { Unknown = 0, RGB8, RGBA8 };
 enum class TextureType : uint8_t { Tex2D = 0, Cube, Tex2DArray };
 
 struct TextureDesc {
@@ -21,6 +23,10 @@ class Texture {
 public:
     virtual ~Texture() = default;
 
+    static TexturePtr Create(const TextureDesc& desc,
+                             const void* initialData = nullptr,
+                             size_t bytes = 0);
+
     virtual const TextureDesc& getDesc() const = 0;
     virtual uint32_t           getWidth() const  = 0;
     virtual uint32_t           getHeight() const = 0;
@@ -29,6 +35,5 @@ public:
     virtual void bind(uint32_t slot = 0) const = 0;
 };
 
-using TexturePtr = std::shared_ptr<Texture>;
 
 } // namespace Hybrid

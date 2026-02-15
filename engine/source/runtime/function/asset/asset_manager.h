@@ -61,6 +61,10 @@ namespace Hybrid
         void unload(AssetID id);
         AssetState getState(AssetID id) const;
 
+        // 设置/获取默认资源（Loader 失败或异步限制时可回退）
+        template <typename T> void setDefault(const std::shared_ptr<T>& def);
+        template <typename T> std::shared_ptr<T> getDefault() const;
+
     private:
         struct LoaderKey
         {
@@ -82,6 +86,14 @@ namespace Hybrid
         // 执行实际加载，不触碰缓存/状态；需在外部调用处设置状态
         std::shared_ptr<void> performLoad(const AssetMetadata& meta, std::type_index ti, AssetType type);
 
+        // 默认资源查找（调用方需自行加锁或在锁外调用封装函数）
+        std::shared_ptr<void> getDefaultByTypeIndex(std::type_index ti) const
+        {
+            std::scoped_lock lock(m_mutex);
+            auto it = m_default.find(ti);
+            return it == m_default.end() ? nullptr : it->second;
+        }
+
     private:
         std::shared_ptr<IVirtualFileSystem> m_vfs;
         std::shared_ptr<AssetRegistry>      m_registry;
@@ -95,6 +107,8 @@ namespace Hybrid
                            std::function<std::shared_ptr<void>(const AssetMetadata&, IVirtualFileSystem&)>,
                            LoaderKeyHasher>
             m_loaders;
+
+        std::unordered_map<std::type_index, std::shared_ptr<void>> m_default;
     };
 } // namespace Hybrid
 

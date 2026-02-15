@@ -22,11 +22,13 @@ namespace Hybrid
 
     private:
         void registerDefaultLoaders();
+        void createDefaultTexture();
 
     private:
         std::shared_ptr<IVirtualFileSystem> m_vfs;
         std::shared_ptr<AssetRegistry>      m_registry;
         std::shared_ptr<AssetManager>       m_manager;
+        std::shared_ptr<Texture>            m_defaultTexture;
     };
 } // namespace Hybrid
 

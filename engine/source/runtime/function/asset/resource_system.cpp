@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "runtime/core/base/macro.h"
+#include "runtime/function/render/texture.h"
 
 namespace Hybrid
 {
@@ -48,6 +49,7 @@ namespace Hybrid
 
         m_manager = std::make_shared<AssetManager>(m_vfs, m_registry);
         registerDefaultLoaders();
+        createDefaultTexture();
         HBD_CORE_TRACE("ResourceSystem initialized");
     }
 
@@ -55,6 +57,26 @@ namespace Hybrid
     {
         auto texLoader = std::make_shared<GLTexture2DLoader>();
         m_manager->registerLoader<Texture>(texLoader);
+    }
+
+    void ResourceSystem::createDefaultTexture()
+    {
+        // 使用 Texture 工厂创建 1x1 白色纹理
+        TextureDesc desc;
+        desc.type   = TextureType::Tex2D;
+        desc.format = TextureFormat::RGBA8;
+        desc.width  = 1;
+        desc.height = 1;
+        desc.layers = 1;
+        desc.mipLevels = 1;
+
+        const uint8_t white[4] = {255, 255, 255, 255};
+        m_defaultTexture = Texture::Create(desc, white, sizeof(white));
+
+        if (m_manager && m_defaultTexture)
+        {
+            m_manager->setDefault<Texture>(m_defaultTexture);
+        }
     }
 } // namespace Hybrid
 

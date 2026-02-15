@@ -25,9 +25,18 @@ namespace Hybrid
     }
 
     std::shared_future<std::shared_ptr<void>>
-        AssetManager::loadInternalAsync(std::type_index ti, AssetType type, AssetID id)
+    AssetManager::loadInternalAsync(std::type_index ti, AssetType type, AssetID id)
     {
-        {   // cache / inflight 快速路径
+        // GPU 资源暂不支持异步创建，直接返回默认
+        if (type == AssetType::Texture2D || type == AssetType::TextureCube)
+        {
+            HBD_CORE_WARN("loadAsync not supported for GPU resource (AssetID={})", id.value);
+            std::promise<std::shared_ptr<void>> p;
+            p.set_value(getDefaultByTypeIndex(ti));
+            return p.get_future().share();
+        }
+
+        { // cache / inflight 快路径
             std::scoped_lock lock(m_mutex);
             if (auto it = m_cache.find(id); it != m_cache.end())
             {
@@ -40,48 +49,56 @@ namespace Hybrid
         }
 
         auto promise_ptr = std::make_shared<std::promise<std::shared_ptr<void>>>();
-        auto fut = promise_ptr->get_future().share();
+        auto fut         = promise_ptr->get_future().share();
         {
             std::scoped_lock lock(m_mutex);
             m_inFlight[id] = fut;
-            m_state[id] = AssetState::Loading;
+            m_state[id]    = AssetState::Loading;
         }
 
         std::thread([this, promise_ptr, ti, type, id]()
-            {
-                std::shared_ptr<void> instance = nullptr;
-
-                try
-                {
-                    const AssetMetadata* meta = m_registry ? m_registry->find(id) : nullptr;
-                    if (meta && meta->is_valid)
                     {
-                        AssetMetadata meta_copy = *meta;     // 防热重载指针失效
-                        instance = performLoad(meta_copy, ti, type);
-                    }
-                }
-                catch (...)
-                {
-                    instance = nullptr;
-                }
+                        std::shared_ptr<void> instance = nullptr;
 
-                {   // 先落状态/缓存，再 fulfill future，保证 future ready 时状态一致
-                    std::scoped_lock lock(m_mutex);
-                    if (instance) { m_cache[id] = instance; m_state[id] = AssetState::Loaded; }
-                    else { m_state[id] = AssetState::Failed; }
-                    m_inFlight.erase(id);
-                }
+                        try
+                        {
+                            const AssetMetadata* meta = m_registry ? m_registry->find(id) : nullptr;
+                            if (meta && meta->is_valid)
+                            {
+                                AssetMetadata meta_copy = *meta; // 避免热重载期间指针失效
+                                instance = performLoad(meta_copy, ti, type);
+                            }
+                        }
+                        catch (...)
+                        {
+                            instance = nullptr;
+                        }
 
-                promise_ptr->set_value(instance);
-            }).detach();
+                        { // 先更新状态/缓存，再 fulfill future
+                            std::scoped_lock lock(m_mutex);
+                            if (instance)
+                            {
+                                m_cache[id] = instance;
+                                m_state[id] = AssetState::Loaded;
+                            }
+                            else
+                            {
+                                m_state[id] = AssetState::Failed;
+                            }
+                            m_inFlight.erase(id);
+                        }
+
+                        promise_ptr->set_value(instance);
+                    })
+            .detach();
 
         return fut;
     }
 
-    std::shared_ptr<void> AssetManager::performLoad(const AssetMetadata &meta, std::type_index ti, AssetType type)
+    std::shared_ptr<void> AssetManager::performLoad(const AssetMetadata& meta, std::type_index ti, AssetType type)
     {
         LoaderKey key{ti, type};
-        std::function<std::shared_ptr<void>(const AssetMetadata &, IVirtualFileSystem &)> loader;
+        std::function<std::shared_ptr<void>(const AssetMetadata&, IVirtualFileSystem&)> loader;
         {
             std::scoped_lock lock(m_mutex);
             auto it = m_loaders.find(key);
@@ -97,7 +114,7 @@ namespace Hybrid
                 throw std::runtime_error("VFS is null");
             return loader(meta, *m_vfs);
         }
-        catch (const std::exception &e)
+        catch (const std::exception& e)
         {
             HBD_CORE_ERROR("Asset load exception: {}", e.what());
             return nullptr;
@@ -108,7 +125,7 @@ namespace Hybrid
     {
         std::shared_future<std::shared_ptr<void>> wait_future;
 
-        // 1) 缓存 / in-flight 复用（取副本，出锁等待）
+        // 1) 缓存 / in-flight 复用
         {
             std::scoped_lock lock(m_mutex);
             if (auto it_cache = m_cache.find(id); it_cache != m_cache.end())
@@ -122,17 +139,17 @@ namespace Hybrid
         }
 
         if (wait_future.valid())
-            return wait_future.get(); // 出锁等待，避免死锁
+            return wait_future.get();
 
-        // 2) 拷贝元数据（防止热重载期间指针失效）
+        // 2) 拷贝元数据
         AssetMetadata meta_copy;
         {
-            const AssetMetadata *meta = m_registry ? m_registry->find(id) : nullptr;
+            const AssetMetadata* meta = m_registry ? m_registry->find(id) : nullptr;
             if (!meta)
             {
                 std::scoped_lock lock(m_mutex);
                 m_state[id] = AssetState::Failed;
-                return nullptr;
+                return getDefaultByTypeIndex(ti);
             }
             meta_copy = *meta;
         }
@@ -140,7 +157,7 @@ namespace Hybrid
         // 3) 执行加载
         auto instance = performLoad(meta_copy, ti, type);
 
-        // 4) 写回状态 / 缓存，清理 in-flight
+        // 4) 写回状态 / 缓存
         {
             std::scoped_lock lock(m_mutex);
             if (instance)
@@ -155,7 +172,12 @@ namespace Hybrid
             m_inFlight.erase(id);
         }
 
+        // 默认资源回退
+        if (!instance)
+            return getDefaultByTypeIndex(ti);
+
         return instance;
     }
 
 } // namespace Hybrid
+
