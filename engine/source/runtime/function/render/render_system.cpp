@@ -171,7 +171,7 @@ uniform mat4 u_Model;
 out vec4 vColor;
 
 void main() {
-    vColor = vec3(1,0,1);
+    vColor = aColor;
     gl_Position = u_ViewProjection * u_Model * vec4(aPos, 1.0);
 }
 )";
@@ -419,7 +419,7 @@ void main() {
             // 若缺少资产管理或 shader，退回旧的 cube 渲染
             const bool assetPathReady = (m_AssetManager != nullptr) && (m_MeshShader != nullptr);
 
-            if (true)
+            if (!assetPathReady)
             {
                 if (m_CubeShader && m_CubeVAO)
                 {
