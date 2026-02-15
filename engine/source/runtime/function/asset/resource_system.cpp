@@ -4,6 +4,8 @@
 
 #include "runtime/core/base/macro.h"
 #include "runtime/function/render/texture.h"
+#include "mesh_loader.h"
+#include "material_loader.h"
 
 namespace Hybrid
 {
@@ -50,6 +52,8 @@ namespace Hybrid
         m_manager = std::make_shared<AssetManager>(m_vfs, m_registry);
         registerDefaultLoaders();
         createDefaultTexture();
+        createDefaultMaterial();
+        createDefaultMesh();
         HBD_CORE_TRACE("ResourceSystem initialized");
     }
 
@@ -57,6 +61,10 @@ namespace Hybrid
     {
         auto texLoader = std::make_shared<GLTexture2DLoader>();
         m_manager->registerLoader<Texture>(texLoader);
+
+        // Stub loaders for Mesh / Material（后续替换为实际实现）
+        m_manager->registerLoader<Mesh>(std::make_shared<StubMeshLoader>());
+        m_manager->registerLoader<Material>(std::make_shared<StubMaterialLoader>());
     }
 
     void ResourceSystem::createDefaultTexture()
@@ -78,5 +86,28 @@ namespace Hybrid
             m_manager->setDefault<Texture>(m_defaultTexture);
         }
     }
-} // namespace Hybrid
 
+    void ResourceSystem::createDefaultMaterial()
+    {
+        MaterialData data;
+        data.albedo_color = {1.0f, 1.0f, 1.0f, 1.0f};
+        data.metallic     = 0.0f;
+        data.roughness    = 1.0f;
+        data.ao           = 1.0f;
+
+        m_defaultMaterial = std::make_shared<Material>(data);
+        if (m_manager && m_defaultMaterial)
+        {
+            m_manager->setDefault<Material>(m_defaultMaterial);
+        }
+    }
+
+    void ResourceSystem::createDefaultMesh()
+    {
+        m_defaultMesh = Mesh::CreateCube();
+        if (m_manager && m_defaultMesh)
+        {
+            m_manager->setDefault<Mesh>(m_defaultMesh);
+        }
+    }
+} // namespace Hybrid

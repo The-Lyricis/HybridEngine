@@ -2,6 +2,7 @@
 #include <string>
 #include <cstdint>
 #include <glm/glm.hpp>
+#include "runtime/function/asset/asset_type.h"
 
 namespace Hybrid
 {
@@ -33,12 +34,13 @@ namespace Hybrid
     };
 
     // --- Step 2: MeshRenderer ---
-    // 先不引入复杂资源系统：只保留“能画什么”的最小标识
+    // 扩展支持资产引用（Mesh/Material），仍保留 primitive 兼容当前渲染路径
     struct MeshRendererComponent
     {
-        // 最小可运行方案：用一个 primitive id 或 debug 颜色占位
-        // 后续你可以替换为 Ref<Mesh> / Ref<Material> 等。
-        int Primitive = 0;           // 0=cube/triangle(由你RenderSystem解释)
-        glm::vec4 Tint{ 1.0f };        // debug color
+        AssetID Mesh{};         // 资产 ID（未设置时回退到 Primitive 路径）
+        AssetID Material{};     // 资产 ID（未设置时使用默认材质）
+
+        int Primitive = 0;      // 向后兼容：0=内建立方体
+        glm::vec4 Tint{ 1.0f }; // debug color / 覆盖色
     };
 }

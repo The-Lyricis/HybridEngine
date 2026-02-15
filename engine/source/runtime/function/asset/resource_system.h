@@ -8,6 +8,8 @@
 #include "asset_loader.h"
 #include "opengl_texture2d_loader.h"
 #include "runtime/core/base/virtual_file_system.h"
+#include "mesh.h"
+#include "material.h"
 
 namespace Hybrid
 {
@@ -22,13 +24,18 @@ namespace Hybrid
 
     private:
         void registerDefaultLoaders();
+        
+        //Default
         void createDefaultTexture();
+        void createDefaultMaterial();
+        void createDefaultMesh();
 
     private:
         std::shared_ptr<IVirtualFileSystem> m_vfs;
         std::shared_ptr<AssetRegistry>      m_registry;
         std::shared_ptr<AssetManager>       m_manager;
         std::shared_ptr<Texture>            m_defaultTexture;
+        std::shared_ptr<Material>           m_defaultMaterial;
+        std::shared_ptr<Mesh>               m_defaultMesh;
     };
 } // namespace Hybrid
-
