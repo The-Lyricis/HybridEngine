@@ -89,6 +89,14 @@ namespace Hybrid {
                     format, GL_UNSIGNED_BYTE, zeros.data());
             }
         }
+        else if (target == GL_TEXTURE_CUBE_MAP)
+        {
+            //TODO: 实现 Cube
+        }
+        else if (target == GL_TEXTURE_2D_ARRAY)
+        {
+            //TODO: 实现 Array
+        }
 
         glBindTexture(target, 0);
         return std::make_shared<GLTexture>((uint32_t)tex, desc);
