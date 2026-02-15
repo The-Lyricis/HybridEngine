@@ -26,6 +26,8 @@ namespace Hybrid
 
         std::string alias = path.substr(0, pos);
         std::string rel = path.substr(pos + 1);
+        while (!rel.empty() && (rel.front() == '/' || rel.front() == '\\'))
+            rel.erase(rel.begin());
         auto it = m_mounts.find(alias);
         if (it == m_mounts.end())
             return std::nullopt;

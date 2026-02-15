@@ -30,6 +30,19 @@ namespace Hybrid {
         m_ResourceSystem = std::make_shared<ResourceSystem>();
         m_ResourceSystem->initialize();
 
+        //--------------- 资源系统测试内容 ---------------
+        auto mgr = m_ResourceSystem->getManager();
+        auto reg = m_ResourceSystem->getRegistry();
+
+        Hybrid::AssetMetadata meta{};
+        meta.id          = reg->generateUniqueID();
+        meta.type        = Hybrid::AssetType::Texture2D;
+        meta.source_path = "asset:/Textures/rusty_metal_diff_4k.jpg"; // 逻辑路径
+        meta.is_valid    = true;
+        reg->registerAsset(meta);
+
+        auto tex = mgr->loadSync<Hybrid::Texture>(meta.id);
+
         auto surface_io = m_Window->getSurfaceIO();
         surface_io->registerOnEventFunc([this](Event& e) { onEvent(e); });
 

@@ -174,7 +174,14 @@ namespace Hybrid
 
         // 默认资源回退
         if (!instance)
-            return getDefaultByTypeIndex(ti);
+        {
+            auto def = getDefaultByTypeIndex(ti);
+            if (def)
+            {
+                HBD_CORE_WARN("Asset {} load failed, fallback to default resource", id.value);
+                return def;
+            }
+        }
 
         return instance;
     }
