@@ -180,6 +180,11 @@ void main() {
         return m_SceneFB ? m_SceneFB->getColorAttachmentRendererID() : 0;
     }
 
+    void RenderSystem::onWindowResize(uint32_t width, uint32_t height) {
+        if (!m_Initialized) return;
+        ensureFramebufferSize(width, height);
+    }
+
     void RenderSystem::renderFrame(const glm::vec2& viewportSize,
         void* glfwWindowHandle,
         float dt,

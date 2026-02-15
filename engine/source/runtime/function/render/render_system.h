@@ -25,6 +25,8 @@ namespace Hybrid {
 
         uint32_t getSceneColorTexture() const;
 
+        void onWindowResize(uint32_t width, uint32_t height);
+
         //输入收敛为 InputState
         void renderFrame(const glm::vec2& viewportSize,
             void* glfwWindowHandle,

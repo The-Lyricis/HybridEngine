@@ -55,6 +55,7 @@ namespace Hybrid {
         m_EditorUI->initialize(m_Window->getGLFWWindow());
 
         // RenderSystem 
+
         m_RenderSystem.initialize(m_Window->getGLFWWindow());
 
         // SceneSystem
@@ -104,6 +105,8 @@ namespace Hybrid {
         }
         m_RenderSystem.setScene(scene);
 
+        // Prime delta timer to avoid an inflated first-frame dt.
+        m_LastTime = static_cast<float>(glfwGetTime());
     }
 
     void HybridEngine::run() {
@@ -167,7 +170,8 @@ namespace Hybrid {
             }
             m_Minimized = false;
             // resize renderer's framebuffer if needed
-            
+            m_RenderSystem.onWindowResize(static_cast<uint32_t>(ev.getWidth()),
+                                          static_cast<uint32_t>(ev.getHeight()));
             return false;
             });
 
