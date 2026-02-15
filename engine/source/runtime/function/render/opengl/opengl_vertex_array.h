@@ -12,7 +12,7 @@ namespace Hybrid {
         void bind() const override;
         void unbind() const override;
 
-        void setVertexBuffer(std::shared_ptr<VertexBuffer> vb) override;
+        void setVertexBuffer(std::shared_ptr<VertexBuffer> vb, const VertexLayout& layout) override;
         void setIndexBuffer(std::shared_ptr<IndexBuffer> ib) override;
 
         uint32_t getIndexCount() const override;

@@ -13,7 +13,7 @@ namespace Hybrid {
         static void setClearColor(const glm::vec4& color);
         static void clear();
 
-        static void drawIndexed(unsigned int indexCount);
+        static void drawIndexed(unsigned int indexCount, unsigned int indexOffset = 0);
 
     private:
         static std::unique_ptr<RendererAPI> s_API;

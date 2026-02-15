@@ -29,6 +29,7 @@ namespace Hybrid {
         // Resource System
         m_ResourceSystem = std::make_shared<ResourceSystem>();
         m_ResourceSystem->initialize();
+        m_RenderSystem.setAssetManager(m_ResourceSystem->getManager());
 
         //--------------- 资源系统测试内容 ---------------
         auto mgr = m_ResourceSystem->getManager();

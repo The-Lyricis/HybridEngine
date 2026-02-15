@@ -70,4 +70,14 @@ namespace Hybrid {
         glUniformMatrix4fv(loc, 1, GL_FALSE, &m[0][0]);
     }
 
+    void GLShader::setVec4(const std::string& name, const glm::vec4& v) {
+        GLint loc = glGetUniformLocation(m_RendererID, name.c_str());
+        glUniform4fv(loc, 1, &v[0]);
+    }
+
+    void GLShader::setFloat(const std::string& name, float v) {
+        GLint loc = glGetUniformLocation(m_RendererID, name.c_str());
+        glUniform1f(loc, v);
+    }
+
 } // namespace Hybrid

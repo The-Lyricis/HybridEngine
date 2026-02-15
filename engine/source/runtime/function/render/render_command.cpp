@@ -21,8 +21,8 @@ namespace Hybrid {
         s_API->clear();
     }
 
-    void RenderCommand::drawIndexed(unsigned int indexCount) {
-        s_API->drawIndexed(indexCount);
+    void RenderCommand::drawIndexed(unsigned int indexCount, unsigned int indexOffset) {
+        s_API->drawIndexed(indexCount, indexOffset);
     }
 
 } // namespace Hybrid

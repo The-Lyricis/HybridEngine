@@ -14,6 +14,8 @@ namespace Hybrid {
         void unbind() const override;
 
         void setMat4(const std::string& name, const glm::mat4& m) override;
+        void setVec4(const std::string& name, const glm::vec4& v) override;
+        void setFloat(const std::string& name, float v) override;
 
     private:
         uint32_t m_RendererID = 0;

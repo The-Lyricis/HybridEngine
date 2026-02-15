@@ -10,7 +10,7 @@ namespace Hybrid {
         void setViewport(int x, int y, int width, int height) override;
         void setClearColor(const glm::vec4& color) override;
         void clear() override;
-        void drawIndexed(uint32_t indexCount) override;
+        void drawIndexed(uint32_t indexCount, uint32_t indexOffset = 0) override;
     };
 
 } // namespace Hybrid

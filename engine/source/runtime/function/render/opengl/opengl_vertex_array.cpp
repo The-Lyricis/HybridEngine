@@ -2,6 +2,7 @@
 #include "opengl_buffer.h"
 #include <glad/gl.h>
 #include <cstddef>
+#include <cassert>
 
 namespace Hybrid {
 
@@ -21,19 +22,24 @@ namespace Hybrid {
         glBindVertexArray(0);
     }
 
-    void GLVertexArray::setVertexBuffer(std::shared_ptr<VertexBuffer> vb) {
-        // Fixed layout: position.xyz + color.rgba (float)
+    void GLVertexArray::setVertexBuffer(std::shared_ptr<VertexBuffer> vb, const VertexLayout& layout) {
         m_VertexBuffer = vb;
-        const uint32_t stride = (3 + 4) * sizeof(float);
 
         bind();
         vb->bind();
 
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (const void*)0);
-
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (const void*)(3 * sizeof(float)));
+        assert(layout.stride > 0);
+        for (const auto& attr : layout.attributes) {
+            glEnableVertexAttribArray(attr.index);
+            glVertexAttribPointer(
+                attr.index,
+                attr.count,
+                GL_FLOAT,
+                attr.normalized ? GL_TRUE : GL_FALSE,
+                layout.stride,
+                reinterpret_cast<const void*>(static_cast<uintptr_t>(attr.offset))
+            );
+        }
     }
 
     void GLVertexArray::setIndexBuffer(std::shared_ptr<IndexBuffer> ib) {
