@@ -13,17 +13,17 @@ namespace Hybrid
         Scene() = default;
         ~Scene() = default;
 
-        Entity CreateEntity(const std::string& name = "Entity");
-        Entity CreateCameraEntity(const std::string& name = "Camera", bool primary = true);
-        Entity CreateRenderableEntity(const std::string& name = "Renderable");
+        Entity createEntity(const std::string& name = "Entity");
+        Entity createCameraEntity(const std::string& name = "Camera", bool primary = true);
+        Entity createRenderableEntity(const std::string& name = "Renderable");
 
-        void DestroyEntity(Entity entity);
+        void destroyEntity(Entity entity);
 
-        void OnUpdate(float dt);
+        void onUpdate(float dt);
 
         // 给 Entity 和外部系统访问
-        entt::registry& GetRegistry() { return m_Registry; }
-        const entt::registry& GetRegistry() const { return m_Registry; }
+        entt::registry& getRegistry() { return m_Registry; }
+        const entt::registry& getRegistry() const { return m_Registry; }
 
     private:
         entt::registry m_Registry;

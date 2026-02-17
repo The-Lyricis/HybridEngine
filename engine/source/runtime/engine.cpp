@@ -70,7 +70,7 @@ namespace Hybrid
         //--------------- 场景测试内容 ---------------
         // 1) 游戏相机（俯视）
         {
-            auto cam = scene->CreateEntity("Game Camera");
+            auto cam = scene->createEntity("Game Camera");
             cam.AddComponent<Hybrid::CameraComponent>(Hybrid::CameraComponent{true, 45.0f, 0.1f, 500.0f});
 
             auto &tr = cam.GetComponent<Hybrid::TransformComponent>();
@@ -79,7 +79,7 @@ namespace Hybrid
             tr.Scale = {1.0f, 1.0f, 1.0f};
         }
         // 2) 添加平行光
-        auto sun = scene->CreateEntity("Sun");
+        auto sun = scene->createEntity("Sun");
         auto &dl = sun.AddComponent<Hybrid::DirectionalLightComponent>();
         dl.Color = {1.0f, 1.0f, 1.0f};
         dl.Intensity = 1.0f;
@@ -100,7 +100,7 @@ namespace Hybrid
                 for (int x = 0; x < gridX; ++x)
                 {
                     std::string name = "Cube_" + std::to_string(z) + "_" + std::to_string(x);
-                    auto cube = scene->CreateEntity(name);
+                    auto cube = scene->createEntity(name);
 
                     // MeshRenderer：使用内建立方体
                     auto &mr = cube.AddComponent<Hybrid::MeshRendererComponent>();
@@ -135,7 +135,7 @@ namespace Hybrid
 
                 // 场景更新
                 if (auto scene = m_SceneManager.GetActiveScene())
-                    scene->OnUpdate(dt);
+                    scene->onUpdate(dt);
 
                 // 注意：事件轮询应该在所有层更新之后进行，以确保事件能被当帧更新的层捕获
                 m_Window->pollEvents();

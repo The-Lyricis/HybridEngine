@@ -43,7 +43,7 @@ namespace Hybrid
         // Scene Camera (Transform + CameraComponent) -> ViewProjection
         static bool TryGetSceneViewProj(Hybrid::Scene &scene, float aspect, glm::mat4 &outViewProj)
         {
-            auto &reg = scene.GetRegistry();
+            auto &reg = scene.getRegistry();
             auto view = reg.view<Hybrid::TransformComponent, Hybrid::CameraComponent>();
 
             entt::entity mainCam = entt::null;
@@ -522,7 +522,7 @@ void main() {
         glm::vec3 cameraPos = m_Camera.getPosition();
         if (useGameCamera && m_Scene)
         {
-            auto& reg = m_Scene->GetRegistry();
+            auto& reg = m_Scene->getRegistry();
             auto view = reg.view<Hybrid::TransformComponent, Hybrid::CameraComponent>();
             for (auto e : view)
             {
@@ -543,7 +543,7 @@ void main() {
 
         if (m_Scene)
         {
-            auto& reg = m_Scene->GetRegistry();
+            auto& reg = m_Scene->getRegistry();
             auto dirView = reg.view<Hybrid::DirectionalLightComponent>();
             for (auto e : dirView)
             {
@@ -577,7 +577,7 @@ void main() {
         // 6) 从 Scene 读取可渲染实体并绘制
         if (m_Scene)
         {
-            auto &registry = m_Scene->GetRegistry();
+            auto &registry = m_Scene->getRegistry();
             auto renderView = registry.view<Hybrid::TransformComponent, Hybrid::MeshRendererComponent>();
 
             // 若缺少资产管理或 shader，退回旧的 cube 渲染
