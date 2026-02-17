@@ -32,7 +32,7 @@ namespace Hybrid
     namespace
     {
         // TransformComponent -> Model Matrix
-        static glm::mat4 BuildModel(const Hybrid::TransformComponent &tr)
+        static glm::mat4 buildModel(const Hybrid::TransformComponent &tr)
         {
             glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
             glm::mat4 R = glm::yawPitchRoll(tr.Rotation.y, tr.Rotation.x, tr.Rotation.z); // yaw, pitch, roll
@@ -41,7 +41,7 @@ namespace Hybrid
         }
 
         // Scene Camera (Transform + CameraComponent) -> ViewProjection
-        static bool TryGetSceneViewProj(Hybrid::Scene &scene, float aspect, glm::mat4 &outViewProj)
+        static bool getSceneViewProj(Hybrid::Scene &scene, float aspect, glm::mat4 &outViewProj)
         {
             auto &reg = scene.getRegistry();
             auto view = reg.view<Hybrid::TransformComponent, Hybrid::CameraComponent>();
@@ -509,7 +509,7 @@ void main() {
             else
             {
                 // Scene 相机优先；若没找到 Primary Camera，则退回 editor camera
-                if (!TryGetSceneViewProj(*m_Scene, aspect, viewProj))
+                if (!getSceneViewProj(*m_Scene, aspect, viewProj))
                     viewProj = m_Camera.getViewProj();
             }
         }
@@ -595,7 +595,7 @@ void main() {
                         const auto &mr = renderView.get<Hybrid::MeshRendererComponent>(e);
                         if (mr.Primitive != 0)
                             continue;
-                        glm::mat4 model = BuildModel(tr);
+                        glm::mat4 model = buildModel(tr);
                         m_CubeShader->setMat4("u_Model", model);
                         Renderer::submit(m_CubeVAO, m_CubeShader);
                     }
@@ -664,7 +664,7 @@ void main() {
                     if (!matGPU)
                         continue;
 
-                    glm::mat4 model = BuildModel(tr);
+                    glm::mat4 model = buildModel(tr);
 
                     for (const auto &sm : meshGPU->submeshes)
                     {
