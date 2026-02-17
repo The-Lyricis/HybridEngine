@@ -82,18 +82,20 @@ namespace Hybrid
         shader.setFloat("u_Roughness", data.roughness);
         shader.setFloat("u_AO", data.ao);
         shader.setFloat("u_Emissive", data.emissive);
-        shader.setInt("u_HasNormalMap", normal ? 1 : 0);
-        int slot = 0;
+
+        // 注意：这里“是否有 normal map”不要用指针是否为空判断（见下一条）
+        shader.setInt("u_HasNormalMap", (data.normal_map.value != 0) ? 1 : 0);
+
         if (albedo)
-            albedo->bind(slot++);
+            albedo->bind(0);
         if (normal)
-            normal->bind(slot++);
+            normal->bind(1);
         if (mr)
-            mr->bind(slot++);
+            mr->bind(2);
         if (ao)
-            ao->bind(slot++);
+            ao->bind(3);
         if (emissive)
-            emissive->bind(slot++);
+            emissive->bind(4);
     }
 
     void RenderSystem::initialize(void *glfwWindowHandle)
@@ -162,8 +164,7 @@ namespace Hybrid
         cubeLayout.stride = (3 + 4) * sizeof(float);
         cubeLayout.attributes = {
             {0, 3, 0, false},
-            {1, 4, static_cast<uint32_t>(3 * sizeof(float)), false}
-        };
+            {1, 4, static_cast<uint32_t>(3 * sizeof(float)), false}};
         m_CubeVAO->setVertexBuffer(vb, cubeLayout);
         m_CubeVAO->setIndexBuffer(ib);
 
@@ -297,11 +298,11 @@ void main() {
         if (!m_DefaultNormalTex)
             m_DefaultNormalTex = createSolidTexture(128, 128, 255, 255); // normal blue
         if (!m_DefaultMRTex)
-            m_DefaultMRTex = createSolidTexture(0, 255, 0, 255);         // metal=0, rough=1
+            m_DefaultMRTex = createSolidTexture(0, 255, 0, 255); // metal=0, rough=1
         if (!m_DefaultAOTex)
-            m_DefaultAOTex = createSolidTexture(255, 255, 255, 255);     // ao=1
+            m_DefaultAOTex = createSolidTexture(255, 255, 255, 255); // ao=1
         if (!m_DefaultEmissiveTex)
-            m_DefaultEmissiveTex = createSolidTexture(0, 0, 0, 255);     // black
+            m_DefaultEmissiveTex = createSolidTexture(0, 0, 0, 255); // black
     }
 
     void RenderSystem::createMeshShader()
@@ -522,11 +523,11 @@ void main() {
         glm::vec3 cameraPos = m_Camera.getPosition();
         if (useGameCamera && m_Scene)
         {
-            auto& reg = m_Scene->getRegistry();
+            auto &reg = m_Scene->getRegistry();
             auto view = reg.view<Hybrid::TransformComponent, Hybrid::CameraComponent>();
             for (auto e : view)
             {
-                auto& cam = view.get<Hybrid::CameraComponent>(e);
+                auto &cam = view.get<Hybrid::CameraComponent>(e);
                 if (cam.Primary)
                 {
                     cameraPos = view.get<Hybrid::TransformComponent>(e).Position;
@@ -543,11 +544,11 @@ void main() {
 
         if (m_Scene)
         {
-            auto& reg = m_Scene->getRegistry();
+            auto &reg = m_Scene->getRegistry();
             auto dirView = reg.view<Hybrid::DirectionalLightComponent>();
             for (auto e : dirView)
             {
-                const auto& dl = dirView.get<Hybrid::DirectionalLightComponent>(e);
+                const auto &dl = dirView.get<Hybrid::DirectionalLightComponent>(e);
                 dirLight.color = dl.Color;
                 dirLight.intensity = dl.Intensity;
                 dirLight.direction = glm::normalize(dl.Direction);
@@ -557,9 +558,10 @@ void main() {
             auto ptView = reg.view<Hybrid::TransformComponent, Hybrid::PointLightComponent>();
             for (auto e : ptView)
             {
-                if (pointCount >= kMaxPointLights) break;
-                const auto& tc = ptView.get<Hybrid::TransformComponent>(e);
-                const auto& pl = ptView.get<Hybrid::PointLightComponent>(e);
+                if (pointCount >= kMaxPointLights)
+                    break;
+                const auto &tc = ptView.get<Hybrid::TransformComponent>(e);
+                const auto &pl = ptView.get<Hybrid::PointLightComponent>(e);
                 pointLights[pointCount].color = pl.Color;
                 pointLights[pointCount].intensity = pl.Intensity;
                 pointLights[pointCount].position = tc.Position;
