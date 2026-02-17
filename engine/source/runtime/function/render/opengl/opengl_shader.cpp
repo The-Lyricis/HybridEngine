@@ -80,4 +80,14 @@ namespace Hybrid {
         glUniform1f(loc, v);
     }
 
+    void GLShader::setVec3(const std::string& name, const glm::vec3& v) {
+        GLint loc = glGetUniformLocation(m_RendererID, name.c_str());
+        glUniform3fv(loc, 1, &v[0]);
+    }
+
+    void GLShader::setInt(const std::string& name, int v) {
+        GLint loc = glGetUniformLocation(m_RendererID, name.c_str());
+        glUniform1i(loc, v);
+    }
+
 } // namespace Hybrid

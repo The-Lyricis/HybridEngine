@@ -43,4 +43,18 @@ namespace Hybrid
         int Primitive = 0;      // 向后兼容：0=内建立方体
         glm::vec4 Tint{ 1.0f }; // debug color / 覆盖色
     };
+
+    struct DirectionalLightComponent
+    {
+        glm::vec3 Color{1.0f, 1.0f, 1.0f};
+        float     Intensity = 1.0f;
+        glm::vec3 Direction{0.0f, -1.0f, 0.0f}; // 指向地面
+    };
+
+    struct PointLightComponent
+    {
+        glm::vec3 Color{1.0f, 1.0f, 1.0f};
+        float     Intensity = 1.0f;
+        float     Range = 10.0f;
+    };
 }

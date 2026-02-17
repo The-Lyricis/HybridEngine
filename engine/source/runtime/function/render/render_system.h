@@ -61,10 +61,26 @@ namespace Hybrid {
             void bind(Shader& shader) const;
         };
 
+        struct DirLightGPU {
+            glm::vec3 color{1.0f};
+            float intensity = 0.0f;
+            glm::vec3 direction{0.0f, -1.0f, 0.0f};
+            float pad = 0.0f;
+        };
+        struct PointLightGPU {
+            glm::vec3 color{1.0f};
+            float intensity = 0.0f;
+            glm::vec3 position{0.0f};
+            float range = 1.0f;
+        };
+        static constexpr int kMaxPointLights = 16;
+
         MeshGPU*     getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh>& mesh);
         MaterialGPU* getOrCreateMaterialGPU(AssetID id, const std::shared_ptr<Material>& mat);
         MeshGPU*     getDefaultMeshGPU();
         MaterialGPU* getDefaultMaterialGPU();
+        void ensureDefaultTextures();
+        TexturePtr createSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 
     private:
         std::shared_ptr<Scene> m_Scene;
@@ -79,6 +95,11 @@ namespace Hybrid {
         std::shared_ptr<AssetManager> m_AssetManager;
         std::unordered_map<AssetID, MeshGPU, AssetID::Hasher> m_MeshCache;
         std::unordered_map<AssetID, MaterialGPU, AssetID::Hasher> m_MatCache;
+        TexturePtr m_DefaultAlbedoTex;
+        TexturePtr m_DefaultNormalTex;
+        TexturePtr m_DefaultMRTex;
+        TexturePtr m_DefaultAOTex;
+        TexturePtr m_DefaultEmissiveTex;
 
         bool m_Initialized = false;
     };
