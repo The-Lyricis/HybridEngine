@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <array>
 #include <string>
 
 #include <glm/glm.hpp>
@@ -83,7 +82,7 @@ namespace Hybrid
         shader.setFloat("u_AO", data.ao);
         shader.setFloat("u_Emissive", data.emissive);
 
-        // 注意：这里“是否有 normal map”不要用指针是否为空判断（见下一条）
+        // Use the asset id to decide normal-map enablement.
         shader.setInt("u_HasNormalMap", (data.normal_map.value != 0) ? 1 : 0);
 
         if (albedo)
@@ -116,7 +115,7 @@ namespace Hybrid
         spec.height = (uint32_t)std::max(1, h);
         m_SceneFB = Framebuffer::Create(spec);
 
-        // 相机初始投影（后续每帧会随 viewport 变化）
+        // Initialize camera projection with current framebuffer size.
         m_Camera.setViewportSize((float)spec.width, (float)spec.height);
 
         m_Initialized = true;
@@ -234,7 +233,16 @@ void main() {
         if (auto it = m_MatCache.find(id); it != m_MatCache.end())
             return &it->second;
 
-        ensureDefaultTextures();
+        if (!m_DefaultAlbedoTex)
+            m_DefaultAlbedoTex = createSolidTexture(255, 255, 255, 255);
+        if (!m_DefaultNormalTex)
+            m_DefaultNormalTex = createSolidTexture(128, 128, 255, 255); // normal blue
+        if (!m_DefaultMRTex)
+            m_DefaultMRTex = createSolidTexture(255, 255, 0, 255); // mr=(1,1), neutral for multiplicative combine
+        if (!m_DefaultAOTex)
+            m_DefaultAOTex = createSolidTexture(255, 255, 255, 255); // ao=1
+        if (!m_DefaultEmissiveTex)
+            m_DefaultEmissiveTex = createSolidTexture(0, 0, 0, 255); // black
 
         MaterialGPU mgpu;
         mgpu.data = mat->getData();
@@ -259,26 +267,6 @@ void main() {
         return &it->second;
     }
 
-    RenderSystem::MeshGPU *RenderSystem::getDefaultMeshGPU()
-    {
-        if (!m_AssetManager)
-            return nullptr;
-        auto defMesh = m_AssetManager->getDefault<Mesh>();
-        if (!defMesh)
-            return nullptr;
-        return getOrCreateMeshGPU(AssetID{}, defMesh);
-    }
-
-    RenderSystem::MaterialGPU *RenderSystem::getDefaultMaterialGPU()
-    {
-        if (!m_AssetManager)
-            return nullptr;
-        auto defMat = m_AssetManager->getDefault<Material>();
-        if (!defMat)
-            return nullptr;
-        return getOrCreateMaterialGPU(AssetID{}, defMat);
-    }
-
     TexturePtr RenderSystem::createSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
     {
         TextureDesc desc;
@@ -291,19 +279,7 @@ void main() {
         return Texture::Create(desc, data, sizeof(data));
     }
 
-    void RenderSystem::ensureDefaultTextures()
-    {
-        if (!m_DefaultAlbedoTex)
-            m_DefaultAlbedoTex = createSolidTexture(255, 255, 255, 255);
-        if (!m_DefaultNormalTex)
-            m_DefaultNormalTex = createSolidTexture(128, 128, 255, 255); // normal blue
-        if (!m_DefaultMRTex)
-            m_DefaultMRTex = createSolidTexture(0, 255, 0, 255); // metal=0, rough=1
-        if (!m_DefaultAOTex)
-            m_DefaultAOTex = createSolidTexture(255, 255, 255, 255); // ao=1
-        if (!m_DefaultEmissiveTex)
-            m_DefaultEmissiveTex = createSolidTexture(0, 0, 0, 255); // black
-    }
+    
 
     void RenderSystem::createMeshShader()
     {
@@ -312,7 +288,7 @@ void main() {
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNormal;
 layout(location=2) in vec2 aUV;
-layout(location=3) in vec3 aTangent;
+layout(location=3) in vec4 aTangent;
 
 uniform mat4 u_ViewProjection;
 uniform mat4 u_Model;
@@ -320,14 +296,18 @@ uniform mat4 u_Model;
 out vec3 vWorldPos;
 out vec3 vNormal;
 out vec2 vUV;
-out vec3 vTangent;
+out vec4 vTangent;
 
 void main() {
     mat3 normalMat = transpose(inverse(mat3(u_Model)));
+
     vWorldPos = vec3(u_Model * vec4(aPos, 1.0));
-    vNormal   = normalMat * aNormal;
-    vTangent  = normalMat * aTangent;
-    vUV       = aUV;
+    vNormal   = normalize(normalMat * aNormal);
+
+    vec3 T = normalize(normalMat * aTangent.xyz);
+    vTangent = vec4(T, aTangent.w);
+
+    vUV = aUV;
     gl_Position = u_ViewProjection * vec4(vWorldPos, 1.0);
 }
 )";
@@ -340,24 +320,27 @@ struct DirLight {
     vec3 direction;
     float pad0;
 };
+
 struct PointLight {
     vec3 color;
     float intensity;
     vec3 position;
     float range;
 };
+
 const int MAX_POINT_LIGHTS = 16;
 
 in vec3 vWorldPos;
 in vec3 vNormal;
 in vec2 vUV;
-in vec3 vTangent;
+in vec4 vTangent;
+
 out vec4 FragColor;
 
 uniform vec3 u_CameraPos;
 uniform DirLight u_DirLight;
 uniform PointLight u_PointLights[MAX_POINT_LIGHTS];
-uniform int  u_PointCount;
+uniform int u_PointCount;
 
 uniform vec4 u_AlbedoColor;
 uniform vec4 u_TintColor;
@@ -374,11 +357,16 @@ uniform sampler2D u_EmissiveMap;
 uniform int u_HasNormalMap;
 
 vec3 getNormal() {
-    if (u_HasNormalMap == 0)
-        return normalize(vNormal);
     vec3 N = normalize(vNormal);
-    vec3 T = normalize(vTangent);
-    vec3 B = normalize(cross(N, T));
+    if (u_HasNormalMap == 0)
+        return N;
+
+    if (length(vTangent.xyz) < 1e-4)
+        return N;
+    vec3 T = normalize(vTangent.xyz);
+    T = normalize(T - N * dot(N, T)); // Gram-Schmidt
+    vec3 B = normalize(cross(N, T)) * vTangent.w;
+
     vec3 nMap = texture(u_NormalMap, vUV).xyz * 2.0 - 1.0;
     mat3 TBN = mat3(T, B, N);
     return normalize(TBN * nMap);
@@ -386,26 +374,28 @@ vec3 getNormal() {
 
 void main() {
     vec3 albedo = (u_AlbedoColor * u_TintColor).rgb * texture(u_AlbedoMap, vUV).rgb;
-    float metallic  = clamp(u_Metallic + texture(u_MRMap, vUV).r, 0.0, 1.0);
-    float roughness = clamp(u_Roughness + texture(u_MRMap, vUV).g, 0.04, 1.0);
+    vec2 mrTex = texture(u_MRMap, vUV).rg;
+    float metallic  = clamp(u_Metallic * mrTex.r, 0.0, 1.0);
+    float roughness = clamp(u_Roughness * mrTex.g, 0.04, 1.0);
     float ao        = clamp(u_AO * texture(u_AOMap, vUV).r, 0.0, 1.0);
-    float emissive  = u_Emissive + texture(u_EmissiveMap, vUV).r;
+    vec3 emissiveColor = texture(u_EmissiveMap, vUV).rgb * max(0.0, u_Emissive);
 
     vec3 N = getNormal();
     vec3 V = normalize(u_CameraPos - vWorldPos);
 
-    vec3 ambient = 0.1 * albedo * ao;
+    vec3 ambient = 0.05 * albedo * ao;
     vec3 color = ambient;
+
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+    vec3 ks = F0;
+    vec3 kd = (vec3(1.0) - ks) * (1.0 - metallic);
+    float specPow = mix(8.0, 128.0, 1.0 - roughness);
 
     // Directional light
     vec3 Ld = normalize(-u_DirLight.direction);
     float ndl = max(dot(N, Ld), 0.0);
     vec3 H = normalize(Ld + V);
-    float specPow = mix(8.0, 128.0, 1.0 - roughness);
     float spec = pow(max(dot(N, H), 0.0), specPow);
-    vec3 F0 = mix(vec3(0.04), albedo, metallic);
-    vec3 ks = F0;
-    vec3 kd = (vec3(1.0) - ks) * (1.0 - metallic);
     color += (kd * ndl * albedo + ks * spec) * u_DirLight.color * u_DirLight.intensity;
 
     // Point lights
@@ -413,15 +403,21 @@ void main() {
         vec3 Lp = u_PointLights[i].position - vWorldPos;
         float dist = length(Lp);
         if (dist > u_PointLights[i].range) continue;
-        Lp = Lp / dist;
+
+        float invDist = 1.0 / max(dist, 1e-4);
+        Lp *= invDist;
+
         float att = 1.0 - clamp(dist / u_PointLights[i].range, 0.0, 1.0);
         float ndl_p = max(dot(N, Lp), 0.0);
+
         vec3 Hp = normalize(Lp + V);
         float specp = pow(max(dot(N, Hp), 0.0), specPow);
-        color += att * ((kd * ndl_p * albedo + ks * specp) * u_PointLights[i].color * u_PointLights[i].intensity);
+
+        color += att * ((kd * ndl_p * albedo + ks * specp) *
+                        u_PointLights[i].color * u_PointLights[i].intensity);
     }
 
-   
+    color += emissiveColor;
     FragColor = vec4(color, u_AlbedoColor.a * u_TintColor.a);
 }
 )";
@@ -444,7 +440,7 @@ void main() {
             m_SceneFB->resize(w, h);
         }
 
-        // 相机投影随 viewport 变化
+        // Keep camera projection aligned with render target size.
         m_Camera.setViewportSize((float)w, (float)h);
     }
 
@@ -460,26 +456,20 @@ void main() {
         ensureFramebufferSize(width, height);
     }
 
-    void RenderSystem::renderFrame(const glm::vec2 &viewportSize,
-                                   void *glfwWindowHandle,
-                                   float dt,
-                                   bool viewportActive,
-                                   const InputState &input,
-                                   bool useGameCamera)
+    
+    RenderSystem::RenderPacket RenderSystem::buildRenderPacket(const glm::vec2 &viewportSize,
+                                                               bool useGameCamera,
+                                                               float dt,
+                                                               bool viewportActive,
+                                                               const InputState &input)
     {
-        if (!m_Initialized)
-            initialize(glfwWindowHandle);
+        RenderPacket pkt;
 
-        // 1) FBO 尺寸匹配 viewport
-        ensureFramebufferSize((uint32_t)viewportSize.x, (uint32_t)viewportSize.y);
-
-        // 2) 解析输入（只在 Editor 预览且 viewportActive 时更新 EditorCamera）
+        // A) camera input/update (EditorCamera)
         const bool rmbDown = (!useGameCamera) && viewportActive && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
-
         const float mdx = (!useGameCamera && viewportActive) ? input.getMouseDeltaX() : 0.0f;
         const float mdy = (!useGameCamera && viewportActive) ? input.getMouseDeltaY() : 0.0f;
         const float scrollY = (!useGameCamera && viewportActive) ? input.getScrollDeltaY() : 0.0f;
-
         const bool keyW = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_W);
         const bool keyA = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_A);
         const bool keyS = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_S);
@@ -487,36 +477,22 @@ void main() {
         const bool keyQ = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_Q);
         const bool keyE = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_E);
 
-        // 3) 更新 Editor 预览相机（游戏相机不吃 Editor 输入）
         if (!useGameCamera)
         {
-            m_Camera.update(dt, viewportActive, rmbDown, mdx, mdy,
-                            keyW, keyA, keyS, keyD, keyQ, keyE,
-                            scrollY);
+            m_Camera.update(dt, viewportActive, rmbDown, mdx, mdy, keyW, keyA, keyS, keyD, keyQ, keyE, scrollY);
         }
 
-        // 4) 选择 ViewProjection：EditorCamera 或 Scene Primary Camera
+        // B) pick camera(viewProj + cameraPos)
         glm::mat4 viewProj(1.0f);
-
         const float aspect = (viewportSize.y > 0.0f) ? (viewportSize.x / viewportSize.y) : 1.0f;
 
-        if (useGameCamera)
+        if (useGameCamera && m_Scene)
         {
-            if (!m_Scene)
-            {
-                // 没有场景：退回 editor camera
+            if (!getSceneViewProj(*m_Scene, aspect, viewProj))
                 viewProj = m_Camera.getViewProj();
-            }
-            else
-            {
-                // Scene 相机优先；若没找到 Primary Camera，则退回 editor camera
-                if (!getSceneViewProj(*m_Scene, aspect, viewProj))
-                    viewProj = m_Camera.getViewProj();
-            }
         }
         else
         {
-            // Editor 预览
             viewProj = m_Camera.getViewProj();
         }
 
@@ -536,166 +512,183 @@ void main() {
             }
         }
 
-        // 光源收集
-        DirLightGPU dirLight{};
-        dirLight.intensity = 0.0f; // default no light
-        std::array<PointLightGPU, kMaxPointLights> pointLights{};
-        int pointCount = 0;
+        pkt.frame.viewProj = viewProj;
+        pkt.frame.cameraPos = cameraPos;
+        pkt.frame.time = dt;
 
+        // C) collect lights
+        pkt.lights.dir.intensity = 0.0f;
+        pkt.lights.points.reserve(kMaxPointLights);
         if (m_Scene)
         {
             auto &reg = m_Scene->getRegistry();
+
             auto dirView = reg.view<Hybrid::DirectionalLightComponent>();
             for (auto e : dirView)
             {
                 const auto &dl = dirView.get<Hybrid::DirectionalLightComponent>(e);
-                dirLight.color = dl.Color;
-                dirLight.intensity = dl.Intensity;
-                dirLight.direction = glm::normalize(dl.Direction);
-                break; // only one dir light for now
+                pkt.lights.dir.color = dl.Color;
+                pkt.lights.dir.intensity = dl.Intensity;
+                pkt.lights.dir.direction = glm::normalize(dl.Direction);
+                break;
             }
 
             auto ptView = reg.view<Hybrid::TransformComponent, Hybrid::PointLightComponent>();
             for (auto e : ptView)
             {
-                if (pointCount >= kMaxPointLights)
+                if ((int)pkt.lights.points.size() >= kMaxPointLights)
                     break;
                 const auto &tc = ptView.get<Hybrid::TransformComponent>(e);
                 const auto &pl = ptView.get<Hybrid::PointLightComponent>(e);
-                pointLights[pointCount].color = pl.Color;
-                pointLights[pointCount].intensity = pl.Intensity;
-                pointLights[pointCount].position = tc.Position;
-                pointLights[pointCount].range = pl.Range;
-                ++pointCount;
+
+                PointLightData p;
+                p.color = pl.Color;
+                p.intensity = pl.Intensity;
+                p.position = tc.Position;
+                p.range = pl.Range;
+                pkt.lights.points.push_back(p);
             }
         }
 
-        // 5) 渲染到 FBO
-        m_SceneFB->bind();
-        RenderCommand::setViewport(0, 0, m_SceneFB->getWidth(), m_SceneFB->getHeight());
-
-        Renderer::beginFrame({0.1f, 0.1f, 0.12f, 1.0f});
-
-        // 6) 从 Scene 读取可渲染实体并绘制
+        // D) collect draw items (pure ECS->packet)
         if (m_Scene)
         {
             auto &registry = m_Scene->getRegistry();
             auto renderView = registry.view<Hybrid::TransformComponent, Hybrid::MeshRendererComponent>();
 
-            // 若缺少资产管理或 shader，退回旧的 cube 渲染
-            const bool assetPathReady = (m_AssetManager != nullptr) && (m_MeshShader != nullptr);
-
-            if (!assetPathReady)
+            pkt.items.reserve(renderView.size_hint());
+            for (auto e : renderView)
             {
-                if (m_CubeShader && m_CubeVAO)
+                const auto &tr = renderView.get<Hybrid::TransformComponent>(e);
+                const auto &mr = renderView.get<Hybrid::MeshRendererComponent>(e);
+
+                DrawItem item;
+                item.meshId = mr.Mesh;
+                item.materialId = mr.Material;
+                item.primitive = mr.Primitive;
+                item.model = buildModel(tr);
+                item.tint = mr.Tint;
+                pkt.items.push_back(item);
+            }
+        }
+
+        return pkt;
+    }
+    
+    void RenderSystem::executeForwardPass(const RenderPacket &packet, void *glfwWindowHandle)
+    {
+        const bool assetPathReady = (m_AssetManager != nullptr) && (m_MeshShader != nullptr);
+
+        // 1) begin pass
+        m_SceneFB->bind();
+        RenderCommand::setViewport(0, 0, m_SceneFB->getWidth(), m_SceneFB->getHeight());
+        Renderer::beginFrame({0.1f, 0.1f, 0.12f, 1.0f});
+
+        // 2) fallback path
+        if (!assetPathReady)
+        {
+            if (m_CubeShader && m_CubeVAO)
+            {
+                m_CubeShader->bind();
+                m_CubeShader->setMat4("u_ViewProjection", packet.frame.viewProj);
+
+                for (const auto &item : packet.items)
                 {
-                    m_CubeShader->bind();
-                    m_CubeShader->setMat4("u_ViewProjection", viewProj);
-                    for (auto e : renderView)
-                    {
-                        const auto &tr = renderView.get<Hybrid::TransformComponent>(e);
-                        const auto &mr = renderView.get<Hybrid::MeshRendererComponent>(e);
-                        if (mr.Primitive != 0)
-                            continue;
-                        glm::mat4 model = buildModel(tr);
-                        m_CubeShader->setMat4("u_Model", model);
-                        Renderer::submit(m_CubeVAO, m_CubeShader);
-                    }
+                    if (item.primitive != 0)
+                        continue;
+                    m_CubeShader->setMat4("u_Model", item.model);
+                    Renderer::submit(m_CubeVAO, m_CubeShader);
                 }
             }
-            else
+        }
+        else
+        {
+            // 3) global shader data (once)
+            m_MeshShader->bind();
+            m_MeshShader->setMat4("u_ViewProjection", packet.frame.viewProj);
+            m_MeshShader->setVec3("u_CameraPos", packet.frame.cameraPos);
+            m_MeshShader->setVec3("u_DirLight.color", packet.lights.dir.color);
+            m_MeshShader->setFloat("u_DirLight.intensity", packet.lights.dir.intensity);
+            m_MeshShader->setVec3("u_DirLight.direction", packet.lights.dir.direction);
+            m_MeshShader->setInt("u_PointCount", static_cast<int>(packet.lights.points.size()));
+
+            for (int i = 0; i < (int)packet.lights.points.size() && i < kMaxPointLights; ++i)
             {
-                if (m_MeshShader)
+                const auto &p = packet.lights.points[i];
+                std::string base = "u_PointLights[" + std::to_string(i) + "]";
+                m_MeshShader->setVec3(base + ".color", p.color);
+                m_MeshShader->setFloat(base + ".intensity", p.intensity);
+                m_MeshShader->setVec3(base + ".position", p.position);
+                m_MeshShader->setFloat(base + ".range", p.range);
+            }
+
+            m_MeshShader->setInt("u_AlbedoMap", 0);
+            m_MeshShader->setInt("u_NormalMap", 1);
+            m_MeshShader->setInt("u_MRMap", 2);
+            m_MeshShader->setInt("u_AOMap", 3);
+            m_MeshShader->setInt("u_EmissiveMap", 4);
+
+            // 4) draw items
+            for (const auto &item : packet.items)
+            {
+                std::shared_ptr<Mesh> cpuMesh;
+                AssetID meshId = item.meshId;
+                if (meshId.value != 0)
+                    cpuMesh = m_AssetManager->loadSync<Mesh>(meshId);
+                if (!cpuMesh)
                 {
-                    m_MeshShader->bind();
-                    m_MeshShader->setMat4("u_ViewProjection", viewProj);
-                    m_MeshShader->setVec3("u_CameraPos", cameraPos);
-                    m_MeshShader->setVec3("u_DirLight.color", dirLight.color);
-                    m_MeshShader->setFloat("u_DirLight.intensity", dirLight.intensity);
-                    m_MeshShader->setVec3("u_DirLight.direction", dirLight.direction);
-                    m_MeshShader->setInt("u_PointCount", pointCount);
-                    for (int i = 0; i < pointCount && i < kMaxPointLights; ++i)
-                    {
-                        std::string base = "u_PointLights[" + std::to_string(i) + "]";
-                        m_MeshShader->setVec3(base + ".color", pointLights[i].color);
-                        m_MeshShader->setFloat(base + ".intensity", pointLights[i].intensity);
-                        m_MeshShader->setVec3(base + ".position", pointLights[i].position);
-                        m_MeshShader->setFloat(base + ".range", pointLights[i].range);
-                    }
-                    m_MeshShader->setInt("u_AlbedoMap", 0);
-                    m_MeshShader->setInt("u_NormalMap", 1);
-                    m_MeshShader->setInt("u_MRMap", 2);
-                    m_MeshShader->setInt("u_AOMap", 3);
-                    m_MeshShader->setInt("u_EmissiveMap", 4);
+                    cpuMesh = m_AssetManager->getDefault<Mesh>();
+                    meshId = AssetID{};
                 }
 
-                for (auto e : renderView)
+                auto *meshGPU = getOrCreateMeshGPU(meshId, cpuMesh);
+                if (!meshGPU)
+                    continue;
+
+                std::shared_ptr<Material> cpuMat;
+                AssetID matId = item.materialId;
+                if (matId.value != 0)
+                    cpuMat = m_AssetManager->loadSync<Material>(matId);
+                if (!cpuMat && !meshGPU->submeshes.empty() && meshGPU->submeshes[0].material.value != 0)
                 {
-                    const auto &tr = renderView.get<Hybrid::TransformComponent>(e);
-                    const auto &mr = renderView.get<Hybrid::MeshRendererComponent>(e);
+                    matId = meshGPU->submeshes[0].material;
+                    cpuMat = m_AssetManager->loadSync<Material>(matId);
+                }
+                if (!cpuMat)
+                {
+                    cpuMat = m_AssetManager->getDefault<Material>();
+                    matId = AssetID{};
+                }
 
-                    std::shared_ptr<Mesh> cpuMesh;
-                    AssetID meshId = mr.Mesh;
-                    if (meshId.value != 0)
-                        cpuMesh = m_AssetManager->loadSync<Mesh>(meshId);
-                    if (!cpuMesh)
+                auto *matGPU = getOrCreateMaterialGPU(matId, cpuMat);
+                if (!matGPU)
+                    continue;
+
+                for (const auto &sm : meshGPU->submeshes)
+                {
+                    const MaterialGPU *useMat = matGPU;
+                    if (sm.material.value != 0)
                     {
-                        cpuMesh = m_AssetManager->getDefault<Mesh>();
-                        meshId = AssetID{};
+                        auto subMat = m_AssetManager->loadSync<Material>(sm.material);
+                        if (subMat)
+                            if (auto *mg = getOrCreateMaterialGPU(sm.material, subMat))
+                                useMat = mg;
                     }
-                    auto *meshGPU = getOrCreateMeshGPU(meshId, cpuMesh);
-                    if (!meshGPU)
-                        continue;
 
-                    // 材质选择：组件指定 > submesh 自带 > 默认
-                    AssetID matId = mr.Material;
-                    std::shared_ptr<Material> cpuMat;
-                    if (matId.value != 0)
-                        cpuMat = m_AssetManager->loadSync<Material>(matId);
-                    if (!cpuMat && !meshGPU->submeshes.empty() && meshGPU->submeshes[0].material.value != 0)
-                    {
-                        matId = meshGPU->submeshes[0].material;
-                        cpuMat = m_AssetManager->loadSync<Material>(matId);
-                    }
-                    if (!cpuMat)
-                    {
-                        cpuMat = m_AssetManager->getDefault<Material>();
-                        matId = AssetID{};
-                    }
-                    auto *matGPU = getOrCreateMaterialGPU(matId, cpuMat);
-                    if (!matGPU)
-                        continue;
+                    m_MeshShader->setMat4("u_Model", item.model);
+                    m_MeshShader->setVec4("u_TintColor", item.tint);
+                    useMat->bind(*m_MeshShader);
 
-                    glm::mat4 model = buildModel(tr);
-
-                    for (const auto &sm : meshGPU->submeshes)
-                    {
-                        const MaterialGPU *useMat = matGPU;
-                        if (sm.material.value != 0)
-                        {
-                            auto subMat = m_AssetManager->loadSync<Material>(sm.material);
-                            if (subMat)
-                                if (auto *mg = getOrCreateMaterialGPU(sm.material, subMat))
-                                    useMat = mg;
-                        }
-
-                        m_MeshShader->bind();
-                        m_MeshShader->setMat4("u_ViewProjection", viewProj);
-                        m_MeshShader->setMat4("u_Model", model);
-                        m_MeshShader->setVec4("u_TintColor", mr.Tint);
-                        useMat->bind(*m_MeshShader);
-
-                        meshGPU->vao->bind();
-                        RenderCommand::drawIndexed(sm.index_count, sm.index_offset);
-                    }
+                    meshGPU->vao->bind();
+                    RenderCommand::drawIndexed(sm.index_count, sm.index_offset);
                 }
             }
         }
 
+        // 5) end pass
         Renderer::endFrame();
         m_SceneFB->unbind();
 
-        // 7) 清屏默认帧缓冲（防 UI 拖影）
         GLFWwindow *window = static_cast<GLFWwindow *>(glfwWindowHandle);
         int display_w = 0, display_h = 0;
         glfwGetFramebufferSize(window, &display_w, &display_h);
@@ -703,6 +696,25 @@ void main() {
         RenderCommand::setViewport(0, 0, display_w, display_h);
         RenderCommand::setClearColor({0.08f, 0.08f, 0.09f, 1.0f});
         RenderCommand::clear();
+    }
+
+    void RenderSystem::renderFrame(const glm::vec2 &viewportSize,
+                                   void *glfwWindowHandle,
+                                   float dt,
+                                   bool viewportActive,
+                                   const InputState &input,
+                                   bool useGameCamera)
+    {
+        if (!m_Initialized)
+            initialize(glfwWindowHandle);
+
+        if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
+            return;
+
+        ensureFramebufferSize((uint32_t)viewportSize.x, (uint32_t)viewportSize.y);
+
+        auto packet = buildRenderPacket(viewportSize, useGameCamera, dt, viewportActive, input);
+        executeForwardPass(packet, glfwWindowHandle);
     }
 
 }
