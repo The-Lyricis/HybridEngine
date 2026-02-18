@@ -217,7 +217,7 @@ void main() {
             {0, 3, static_cast<uint32_t>(offsetof(MeshVertex, position)), false},
             {1, 3, static_cast<uint32_t>(offsetof(MeshVertex, normal)), false},
             {2, 2, static_cast<uint32_t>(offsetof(MeshVertex, uv)), false},
-            {3, 3, static_cast<uint32_t>(offsetof(MeshVertex, tangent)), false},
+            {3, 4, static_cast<uint32_t>(offsetof(MeshVertex, tangent)), false},
         };
         mgpu.vao->setVertexBuffer(mgpu.vb, layout);
         mgpu.vao->setIndexBuffer(mgpu.ib);
