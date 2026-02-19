@@ -466,20 +466,35 @@ void main() {
         RenderPacket pkt;
 
         // A) camera input/update (EditorCamera)
-        const bool rmbDown = (!useGameCamera) && viewportActive && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
-        const float mdx = (!useGameCamera && viewportActive) ? input.getMouseDeltaX() : 0.0f;
-        const float mdy = (!useGameCamera && viewportActive) ? input.getMouseDeltaY() : 0.0f;
-        const float scrollY = (!useGameCamera && viewportActive) ? input.getScrollDeltaY() : 0.0f;
-        const bool keyW = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_W);
-        const bool keyA = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_A);
-        const bool keyS = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_S);
-        const bool keyD = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_D);
-        const bool keyQ = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_Q);
-        const bool keyE = (!useGameCamera) && viewportActive && input.isKeyDown(GLFW_KEY_E);
+        const bool cameraInputActive = (!useGameCamera) && viewportActive;
+
+        const float mdx = cameraInputActive ? input.getMouseDeltaX() : 0.0f;
+        const float mdy = cameraInputActive ? input.getMouseDeltaY() : 0.0f;
+        const float scrollY = cameraInputActive ? input.getScrollDeltaY() : 0.0f;
+
+        const bool lmbDown = cameraInputActive && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
+        const bool mmbDown = cameraInputActive && input.isMouseDown(GLFW_MOUSE_BUTTON_MIDDLE);
+        const bool rmbDown = cameraInputActive && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
+
+        const bool keyW = cameraInputActive && input.isKeyDown(GLFW_KEY_W);
+        const bool keyA = cameraInputActive && input.isKeyDown(GLFW_KEY_A);
+        const bool keyS = cameraInputActive && input.isKeyDown(GLFW_KEY_S);
+        const bool keyD = cameraInputActive && input.isKeyDown(GLFW_KEY_D);
+        const bool keyQ = cameraInputActive && input.isKeyDown(GLFW_KEY_Q);
+        const bool keyE = cameraInputActive && input.isKeyDown(GLFW_KEY_E);
+        const bool keyShift = cameraInputActive &&
+            (input.isKeyDown(GLFW_KEY_LEFT_SHIFT) || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT));
+        const bool keyCtrl = cameraInputActive &&
+            (input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || input.isKeyDown(GLFW_KEY_RIGHT_CONTROL));
+        const bool keyAlt = cameraInputActive &&
+            (input.isKeyDown(GLFW_KEY_LEFT_ALT) || input.isKeyDown(GLFW_KEY_RIGHT_ALT));
 
         if (!useGameCamera)
         {
-            m_Camera.update(dt, viewportActive, rmbDown, mdx, mdy, keyW, keyA, keyS, keyD, keyQ, keyE, scrollY);
+            m_Camera.update(dt, cameraInputActive, mdx, mdy, scrollY,
+                lmbDown, mmbDown, rmbDown,
+                keyW, keyA, keyS, keyD, keyQ, keyE,
+                keyShift, keyCtrl, keyAlt);
         }
 
         // B) pick camera(viewProj + cameraPos)
