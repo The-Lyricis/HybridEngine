@@ -40,6 +40,7 @@ namespace Hybrid
 
         uint32_t getSceneColorTexture() const;
         void onWindowResize(uint32_t width, uint32_t height);
+        uint32_t readEntityID(int x, int y) const;
 
         // Per-frame render entry.
         void renderFrame(const glm::vec2 &viewportSize,
@@ -47,7 +48,8 @@ namespace Hybrid
                          float dt,
                          bool viewportActive,
                          const InputState &input,
-                         bool useGameCamera);
+                         bool useGameCamera,
+                         uint32_t selectedEntityID);
 
     private:
         void createCubeResources();
@@ -111,6 +113,8 @@ namespace Hybrid
             int primitive = 0;
             glm::mat4 model{1.0f};
             glm::vec4 tint{1.0f};
+            uint32_t entityID = 0;
+            bool selected = false;
         };
 
         struct RenderPacket
@@ -124,12 +128,14 @@ namespace Hybrid
                                        bool useGameCamera,
                                        float dt,
                                        bool viewportActive,
-                                       const InputState &input);
+                                       const InputState &input,
+                                       uint32_t selectedEntityID);
         void executeForwardPass(const RenderPacket &packet, void *glfwWindowHandle);
 
         MeshGPU *getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh);
         MaterialGPU *getOrCreateMaterialGPU(AssetID id, const std::shared_ptr<Material> &mat);
         TexturePtr createSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+        
 
     private:
         std::shared_ptr<Scene> m_Scene;
@@ -152,6 +158,8 @@ namespace Hybrid
         TexturePtr m_DefaultEmissiveTex;
 
         bool m_Initialized = false;
+
+        
     };
 
 } // namespace Hybrid

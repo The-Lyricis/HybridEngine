@@ -1,6 +1,9 @@
 #include "render_system.h"
 
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+
+#include <glad/gl.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -8,6 +11,8 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/euler_angles.hpp>
@@ -24,6 +29,7 @@
 #include "runtime/function/asset/asset_manager.h"
 #include "runtime/function/asset/material.h"
 #include "runtime/function/asset/mesh.h"
+
 
 namespace Hybrid
 {
@@ -186,9 +192,20 @@ void main() {
         const std::string fs = R"(
 #version 330 core
 in vec4 vColor;
-out vec4 FragColor;
+
+layout(location=0) out vec4 FragColor;
+layout(location=1) out int EntityID;
+
+uniform int u_EntityID;
+uniform int u_Selected;
+
 void main() {
-    FragColor = vColor;
+    vec4 c = vColor;
+    if (u_Selected == 1) {
+        c.rgb = min(c.rgb * 1.35 + vec3(0.08), vec3(1.0)); // 简单高亮
+    }
+    FragColor = c;
+    EntityID  = u_EntityID;
 }
 )";
 
@@ -335,7 +352,11 @@ in vec3 vNormal;
 in vec2 vUV;
 in vec4 vTangent;
 
-out vec4 FragColor;
+layout(location=0) out vec4 FragColor;
+layout(location=1) out int EntityID;
+
+uniform int u_EntityID;
+uniform int  u_Selected;
 
 uniform vec3 u_CameraPos;
 uniform DirLight u_DirLight;
@@ -418,7 +439,13 @@ void main() {
     }
 
     color += emissiveColor;
-    FragColor = vec4(color, u_AlbedoColor.a * u_TintColor.a);
+    vec3 finalColor = color;
+    if (u_Selected == 1) {
+        finalColor = min(finalColor * 1.25 + vec3(0.10), vec3(1.0));
+    }
+
+    FragColor = vec4(finalColor, u_AlbedoColor.a * u_TintColor.a);
+    EntityID  = u_EntityID;
 }
 )";
 
@@ -461,7 +488,8 @@ void main() {
                                                                bool useGameCamera,
                                                                float dt,
                                                                bool viewportActive,
-                                                               const InputState &input)
+                                                               const InputState &input,
+                                                               uint32_t selectedEntityID)
     {
         RenderPacket pkt;
 
@@ -583,6 +611,8 @@ void main() {
                 item.primitive = mr.Primitive;
                 item.model = buildModel(tr);
                 item.tint = mr.Tint;
+                item.entityID = (uint32_t)entt::to_integral(e);
+                item.selected = (selectedEntityID != 0 && item.entityID == selectedEntityID);
                 pkt.items.push_back(item);
             }
         }
@@ -599,6 +629,10 @@ void main() {
         RenderCommand::setViewport(0, 0, m_SceneFB->getWidth(), m_SceneFB->getHeight());
         Renderer::beginFrame({0.1f, 0.1f, 0.12f, 1.0f});
 
+        // 清 ID buffer（COLOR1）
+        uint32_t zero = 0;
+        glClearBufferuiv(GL_COLOR, 1, &zero);
+
         // 2) fallback path
         if (!assetPathReady)
         {
@@ -612,6 +646,8 @@ void main() {
                     if (item.primitive != 0)
                         continue;
                     m_CubeShader->setMat4("u_Model", item.model);
+                    m_CubeShader->setInt("u_EntityID", item.entityID);
+                    m_CubeShader->setInt("u_Selected", item.selected ? 1 : 0);
                     Renderer::submit(m_CubeVAO, m_CubeShader);
                 }
             }
@@ -692,6 +728,8 @@ void main() {
 
                     m_MeshShader->setMat4("u_Model", item.model);
                     m_MeshShader->setVec4("u_TintColor", item.tint);
+                    m_MeshShader->setInt("u_EntityID", item.entityID);
+                    m_MeshShader->setInt("u_Selected", item.selected ? 1 : 0);
                     useMat->bind(*m_MeshShader);
 
                     meshGPU->vao->bind();
@@ -718,7 +756,8 @@ void main() {
                                    float dt,
                                    bool viewportActive,
                                    const InputState &input,
-                                   bool useGameCamera)
+                                   bool useGameCamera,
+                                   uint32_t selectedEntityID)
     {
         if (!m_Initialized)
             initialize(glfwWindowHandle);
@@ -728,8 +767,23 @@ void main() {
 
         ensureFramebufferSize((uint32_t)viewportSize.x, (uint32_t)viewportSize.y);
 
-        auto packet = buildRenderPacket(viewportSize, useGameCamera, dt, viewportActive, input);
+        auto packet = buildRenderPacket(viewportSize, useGameCamera, dt, viewportActive, input, selectedEntityID);
         executeForwardPass(packet, glfwWindowHandle);
+    }
+    uint32_t RenderSystem::readEntityID(int x, int y) const
+    {
+        if (!m_SceneFB) return 0;
+
+        m_SceneFB->bind();
+
+        // 读 COLOR1
+        glReadBuffer(GL_COLOR_ATTACHMENT1);
+
+        uint32_t id = 0;
+        glReadPixels(x, y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT, &id);
+
+        m_SceneFB->unbind();
+        return id;
     }
 
 }

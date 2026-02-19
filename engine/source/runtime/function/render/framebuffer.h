@@ -19,11 +19,14 @@ namespace Hybrid {
         virtual void unbind() const = 0;
         virtual void resize(uint32_t w, uint32_t h) = 0;
 
-        virtual uint32_t getColorAttachmentRendererID() const = 0;
+        virtual uint32_t getColorAttachmentRendererID(uint32_t index = 0) const = 0;
+
         virtual uint32_t getWidth() const = 0;
         virtual uint32_t getHeight() const = 0;
 
         static std::shared_ptr<Framebuffer> Create(const FramebufferSpec& spec);
+
+
     };
 
 } // namespace Hybrid

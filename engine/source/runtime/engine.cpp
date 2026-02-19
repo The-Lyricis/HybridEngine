@@ -166,6 +166,9 @@ namespace Hybrid
             const bool allowCameraInput = ctx.viewport_hovered && ctx.viewport_focused;
             const bool useGameCamera = ctx.use_game_camera;
 
+            uint32_t selectedID = (ctx.selected == entt::null) ? 0u : (uint32_t)entt::to_integral(ctx.selected);
+
+
             // phase 5: render
             m_RenderSystem.renderFrame(
                 viewportSize,
@@ -173,8 +176,17 @@ namespace Hybrid
                 dt,
                 allowCameraInput,
                 m_InputLayer->getState(),
-                useGameCamera
+                useGameCamera,
+                selectedID
             );
+
+            // --- picking：渲染完成后读回 ---
+            if (ctx.request_pick)
+            {
+                uint32_t id = m_RenderSystem.readEntityID(ctx.pick_x, ctx.pick_y);
+                ctx.selected = (id == 0) ? entt::null : (entt::entity)id;
+                ctx.request_pick = false;
+            }
 
             // phase 6: UI end (提交 ImGui draw data 到默认帧缓冲，确保 UI 覆盖在画面上)
             m_EditorUI->endFrame();

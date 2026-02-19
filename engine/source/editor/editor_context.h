@@ -20,5 +20,8 @@ namespace Hybrid
         ImVec2 viewport_max = ImVec2(0, 0);
 
         bool use_game_camera = false;
+        bool request_pick = false;
+        int  pick_x = 0;
+        int  pick_y = 0;
     };
 }
