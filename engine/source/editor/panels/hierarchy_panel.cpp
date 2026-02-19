@@ -1,9 +1,22 @@
 #include "hierarchy_panel.h"
 #include "../editor_context.h"
+
+#include "runtime/function/scene/scene.h"
+#include "runtime/function/scene/components.h"
+
 #include <imgui.h>
+#include <entt/entt.hpp>
 
 namespace Hybrid
 {
+
+    static const char* getEntityLabel(entt::registry& reg, entt::entity e)
+    {
+        if (auto* tag = reg.try_get<TagComponent>(e))
+            return tag->Tag.c_str();
+        return "Entity";
+    }
+
     void HierarchyPanel::onImGuiRender(EditorContext& ctx)
     {
         if (!m_open) return;
@@ -17,12 +30,34 @@ namespace Hybrid
             return;
         }
 
-        // 第一步：占位
-        ImGui::Text("Hierarchy (step1 skeleton)");
-        ImGui::Separator();
-        ImGui::Text("Selected ID: %llu", (unsigned long long)ctx.selected_id);
+        auto& reg = ctx.active_scene->getRegistry();
 
-        // TODO(step2): 遍历场景实体，点击时写 ctx.selected_id
+        // 点击空白处取消选择
+        if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered())
+            ctx.selected = entt::null;
+
+        auto view = reg.view<TagComponent>();
+        for (auto e : view)
+        {
+            const char* label = getEntityLabel(reg, e);
+            const bool selected = (ctx.selected == e);
+
+            ImGuiTreeNodeFlags flags =
+                ImGuiTreeNodeFlags_OpenOnArrow |
+                ImGuiTreeNodeFlags_SpanAvailWidth |
+                ImGuiTreeNodeFlags_Leaf |
+                (selected ? ImGuiTreeNodeFlags_Selected : 0);
+
+            // 用 entt::to_integral(e) 作为 ImGui ID，避免 Entity 强转问题
+            const auto id = (void*)(uintptr_t)entt::to_integral(e);
+            bool opened = ImGui::TreeNodeEx(id, flags, "%s", label);
+
+            if (ImGui::IsItemClicked())
+                ctx.selected = e;
+
+            if (opened)
+                ImGui::TreePop();
+        }
 
         ImGui::End();
     }

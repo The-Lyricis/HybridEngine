@@ -71,6 +71,7 @@ namespace Hybrid
         //场景绑定到编辑器上下文
         m_EditorUI->setActiveScene(scene.get());
 
+
         //--------------- 场景测试内容 ---------------
         // 1) 游戏相机（俯视）
         {
