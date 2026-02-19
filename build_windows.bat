@@ -21,7 +21,7 @@ echo !C_WHITE!  HHHHH    Y    BBBB   RRRR     I    D   D       EEEE   N N N  G  
 echo !C_WHITE!  H   H    Y    B   B  R R      I    D   D       E      N  NN  G   G    I    N  NN  E     !C_RESET!
 echo !C_WHITE!  H   H    Y    BBBB   R  RR  IIIII  DDDD        EEEEE  N   N  GGGG   IIIII  N   N  EEEEE !C_RESET!
 echo !C_CYAN!===========================================================================================!C_RESET!
-echo !C_DIM!  BUILD SCRIPT  -  CMake Configure + Build (Release)!C_RESET!
+echo !C_GREEN!version 0.0.2!C_RESET!
 echo !C_CYAN!===========================================================================================!C_RESET!
 echo.
 
