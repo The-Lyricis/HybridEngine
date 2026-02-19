@@ -1,5 +1,6 @@
 #include "engine.h"
 #include <filesystem>
+#include "editor/editor_context.h"  
 
 namespace Hybrid
 {
@@ -67,6 +68,9 @@ namespace Hybrid
         auto scene = std::make_shared<Scene>();
         m_SceneManager.SetActiveScene(scene);
 
+        //场景绑定到编辑器上下文
+        m_EditorUI->setActiveScene(scene.get());
+
         //--------------- 场景测试内容 ---------------
         // 1) 游戏相机（俯视）
         {
@@ -126,40 +130,59 @@ namespace Hybrid
         {
             float dt = calculateDeltaTime();
 
-            // phase 1: input state update
-            if (!m_Minimized)
+            // 即使最小化，也要处理事件，避免窗口“假死”
+            if (m_Minimized)
             {
-                // phase 2: logic update
-                for (Layer *layer : m_LayerStack)
-                    layer->onUpdate(dt);
-
-                // 场景更新
-                if (auto scene = m_SceneManager.GetActiveScene())
-                    scene->onUpdate(dt);
-
-                // 注意：事件轮询应该在所有层更新之后进行，以确保事件能被当帧更新的层捕获
                 m_Window->pollEvents();
-                // phase 3: UI
-                m_EditorUI->beginFrame();
-                m_EditorUI->drawPanels();
-                m_EditorUI->drawViewport(m_RenderSystem.getSceneColorTexture());
-
-                // phase 4: render
-                m_RenderSystem.renderFrame(
-                    m_EditorUI->getViewportSize(),
-                    m_Window->getGLFWWindow(),
-                    dt,
-                    m_EditorUI->isViewportHovered() && m_EditorUI->isViewportFocused(),
-                    m_InputLayer->getState(),
-                    m_EditorUI->useGameCamera() // <-- 新增：UI 控制的模式
-                );
-                m_EditorUI->endFrame();
+                m_GraphicsContext->swapBuffers();
+                continue;
             }
 
-            // phase 5: events & swap
+            // phase 1/2: input & logic update
+            for (Layer* layer : m_LayerStack)
+                layer->onUpdate(dt);
+
+            if (auto scene = m_SceneManager.GetActiveScene())
+                scene->onUpdate(dt);
+
+            // phase 3: events (glfwPollEvents 会驱动 ImGui GLFW backend 的回调)
+            m_Window->pollEvents();
+
+            // phase 4: UI begin + panels
+            m_EditorUI->beginFrame();
+            m_EditorUI->drawPanels();
+
+            // 注意：drawViewport 这一帧会更新 EditorContext 里的 viewport_size/hovered/focused
+            // 纹理 ID 通常是“上一帧渲染结果”，这一点与你原本逻辑一致（天然一帧延迟显示）。
+            m_EditorUI->drawViewport(m_RenderSystem.getSceneColorTexture());
+
+            // 从 EditorContext 读取 viewport 状态（替代 getViewportSize / isViewportHovered 等）
+            auto& ctx = m_EditorUI->context();
+
+            // 将 ImVec2 转为你 RenderSystem 需要的类型（此处示例用 glm::vec2）
+            glm::vec2 viewportSize{ ctx.viewport_size.x, ctx.viewport_size.y };
+
+            const bool allowCameraInput = ctx.viewport_hovered && ctx.viewport_focused;
+            const bool useGameCamera = ctx.use_game_camera;
+
+            // phase 5: render
+            m_RenderSystem.renderFrame(
+                viewportSize,
+                m_Window->getGLFWWindow(),
+                dt,
+                allowCameraInput,
+                m_InputLayer->getState(),
+                useGameCamera
+            );
+
+            // phase 6: UI end (提交 ImGui draw data 到默认帧缓冲，确保 UI 覆盖在画面上)
+            m_EditorUI->endFrame();
+
+            // phase 7: swap
             m_GraphicsContext->swapBuffers();
         }
     }
+
     void HybridEngine::onEvent(Event &e)
     {
         // phase 1: input capture (ignore Handled)
