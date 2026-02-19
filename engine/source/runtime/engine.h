@@ -8,7 +8,7 @@
 #include "runtime/function/input/input_layer.h"
 #include "runtime/function/render/render_system.h"
 #include "runtime/function/render/graphics_context.h"
-#include "editor/include/editor_ui.h"
+#include "editor/editor_ui.h"
 #include "function/scene/scene_manager.h"
 #include "function/scene/scene.h"
 #include "function/asset/resource_system.h"
