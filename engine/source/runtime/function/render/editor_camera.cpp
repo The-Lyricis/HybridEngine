@@ -7,6 +7,16 @@ namespace Hybrid {
 
     static float radians(float deg) { return deg * 0.01745329251994329577f; }
 
+    static glm::vec3 calculateForward(float yawDeg, float pitchDeg) {
+        const float yawR = radians(yawDeg);
+        const float pitR = radians(pitchDeg);
+
+        glm::vec3 forward;
+        forward.x = std::cos(yawR) * std::cos(pitR);
+        forward.y = std::sin(pitR);
+        forward.z = std::sin(yawR) * std::cos(pitR);
+        return glm::normalize(forward);
+    }
 
     EditorCamera::EditorCamera(float fovDeg, float aspect, float nearClip, float farClip)
         : m_FovDeg(fovDeg), m_Aspect(aspect), m_Near(nearClip), m_Far(farClip) {
@@ -24,36 +34,26 @@ namespace Hybrid {
         float mouseDeltaX, float mouseDeltaY,
         bool keyW, bool keyA, bool keyS, bool keyD, bool keyQ, bool keyE,
         float scrollDelta) {
-        // 允许滚轮缩放（即使不按 RMB，也可根据你偏好调整）
+        if (enableControl && rmbDown) {
+            m_YawDeg += mouseDeltaX * m_MouseSensitivity;
+            m_PitchDeg -= mouseDeltaY * m_MouseSensitivity;
+            m_PitchDeg = std::clamp(m_PitchDeg, -89.0f, 89.0f);
+        }
+
+        const glm::vec3 forward = calculateForward(m_YawDeg, m_PitchDeg);
+
         if (enableControl) {
-            m_Position += getViewMatrix()[2] * (-scrollDelta) * m_ScrollSpeed; // view[2] 是 -forward 的近似
+            m_Position += forward * (scrollDelta * m_ScrollSpeed);
         }
 
         if (!(enableControl && rmbDown)) {
-            // 不控制时只更新投影（若 viewport 改变）
             recalcView();
             return;
         }
 
-        // 1) 鼠标旋转
-        m_YawDeg += mouseDeltaX * m_MouseSensitivity;
-        m_PitchDeg -= mouseDeltaY * m_MouseSensitivity;
-        m_PitchDeg = std::clamp(m_PitchDeg, -89.0f, 89.0f);
-
-        // 2) 方向向量
-        const float yawR = radians(m_YawDeg);
-        const float pitR = radians(m_PitchDeg);
-
-        glm::vec3 forward;
-        forward.x = std::cos(yawR) * std::cos(pitR);
-        forward.y = std::sin(pitR);
-        forward.z = std::sin(yawR) * std::cos(pitR);
-        forward = glm::normalize(forward);
-
         const glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0, 1, 0)));
         const glm::vec3 up = glm::normalize(glm::cross(right, forward));
 
-        // 3) 键盘平移（WASD + QE 上下）
         const float v = m_MoveSpeed * dt;
         if (keyW) m_Position += forward * v;
         if (keyS) m_Position -= forward * v;
@@ -66,15 +66,7 @@ namespace Hybrid {
     }
 
     void EditorCamera::recalcView() {
-        const float yawR = radians(m_YawDeg);
-        const float pitR = radians(m_PitchDeg);
-
-        glm::vec3 forward;
-        forward.x = std::cos(yawR) * std::cos(pitR);
-        forward.y = std::sin(pitR);
-        forward.z = std::sin(yawR) * std::cos(pitR);
-        forward = glm::normalize(forward);
-
+        const glm::vec3 forward = calculateForward(m_YawDeg, m_PitchDeg);
         m_View = glm::lookAt(m_Position, m_Position + forward, glm::vec3(0, 1, 0));
     }
 
