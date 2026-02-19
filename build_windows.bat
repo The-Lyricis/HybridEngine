@@ -1,13 +1,10 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-REM 可选：切到 UTF-8（如果你只输出英文，其实不需要）
 chcp 65001 >nul
 
-REM 取 ESC 字符，用于 ANSI 颜色序列
 for /f %%A in ('echo prompt $E^| cmd') do set "ESC=%%A"
 
-REM 颜色定义
 set "C_RESET=!ESC![0m"
 set "C_CYAN=!ESC![96m"
 set "C_WHITE=!ESC![97m"
