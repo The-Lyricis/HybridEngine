@@ -28,6 +28,7 @@ target_link_libraries(${TARGET_NAME}
     PUBLIC stb
     PUBLIC spdlog::spdlog
     PUBLIC EnTT::EnTT
+    PUBLIC nlohmann_json::nlohmann_json
 )
 
 # 包含目录

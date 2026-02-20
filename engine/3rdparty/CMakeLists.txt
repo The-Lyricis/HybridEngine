@@ -72,3 +72,15 @@ endif()
 if(TARGET entt)
     set_target_properties(entt PROPERTIES FOLDER ${third_party_folder}/entt)
 endif()
+
+# ---- nlohmann/json (submodule, header-only) ----
+if(NOT TARGET nlohmann_json::nlohmann_json AND NOT TARGET nlohmann_json)
+    option(JSON_BuildTests "" OFF)
+    option(JSON_Install "" OFF)
+
+    add_subdirectory(nlohmann_json EXCLUDE_FROM_ALL)
+endif()
+
+if(TARGET nlohmann_json)
+    set_target_properties(nlohmann_json PROPERTIES FOLDER ${third_party_folder}/nlohmann_json)
+endif()
