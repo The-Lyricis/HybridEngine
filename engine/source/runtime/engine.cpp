@@ -1,6 +1,7 @@
 #include "engine.h"
 #include <filesystem>
 #include "editor/editor_context.h"  
+#include <iostream>
 
 namespace Hybrid
 {
@@ -155,16 +156,24 @@ namespace Hybrid
             m_EditorUI->drawPanels();
 
             // 注意：drawViewport 这一帧会更新 EditorContext 里的 viewport_size/hovered/focused
-            // 纹理 ID 通常是“上一帧渲染结果”，这一点与你原本逻辑一致（天然一帧延迟显示）。
-            m_EditorUI->drawViewport(m_RenderSystem.getSceneColorTexture());
+            // 纹理 ID 通常是“上一帧渲染结果”，这一点与原本逻辑一致（天然一帧延迟显示）。
 
-            // 从 EditorContext 读取 viewport 状态（替代 getViewportSize / isViewportHovered 等）
             auto& ctx = m_EditorUI->context();
+            ctx.active_scene = m_SceneManager.GetActiveScene().get();
+
+            // 把上一帧相机矩阵喂给 gizmo（足够稳定）
+            ctx.gizmo_view = m_RenderSystem.getLastView();
+            ctx.gizmo_proj = m_RenderSystem.getLastProj();
+
+            m_EditorUI->drawViewport(m_RenderSystem.getSceneColorTexture());
 
             // 将 ImVec2 转为你 RenderSystem 需要的类型（此处示例用 glm::vec2）
             glm::vec2 viewportSize{ ctx.viewport_size.x, ctx.viewport_size.y };
 
-            const bool allowCameraInput = ctx.viewport_hovered && ctx.viewport_focused;
+
+            ImGuiIO& io = ImGui::GetIO();
+            bool viewportActive = ctx.viewport_image_hovered;
+
             const bool useGameCamera = ctx.use_game_camera;
 
             uint32_t selectedID = (ctx.selected == entt::null) ? 0u : (uint32_t)entt::to_integral(ctx.selected);
@@ -175,7 +184,7 @@ namespace Hybrid
                 viewportSize,
                 m_Window->getGLFWWindow(),
                 dt,
-                allowCameraInput,
+                viewportActive,
                 m_InputLayer->getState(),
                 useGameCamera,
                 selectedID

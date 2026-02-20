@@ -105,3 +105,12 @@ if(EXISTS "${ENGINE_ROOT_DIR}/shader")
                 "${BINARY_ROOT_DIR}/shader"
     )
 endif()
+
+# ---- ImGuizmo (Editor-only) ----
+target_include_directories(${TARGET_NAME} PRIVATE
+    ${ENGINE_ROOT_DIR}/3rdparty/ImGuizmo
+)
+
+target_sources(${TARGET_NAME} PRIVATE
+    ${ENGINE_ROOT_DIR}/3rdparty/ImGuizmo/ImGuizmo.cpp
+)

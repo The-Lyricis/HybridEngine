@@ -50,6 +50,8 @@ namespace Hybrid
                          const InputState &input,
                          bool useGameCamera,
                          uint32_t selectedEntityID);
+        const glm::mat4& getLastView() const { return m_LastView; }
+        const glm::mat4& getLastProj() const { return m_LastProj; }
 
     private:
         void createCubeResources();
@@ -158,6 +160,9 @@ namespace Hybrid
         TexturePtr m_DefaultEmissiveTex;
 
         bool m_Initialized = false;
+
+        glm::mat4 m_LastView = glm::mat4(1.0f);
+        glm::mat4 m_LastProj = glm::mat4(1.0f);
 
         
     };

@@ -8,6 +8,7 @@
 
 #include <GLFW/glfw3.h>
 #include <imgui_internal.h>
+#include <ImGuizmo.h>
 
 // 请按你的实际路径调整
 #include "editor/editor_context.h"
@@ -89,6 +90,9 @@ namespace Hybrid
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+
+        ImGuizmo::SetImGuiContext(ImGui::GetCurrentContext());
+        ImGuizmo::BeginFrame();
     }
 
     void EditorUI::drawPanels()

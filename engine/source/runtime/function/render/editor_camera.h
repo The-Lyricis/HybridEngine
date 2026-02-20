@@ -25,7 +25,9 @@ namespace Hybrid {
 
         const glm::mat4& getViewMatrix() const { return m_View; }
         const glm::mat4& getProjMatrix() const { return m_Proj; }
-        glm::mat4 getViewProj() const { return m_Proj * m_View; }
+        const glm::mat4& getView() const { return m_View; }
+        const glm::mat4& getProjection() const { return m_Proj; }
+        const glm::mat4& getViewProj() const { return m_ViewProj; }
 
         glm::vec3 getPosition() const { return m_Position; }
 
@@ -70,6 +72,7 @@ namespace Hybrid {
 
         glm::mat4 m_View{ 1.0f };
         glm::mat4 m_Proj{ 1.0f };
+        glm::mat4 m_ViewProj{ 1.0f };
     };
 
 } // namespace Hybrid

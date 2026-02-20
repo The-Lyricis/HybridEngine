@@ -88,6 +88,33 @@ namespace Hybrid
                 return glm::vec3(0.0f, -1.0f, 0.0f);
             return dir / len;
         }
+        // 匿名命名空间里新增：输出 view/proj/camPos
+        static bool getSceneCameraMatrices(Hybrid::Scene& scene, float aspect,
+            glm::mat4& outView, glm::mat4& outProj, glm::vec3& outCamPos)
+        {
+            auto& reg = scene.getRegistry();
+            auto view = reg.view<Hybrid::TransformComponent, Hybrid::CameraComponent>();
+
+            entt::entity mainCam = entt::null;
+            for (auto e : view)
+            {
+                auto& cam = view.get<Hybrid::CameraComponent>(e);
+                if (cam.Primary) { mainCam = e; break; }
+            }
+            if (mainCam == entt::null) return false;
+
+            const auto& tr = reg.get<Hybrid::TransformComponent>(mainCam);
+            const auto& cam = reg.get<Hybrid::CameraComponent>(mainCam);
+
+            outProj = glm::perspective(glm::radians(cam.FovY), aspect, cam.Near, cam.Far);
+
+            glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
+            glm::mat4 R = glm::yawPitchRoll(tr.Rotation.y, tr.Rotation.x, tr.Rotation.z);
+            outView = glm::inverse(T * R);
+
+            outCamPos = tr.Position;
+            return true;
+        }
     }
 
     void RenderSystem::MaterialGPU::bind(Shader &shader) const
@@ -535,39 +562,36 @@ void main() {
                 keyShift, keyCtrl, keyAlt);
         }
 
-        // B) pick camera(viewProj + cameraPos)
-        glm::mat4 viewProj(1.0f);
+        // B) pick camera(view/proj + cameraPos)
+        glm::mat4 viewM(1.0f), projM(1.0f);
+        glm::vec3 cameraPos = m_Camera.getPosition();
+
         const float aspect = (viewportSize.y > 0.0f) ? (viewportSize.x / viewportSize.y) : 1.0f;
 
         if (useGameCamera && m_Scene)
         {
-            if (!getSceneViewProj(*m_Scene, aspect, viewProj))
-                viewProj = m_Camera.getViewProj();
+            if (!getSceneCameraMatrices(*m_Scene, aspect, viewM, projM, cameraPos))
+            {
+                viewM = m_Camera.getView();
+                projM = m_Camera.getProjection();
+                cameraPos = m_Camera.getPosition();
+            }
         }
         else
         {
-            viewProj = m_Camera.getViewProj();
+            viewM = m_Camera.getView();
+            projM = m_Camera.getProjection();
+            cameraPos = m_Camera.getPosition();
         }
 
-        glm::vec3 cameraPos = m_Camera.getPosition();
-        if (useGameCamera && m_Scene)
-        {
-            auto &reg = m_Scene->getRegistry();
-            auto view = reg.view<Hybrid::TransformComponent, Hybrid::CameraComponent>();
-            for (auto e : view)
-            {
-                auto &cam = view.get<Hybrid::CameraComponent>(e);
-                if (cam.Primary)
-                {
-                    cameraPos = view.get<Hybrid::TransformComponent>(e).Position;
-                    break;
-                }
-            }
-        }
-
-        pkt.frame.viewProj = viewProj;
+        // 写入 packet
+        pkt.frame.viewProj = projM * viewM;
         pkt.frame.cameraPos = cameraPos;
         pkt.frame.time = dt;
+
+        // 缓存给 ImGuizmo：必须是“分离的 view/proj”
+        m_LastView = viewM;
+        m_LastProj = projM;
 
         // C) collect lights
         pkt.lights.dir.intensity = 0.0f;
