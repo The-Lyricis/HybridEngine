@@ -27,7 +27,7 @@ namespace Hybrid
 
     std::string AssetRegistry::normalizeKey(const std::string& path) const
     {
-        // Normalize logical path to alias:relative (without leading '/').
+        // Normalize logical path to alias:relative in strict mode.
         const auto colon_pos = path.find(':');
         const bool is_windows_drive =
             (colon_pos == 1 && !path.empty() && std::isalpha(static_cast<unsigned char>(path[0])));
@@ -37,14 +37,16 @@ namespace Hybrid
             const std::string alias = path.substr(0, colon_pos);
             std::string rel = path.substr(colon_pos + 1);
 
+            if (rel.empty())
+                return {};
+            if (rel.front() == '/' || rel.front() == '\\')
+                return {};
+
             for (char& ch : rel)
             {
                 if (ch == '\\')
                     ch = '/';
             }
-
-            while (!rel.empty() && rel.front() == '/')
-                rel.erase(rel.begin());
 
             std::filesystem::path rel_path(rel);
             rel_path = rel_path.lexically_normal();
@@ -76,6 +78,8 @@ namespace Hybrid
             return;
 
         const auto key = normalizeKey(meta.source_path);
+        if (key.empty())
+            return;
 
         // If the path is re-registered with a new id, remove stale metadata entry.
         auto pit = m_by_path.find(key);
@@ -104,7 +108,11 @@ namespace Hybrid
 
     const AssetMetadata* AssetRegistry::findByPath(const std::string& path) const
     {
-        auto it = m_by_path.find(normalizeKey(path));
+        const auto key = normalizeKey(path);
+        if (key.empty())
+            return nullptr;
+
+        auto it = m_by_path.find(key);
         if (it == m_by_path.end())
             return nullptr;
 

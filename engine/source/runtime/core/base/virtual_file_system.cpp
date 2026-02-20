@@ -40,11 +40,11 @@ namespace Hybrid
         const std::string alias = path.substr(0, pos);
         std::string rel = path.substr(pos + 1);
 
-        // Read-side compatibility for legacy alias:/relative paths.
-        while (!rel.empty() && (rel.front() == '/' || rel.front() == '\\'))
-            rel.erase(rel.begin());
-
         if (rel.empty())
+            return std::nullopt;
+
+        // Strict mode: only alias:relative is accepted.
+        if (rel.front() == '/' || rel.front() == '\\')
             return std::nullopt;
 
         for (char& ch : rel)
