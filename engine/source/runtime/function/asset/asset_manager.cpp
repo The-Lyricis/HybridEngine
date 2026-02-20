@@ -147,8 +147,10 @@ namespace Hybrid
             const AssetMetadata* meta = m_registry ? m_registry->find(id) : nullptr;
             if (!meta)
             {
-                std::scoped_lock lock(m_mutex);
-                m_state[id] = AssetState::Failed;
+                {
+                    std::scoped_lock lock(m_mutex);
+                    m_state[id] = AssetState::Failed;
+                }
                 return getDefaultByTypeIndex(ti);
             }
             meta_copy = *meta;
