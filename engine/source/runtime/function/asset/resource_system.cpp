@@ -4,6 +4,7 @@
 
 #include "runtime/core/base/macro.h"
 #include "runtime/function/render/texture.h"
+#include "opengl_texture2d_loader.h"
 #include "mesh_loader.h"
 #include "material_loader.h"
 
@@ -33,8 +34,9 @@ namespace Hybrid
 
     void ResourceSystem::initialize()
     {
-        m_vfs      = std::make_shared<NativeFileSystem>();
+        m_vfs = std::make_shared<NativeFileSystem>();
         m_registry = std::make_shared<AssetRegistry>();
+        m_metaStore = std::make_unique<AssetMetaStore>(m_registry);
 
         const auto assetRoot = CollectAssetRoot();
 
@@ -47,6 +49,15 @@ namespace Hybrid
             m_vfs->mount("asset", assetRoot, 0);
             m_registry->setRoot(assetRoot);
             HBD_CORE_INFO("ResourceSystem using asset root: {}", assetRoot.string());
+
+            if (m_metaStore)
+            {
+                const auto stat = m_metaStore->loadAll(assetRoot);
+                HBD_CORE_INFO("Asset meta load: total={}, loaded={}, failed={}",
+                              stat.total_files,
+                              stat.loaded,
+                              stat.failed);
+            }
         }
 
         m_manager = std::make_shared<AssetManager>(m_vfs, m_registry);

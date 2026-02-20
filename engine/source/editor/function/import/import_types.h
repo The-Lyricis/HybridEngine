@@ -1,0 +1,34 @@
+#pragma once
+
+#include <string>
+#include <vector>
+
+#include "runtime/function/asset/asset_type.h"
+
+namespace Hybrid
+{
+    struct ImportRequest
+    {
+        // Strict logical path: alias:relative
+        std::string source_path;
+        // Optional cooked output path (alias:relative).
+        std::string cooked_path;
+        // Optional content/settings hash.
+        std::string hash;
+
+        // Optional routing hint.
+        AssetType preferred_type = AssetType::Unknown;
+        bool force_reimport = false;
+    };
+
+    struct ImportResult
+    {
+        bool success = false;
+        AssetID primary_id{};
+        std::string message;
+
+        // Main + sub-assets (future-proof for FBX/GLTF split).
+        std::vector<AssetMetadata> assets;
+    };
+} // namespace Hybrid
+
