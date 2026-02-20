@@ -24,7 +24,7 @@ namespace Hybrid
             const std::filesystem::path& root,
             int priority = 0) = 0;
 
-        // 判断逻辑路径是否存在（<别名>:<相对路径>）
+        // 判断逻辑路径是否存在（<别名>:<相对路径>，即 alias:relative）
         virtual bool exists(const std::string& path) const = 0;
 
         // 将逻辑路径解析为实际文件系统路径；失败返回 nullopt

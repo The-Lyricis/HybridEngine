@@ -51,8 +51,8 @@ namespace Hybrid
     {
         AssetID     id{};
         AssetType   type{AssetType::Unknown}; // 资源类型
-        std::string source_path;              // 逻辑路径 alias:/relative
-        std::string cooked_path;              // 逻辑路径 alias:/relative
+        std::string source_path;              // 逻辑路径 alias:relative
+        std::string cooked_path;              // 逻辑路径 alias:relative
         std::string hash;                     // 源文件 + 导入设置哈希
         std::vector<AssetID> hard_deps;       // 必需依赖
         std::vector<AssetID> soft_deps;       // 可选依赖
