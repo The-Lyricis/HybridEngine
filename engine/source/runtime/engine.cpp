@@ -88,7 +88,8 @@ namespace Hybrid
         auto &dl = sun.AddComponent<Hybrid::DirectionalLightComponent>();
         dl.Color = {1.0f, 1.0f, 1.0f};
         dl.Intensity = 1.0f;
-        dl.Direction = glm::normalize(glm::vec3(0.3f, -1.0f, 0.2f));
+        auto &sunTr = sun.GetComponent<Hybrid::TransformComponent>();
+        sunTr.Rotation = {glm::radians(-70.5f), glm::radians(-123.7f), 0.0f};
 
         // 3) 生成一组立方体
         {

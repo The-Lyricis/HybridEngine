@@ -78,6 +78,16 @@ namespace Hybrid
             outViewProj = proj * viewMat;
             return true;
         }
+
+        static glm::vec3 lightDirectionFromTransform(const Hybrid::TransformComponent &tr)
+        {
+            const glm::mat4 R = glm::yawPitchRoll(tr.Rotation.y, tr.Rotation.x, tr.Rotation.z);
+            const glm::vec3 dir = glm::vec3(R * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
+            const float len = glm::length(dir);
+            if (len < 1e-4f)
+                return glm::vec3(0.0f, -1.0f, 0.0f);
+            return dir / len;
+        }
     }
 
     void RenderSystem::MaterialGPU::bind(Shader &shader) const
@@ -566,13 +576,14 @@ void main() {
         {
             auto &reg = m_Scene->getRegistry();
 
-            auto dirView = reg.view<Hybrid::DirectionalLightComponent>();
+            auto dirView = reg.view<Hybrid::TransformComponent, Hybrid::DirectionalLightComponent>();
             for (auto e : dirView)
             {
+                const auto &tc = dirView.get<Hybrid::TransformComponent>(e);
                 const auto &dl = dirView.get<Hybrid::DirectionalLightComponent>(e);
                 pkt.lights.dir.color = dl.Color;
                 pkt.lights.dir.intensity = dl.Intensity;
-                pkt.lights.dir.direction = glm::normalize(dl.Direction);
+                pkt.lights.dir.direction = lightDirectionFromTransform(tc);
                 break;
             }
 
