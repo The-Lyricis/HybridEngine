@@ -7,7 +7,7 @@
 
 namespace Hybrid
 {
-    bool EditorResourceSystem::initialize(const std::shared_ptr<ResourceSystem>& runtime_system)
+    bool EditorResourceSystem::initialize(const std::shared_ptr<RuntimeResourceSystem>& runtime_system)
     {
         if (!runtime_system)
         {

@@ -3,7 +3,7 @@
 #include <memory>
 #include <string>
 
-#include "runtime/function/asset/resource_system.h"
+#include "runtime/function/asset/runtime_resource_system.h"
 #include "runtime/function/asset/asset_meta_store.h"
 #include "editor/function/import/import_manager.h"
 
@@ -12,7 +12,7 @@ namespace Hybrid
     class EditorResourceSystem
     {
     public:
-        bool initialize(const std::shared_ptr<ResourceSystem>& runtime_system);
+        bool initialize(const std::shared_ptr<RuntimeResourceSystem>& runtime_system);
 
         ImportResult importAsset(const ImportRequest& request);
         AssetID importTexture2D(const std::string& source_path,
@@ -26,7 +26,7 @@ namespace Hybrid
         void registerDefaultImporters();
 
     private:
-        std::shared_ptr<ResourceSystem> m_runtime;
+        std::shared_ptr<RuntimeResourceSystem> m_runtime;
         std::unique_ptr<AssetMetaStore> m_metaStore;
         std::shared_ptr<ImportManager> m_importManager;
     };

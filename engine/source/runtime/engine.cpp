@@ -32,7 +32,7 @@ namespace Hybrid
         m_GraphicsContext->init();
 
         // Resource System
-        m_ResourceSystem = std::make_shared<ResourceSystem>();
+        m_ResourceSystem = std::make_shared<RuntimeResourceSystem>();
         m_ResourceSystem->initialize();
         m_RenderSystem.setAssetManager(m_ResourceSystem->getManager());
 

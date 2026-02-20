@@ -10,10 +10,11 @@
 #include "runtime/core/base/virtual_file_system.h"
 #include "mesh.h"
 #include "material.h"
+#include "texture.h"
 
 namespace Hybrid
 {
-    class ResourceSystem
+    class RuntimeResourceSystem
     {
     public:
         void initialize();

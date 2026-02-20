@@ -1,4 +1,4 @@
-#include "resource_system.h"
+#include "runtime_resource_system.h"
 
 #include <vector>
 
@@ -32,7 +32,7 @@ namespace Hybrid
         return {};
     }
 
-    void ResourceSystem::initialize()
+    void RuntimeResourceSystem::initialize()
     {
         m_vfs = std::make_shared<NativeFileSystem>();
         m_registry = std::make_shared<AssetRegistry>();
@@ -48,7 +48,7 @@ namespace Hybrid
         {
             m_vfs->mount("asset", assetRoot, 0);
             m_registry->setRoot(assetRoot);
-            HBD_CORE_INFO("ResourceSystem using asset root: {}", assetRoot.string());
+            HBD_CORE_INFO("RuntimeResourceSystem using asset root: {}", assetRoot.string());
 
             if (m_metaStore)
             {
@@ -65,10 +65,10 @@ namespace Hybrid
         createDefaultTexture();
         createDefaultMaterial();
         createDefaultMesh();
-        HBD_CORE_TRACE("ResourceSystem initialized");
+        HBD_CORE_TRACE("RuntimeResourceSystem initialized");
     }
 
-    void ResourceSystem::registerDefaultLoaders()
+    void RuntimeResourceSystem::registerDefaultLoaders()
     {
         auto texLoader = std::make_shared<GLTexture2DLoader>();
         m_manager->registerLoader<Texture>(texLoader);
@@ -78,7 +78,7 @@ namespace Hybrid
         m_manager->registerLoader<Material>(std::make_shared<StubMaterialLoader>());
     }
 
-    void ResourceSystem::createDefaultTexture()
+    void RuntimeResourceSystem::createDefaultTexture()
     {
         // 使用 Texture 工厂创建 1x1 白色纹理
         TextureDesc desc;
@@ -98,7 +98,7 @@ namespace Hybrid
         }
     }
 
-    void ResourceSystem::createDefaultMaterial()
+    void RuntimeResourceSystem::createDefaultMaterial()
     {
         MaterialData data;
         data.albedo_color = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -113,7 +113,7 @@ namespace Hybrid
         }
     }
 
-    void ResourceSystem::createDefaultMesh()
+    void RuntimeResourceSystem::createDefaultMesh()
     {
         m_defaultMesh = Mesh::CreateCube();
         if (m_manager && m_defaultMesh)

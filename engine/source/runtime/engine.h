@@ -11,7 +11,7 @@
 #include "editor/editor_ui.h"
 #include "function/scene/scene_manager.h"
 #include "function/scene/scene.h"
-#include "function/asset/resource_system.h"
+#include "function/asset/runtime_resource_system.h"
 
 
 namespace Hybrid{
@@ -38,7 +38,7 @@ namespace Hybrid{
 
         InputLayer* m_InputLayer = nullptr;
         EditorUI* m_EditorUI = nullptr;
-        std::shared_ptr<ResourceSystem> m_ResourceSystem;
+        std::shared_ptr<RuntimeResourceSystem> m_ResourceSystem;
         RenderSystem m_RenderSystem;
         SceneManager m_SceneManager;
 
