@@ -14,7 +14,10 @@
 #include "runtime/function/asset/material.h"
 #include "runtime/function/asset/mesh.h"
 #include "runtime/function/input/input_state.h"
+#include "runtime/function/render/editor_render_ext.h"
 #include "runtime/function/render/editor_camera.h"
+#include "runtime/function/render/frame_context.h"
+#include "runtime/function/render/render_flags.h"
 #include "runtime/function/render/texture.h"
 
 namespace Hybrid
@@ -27,7 +30,7 @@ namespace Hybrid
     class Shader;
     class Scene;
 
-    // Owns runtime render resources and submits per-frame rendering.
+    // Owns runtime render resources and executes render passes from FrameContext/Flags.
     class RenderSystem
     {
     public:
@@ -42,14 +45,10 @@ namespace Hybrid
         void onWindowResize(uint32_t width, uint32_t height);
         uint32_t readEntityID(int x, int y) const;
 
-        // Per-frame render entry.
-        void renderFrame(const glm::vec2 &viewportSize,
-                         void *glfwWindowHandle,
-                         float dt,
-                         bool viewportActive,
-                         const InputState &input,
-                         bool useGameCamera,
-                         uint32_t selectedEntityID);
+        // Per-frame render entry driven by context + feature flags.
+        void renderFrame(const FrameContext& frame_context,
+                         RenderFlags flags,
+                         const EditorRenderExt* editor_ext = nullptr);
         const glm::mat4& getLastView() const { return m_LastView; }
         const glm::mat4& getLastProj() const { return m_LastProj; }
 
@@ -126,13 +125,21 @@ namespace Hybrid
             std::vector<DrawItem> items;
         };
 
-        RenderPacket buildRenderPacket(const glm::vec2 &viewportSize,
-                                       bool useGameCamera,
-                                       float dt,
-                                       bool viewportActive,
-                                       const InputState &input,
-                                       uint32_t selectedEntityID);
+        // Extract ECS data + camera/light state into a draw packet.
+        RenderPacket buildRenderPacket(const FrameContext& frame_context,
+                                       RenderFlags flags,
+                                       const EditorRenderExt* editor_ext);
+        // Dispatch pass execution by RenderFlags.
+        void executePasses(const RenderPacket& packet, RenderFlags flags, void* glfwWindowHandle);
+        // Execute the main forward pass and resolve color/id targets.
         void executeForwardPass(const RenderPacket &packet, void *glfwWindowHandle);
+        void executePickingPass(const RenderPacket& packet, void* glfwWindowHandle);
+        void executeSelectionOutlinePass(const RenderPacket& packet, void* glfwWindowHandle);
+        void executeGizmoPass(const RenderPacket& packet, void* glfwWindowHandle);
+        void executeGridPass(const RenderPacket& packet, void* glfwWindowHandle);
+        void executeShadowPass(const RenderPacket& packet, void* glfwWindowHandle);
+        void executePostProcessPass(const RenderPacket& packet, void* glfwWindowHandle);
+        void executeDebugNormalsPass(const RenderPacket& packet, void* glfwWindowHandle);
 
         MeshGPU *getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh);
         MaterialGPU *getOrCreateMaterialGPU(AssetID id, const std::shared_ptr<Material> &mat);
@@ -140,7 +147,7 @@ namespace Hybrid
         
 
     private:
-        std::shared_ptr<Scene> m_Scene;
+        std::shared_ptr<Scene> m_Scene; // Fallback scene source when frame context has no scene.
 
         std::shared_ptr<Framebuffer> m_SceneFB;
         std::shared_ptr<VertexArray> m_CubeVAO;
@@ -159,7 +166,7 @@ namespace Hybrid
         TexturePtr m_DefaultAOTex;
         TexturePtr m_DefaultEmissiveTex;
 
-        bool m_Initialized = false;
+        bool m_Initialized = false; // Render backend init state.
 
         glm::mat4 m_LastView = glm::mat4(1.0f);
         glm::mat4 m_LastProj = glm::mat4(1.0f);

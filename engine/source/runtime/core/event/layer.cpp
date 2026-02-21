@@ -4,6 +4,11 @@
 
 namespace Hybrid
 {
+    LayerStack::~LayerStack()
+    {
+        clear();
+    }
+
     void LayerStack::pushLayer(Layer* layer)
     {
         m_Layers.emplace(m_Layers.begin() + static_cast<std::ptrdiff_t>(m_LayerInsertIndex), layer);
@@ -20,6 +25,11 @@ namespace Hybrid
         auto it = std::find(m_Layers.begin(), m_Layers.begin() + static_cast<std::ptrdiff_t>(m_LayerInsertIndex), layer);
         if (it != m_Layers.begin() + static_cast<std::ptrdiff_t>(m_LayerInsertIndex))
         {
+            if (*it)
+            {
+                (*it)->onDetach();
+                delete *it;
+            }
             m_Layers.erase(it);
             --m_LayerInsertIndex;
         }
@@ -30,7 +40,26 @@ namespace Hybrid
         auto it = std::find(m_Layers.begin() + static_cast<std::ptrdiff_t>(m_LayerInsertIndex), m_Layers.end(), overlay);
         if (it != m_Layers.end())
         {
+            if (*it)
+            {
+                (*it)->onDetach();
+                delete *it;
+            }
             m_Layers.erase(it);
         }
+    }
+
+    void LayerStack::clear()
+    {
+        for (auto it = m_Layers.rbegin(); it != m_Layers.rend(); ++it)
+        {
+            if (*it)
+            {
+                (*it)->onDetach();
+                delete *it;
+            }
+        }
+        m_Layers.clear();
+        m_LayerInsertIndex = 0;
     }
 } // namespace Hybrid

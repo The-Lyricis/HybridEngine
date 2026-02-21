@@ -1,47 +1,68 @@
 #pragma once
+
+#include <cstdint>
 #include <memory>
 
-#include "runtime/function/window/window_system.h"
-#include "runtime/core/event/layer.h"
 #include "runtime/core/event/application_event.h"
 #include "runtime/core/event/input_event.h"
+#include "runtime/core/event/layer.h"
+#include "runtime/function/asset/runtime_resource_system.h"
 #include "runtime/function/input/input_layer.h"
-#include "runtime/function/render/render_system.h"
+#include "runtime/function/render/editor_render_ext.h"
+#include "runtime/function/render/frame_context.h"
 #include "runtime/function/render/graphics_context.h"
-#include "editor/editor_ui.h"
-#include "function/scene/scene_manager.h"
-#include "function/scene/scene.h"
-#include "function/asset/runtime_resource_system.h"
+#include "runtime/function/render/render_flags.h"
+#include "runtime/function/render/render_system.h"
+#include "runtime/function/scene/scene.h"
+#include "runtime/function/scene/scene_manager.h"
+#include "runtime/function/window/window_system.h"
 
-
-namespace Hybrid{
-
-    class HybridEngine {
+namespace Hybrid
+{
+    // Runtime application host. Editor extends behavior via layers/services.
+    class HybridEngine
+    {
     public:
-        void initialize();
-        void run();
-        void shutdown();
+        void initialize(); // Create window, graphics context, scene and runtime systems.
+        void run();        // Main loop: update -> render -> UI -> present.
+        void shutdown();   // Tear down layers and core systems.
 
-        void onEvent(Event& e);
+        void onEvent(Event& e);          // Dispatch platform input/window events.
+        void pushLayer(Layer* layer);    // Insert gameplay/editor layer.
+        void pushOverlay(Layer* layer);  // Insert overlay layer (e.g. ImGui).
+
+        WindowSystem& getWindowSystem() const { return *m_Window; }
+        RenderSystem& getRenderSystem() { return m_RenderSystem; }
+        SceneManager& getSceneManager() { return m_SceneManager; }
+        RuntimeResourceSystem& getResourceSystem() const { return *m_ResourceSystem; }
+        InputLayer& getInputLayer() const { return *m_InputLayer; }
+        FrameContext& getFrameContext() { return m_FrameContext; }
+        RenderFlags& getRenderFlags() { return m_RenderFlags; }
+        EditorRenderExt& getEditorRenderExt() { return m_EditorRenderExt; }
+        bool consumePickResult(uint32_t& out_entity_id); // Pop one pending picking result.
 
     private:
         float calculateDeltaTime();
 
     private:
-        bool m_Running = true;
-        bool m_Minimized = false;   //用来判断窗口是否被最小化
-        bool m_isPlayMode = false;   //编辑模式和游戏模式切换
+        bool m_Running = true;    // Main loop running state.
+        bool m_Minimized = false; // Window minimized gate.
+        bool m_isPlayMode = false;
 
-        std::shared_ptr<WindowSystem> m_Window;
-        std::unique_ptr<GraphicsContext> m_GraphicsContext;
-        LayerStack m_LayerStack;
+        std::shared_ptr<WindowSystem> m_Window;        // Native window wrapper.
+        std::unique_ptr<GraphicsContext> m_GraphicsContext; // Graphics backend context.
+        LayerStack m_LayerStack;                       // Layer and overlay stack.
 
-        InputLayer* m_InputLayer = nullptr;
-        EditorUI* m_EditorUI = nullptr;
-        std::shared_ptr<RuntimeResourceSystem> m_ResourceSystem;
-        RenderSystem m_RenderSystem;
-        SceneManager m_SceneManager;
+        InputLayer* m_InputLayer = nullptr;                    // Input aggregation layer.
+        std::shared_ptr<RuntimeResourceSystem> m_ResourceSystem; // Runtime asset stack.
+        RenderSystem m_RenderSystem;                           // Rendering front-end.
+        SceneManager m_SceneManager;                           // Active scene manager.
+        FrameContext m_FrameContext{};                         // Per-frame runtime render payload.
+        RenderFlags m_RenderFlags = RenderFlags::Forward;      // Enabled render passes this frame.
+        EditorRenderExt m_EditorRenderExt{};                   // Optional editor-side render extension.
+        bool m_HasPendingPickResult = false;                   // Whether a pick readback is ready.
+        uint32_t m_LastPickResult = 0;                         // Last entity id read from ID buffer.
 
-        float m_LastTime = 0.0f;    //保存上一帧时间
+        float m_LastTime = 0.0f; // Previous frame timestamp.
     };
-}
+} // namespace Hybrid

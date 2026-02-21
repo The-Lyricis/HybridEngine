@@ -1,0 +1,30 @@
+#pragma once
+
+#include <cstdint>
+#include <functional>
+
+namespace Hybrid
+{
+    class WindowSystem;
+    class RenderSystem;
+    class SceneManager;
+    class RuntimeResourceSystem;
+    class InputLayer;
+    struct FrameContext;
+    enum class RenderFlags : uint32_t;
+    struct EditorRenderExt;
+
+    // Service locator-style bundle injected into editor layers.
+    struct EngineServices
+    {
+        WindowSystem* window = nullptr;                  // Native window and platform IO.
+        RenderSystem* render = nullptr;                  // Render system API.
+        SceneManager* scene = nullptr;                   // Scene lifecycle/selection source.
+        RuntimeResourceSystem* resources = nullptr;      // Runtime asset services.
+        InputLayer* input = nullptr;                     // Per-frame input state.
+        FrameContext* frame_context = nullptr;           // Shared frame payload for renderer.
+        RenderFlags* render_flags = nullptr;             // Per-frame pass mask.
+        EditorRenderExt* editor_ext = nullptr;           // Editor-only render extension payload.
+        std::function<bool(uint32_t&)> consume_pick_result; // Callback to read pick result from engine.
+    };
+} // namespace Hybrid

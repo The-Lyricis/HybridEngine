@@ -521,42 +521,56 @@ void main() {
     }
 
     
-    RenderSystem::RenderPacket RenderSystem::buildRenderPacket(const glm::vec2 &viewportSize,
-                                                               bool useGameCamera,
-                                                               float dt,
-                                                               bool viewportActive,
-                                                               const InputState &input,
-                                                               uint32_t selectedEntityID)
+    RenderSystem::RenderPacket RenderSystem::buildRenderPacket(const FrameContext& frame_context,
+                                                               RenderFlags flags,
+                                                               const EditorRenderExt* editor_ext)
     {
         RenderPacket pkt;
 
-        // A) camera input/update (EditorCamera)
-        const bool cameraInputActive = (!useGameCamera) && viewportActive;
+        const glm::vec2 viewport_size = frame_context.viewport_size;
+        const InputState* input = frame_context.input;
+        std::shared_ptr<Scene> scene = frame_context.scene ? frame_context.scene : m_Scene;
 
-        const float mdx = cameraInputActive ? input.getMouseDeltaX() : 0.0f;
-        const float mdy = cameraInputActive ? input.getMouseDeltaY() : 0.0f;
-        const float scrollY = cameraInputActive ? input.getScrollDeltaY() : 0.0f;
-
-        const bool lmbDown = cameraInputActive && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
-        const bool mmbDown = cameraInputActive && input.isMouseDown(GLFW_MOUSE_BUTTON_MIDDLE);
-        const bool rmbDown = cameraInputActive && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
-
-        const bool keyW = cameraInputActive && input.isKeyDown(GLFW_KEY_W);
-        const bool keyA = cameraInputActive && input.isKeyDown(GLFW_KEY_A);
-        const bool keyS = cameraInputActive && input.isKeyDown(GLFW_KEY_S);
-        const bool keyD = cameraInputActive && input.isKeyDown(GLFW_KEY_D);
-        const bool keyQ = cameraInputActive && input.isKeyDown(GLFW_KEY_Q);
-        const bool keyE = cameraInputActive && input.isKeyDown(GLFW_KEY_E);
-        const bool keyShift = cameraInputActive &&
-            (input.isKeyDown(GLFW_KEY_LEFT_SHIFT) || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT));
-        const bool keyCtrl = cameraInputActive &&
-            (input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || input.isKeyDown(GLFW_KEY_RIGHT_CONTROL));
-        const bool keyAlt = cameraInputActive &&
-            (input.isKeyDown(GLFW_KEY_LEFT_ALT) || input.isKeyDown(GLFW_KEY_RIGHT_ALT));
-
-        if (!useGameCamera)
+        bool viewport_active = true;
+        bool use_game_camera = true;
+        uint32_t selected_entity_id = 0;
+        if (editor_ext)
         {
-            m_Camera.update(dt, cameraInputActive, mdx, mdy, scrollY,
+            viewport_active = editor_ext->viewport_active;
+            use_game_camera = editor_ext->use_game_camera;
+            if (HasFlag(flags, RenderFlags::SelectionOutline))
+            {
+                selected_entity_id = editor_ext->selected_entity_id;
+            }
+        }
+
+        // A) camera input/update (EditorCamera)
+        const bool cameraInputActive = (!use_game_camera) && viewport_active && (input != nullptr);
+
+        const float mdx = cameraInputActive ? input->getMouseDeltaX() : 0.0f;
+        const float mdy = cameraInputActive ? input->getMouseDeltaY() : 0.0f;
+        const float scrollY = cameraInputActive ? input->getScrollDeltaY() : 0.0f;
+
+        const bool lmbDown = cameraInputActive && input->isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
+        const bool mmbDown = cameraInputActive && input->isMouseDown(GLFW_MOUSE_BUTTON_MIDDLE);
+        const bool rmbDown = cameraInputActive && input->isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
+
+        const bool keyW = cameraInputActive && input->isKeyDown(GLFW_KEY_W);
+        const bool keyA = cameraInputActive && input->isKeyDown(GLFW_KEY_A);
+        const bool keyS = cameraInputActive && input->isKeyDown(GLFW_KEY_S);
+        const bool keyD = cameraInputActive && input->isKeyDown(GLFW_KEY_D);
+        const bool keyQ = cameraInputActive && input->isKeyDown(GLFW_KEY_Q);
+        const bool keyE = cameraInputActive && input->isKeyDown(GLFW_KEY_E);
+        const bool keyShift = cameraInputActive &&
+            (input->isKeyDown(GLFW_KEY_LEFT_SHIFT) || input->isKeyDown(GLFW_KEY_RIGHT_SHIFT));
+        const bool keyCtrl = cameraInputActive &&
+            (input->isKeyDown(GLFW_KEY_LEFT_CONTROL) || input->isKeyDown(GLFW_KEY_RIGHT_CONTROL));
+        const bool keyAlt = cameraInputActive &&
+            (input->isKeyDown(GLFW_KEY_LEFT_ALT) || input->isKeyDown(GLFW_KEY_RIGHT_ALT));
+
+        if (!use_game_camera)
+        {
+            m_Camera.update(frame_context.dt, cameraInputActive, mdx, mdy, scrollY,
                 lmbDown, mmbDown, rmbDown,
                 keyW, keyA, keyS, keyD, keyQ, keyE,
                 keyShift, keyCtrl, keyAlt);
@@ -566,11 +580,11 @@ void main() {
         glm::mat4 viewM(1.0f), projM(1.0f);
         glm::vec3 cameraPos = m_Camera.getPosition();
 
-        const float aspect = (viewportSize.y > 0.0f) ? (viewportSize.x / viewportSize.y) : 1.0f;
+        const float aspect = (viewport_size.y > 0.0f) ? (viewport_size.x / viewport_size.y) : 1.0f;
 
-        if (useGameCamera && m_Scene)
+        if (use_game_camera && scene)
         {
-            if (!getSceneCameraMatrices(*m_Scene, aspect, viewM, projM, cameraPos))
+            if (!getSceneCameraMatrices(*scene, aspect, viewM, projM, cameraPos))
             {
                 viewM = m_Camera.getView();
                 projM = m_Camera.getProjection();
@@ -587,7 +601,7 @@ void main() {
         // 写入 packet
         pkt.frame.viewProj = projM * viewM;
         pkt.frame.cameraPos = cameraPos;
-        pkt.frame.time = dt;
+        pkt.frame.time = frame_context.dt;
 
         // 缓存给 ImGuizmo：必须是“分离的 view/proj”
         m_LastView = viewM;
@@ -596,9 +610,9 @@ void main() {
         // C) collect lights
         pkt.lights.dir.intensity = 0.0f;
         pkt.lights.points.reserve(kMaxPointLights);
-        if (m_Scene)
+        if (scene)
         {
-            auto &reg = m_Scene->getRegistry();
+            auto &reg = scene->getRegistry();
 
             auto dirView = reg.view<Hybrid::TransformComponent, Hybrid::DirectionalLightComponent>();
             for (auto e : dirView)
@@ -629,9 +643,9 @@ void main() {
         }
 
         // D) collect draw items (pure ECS->packet)
-        if (m_Scene)
+        if (scene)
         {
-            auto &registry = m_Scene->getRegistry();
+            auto &registry = scene->getRegistry();
             auto renderView = registry.view<Hybrid::TransformComponent, Hybrid::MeshRendererComponent>();
 
             pkt.items.reserve(renderView.size_hint());
@@ -647,14 +661,40 @@ void main() {
                 item.model = buildModel(tr);
                 item.tint = mr.Tint;
                 item.entityID = (uint32_t)entt::to_integral(e);
-                item.selected = (selectedEntityID != 0 && item.entityID == selectedEntityID);
+                item.selected = (selected_entity_id != 0 && item.entityID == selected_entity_id);
                 pkt.items.push_back(item);
             }
         }
 
         return pkt;
     }
-    
+
+    void RenderSystem::executePasses(const RenderPacket& packet, RenderFlags flags, void* glfwWindowHandle)
+    {
+        const bool needs_forward = HasFlag(flags, RenderFlags::Forward) ||
+                                   HasFlag(flags, RenderFlags::PickingID) ||
+                                   HasFlag(flags, RenderFlags::SelectionOutline);
+        if (needs_forward)
+        {
+            executeForwardPass(packet, glfwWindowHandle);
+        }
+
+        if (HasFlag(flags, RenderFlags::PickingID))
+            executePickingPass(packet, glfwWindowHandle);
+        if (HasFlag(flags, RenderFlags::SelectionOutline))
+            executeSelectionOutlinePass(packet, glfwWindowHandle);
+        if (HasFlag(flags, RenderFlags::Gizmos))
+            executeGizmoPass(packet, glfwWindowHandle);
+        if (HasFlag(flags, RenderFlags::Grid))
+            executeGridPass(packet, glfwWindowHandle);
+        if (HasFlag(flags, RenderFlags::Shadows))
+            executeShadowPass(packet, glfwWindowHandle);
+        if (HasFlag(flags, RenderFlags::PostProcess))
+            executePostProcessPass(packet, glfwWindowHandle);
+        if (HasFlag(flags, RenderFlags::DebugNormals))
+            executeDebugNormalsPass(packet, glfwWindowHandle);
+    }
+
     void RenderSystem::executeForwardPass(const RenderPacket &packet, void *glfwWindowHandle)
     {
         const bool assetPathReady = (m_AssetManager != nullptr) && (m_MeshShader != nullptr);
@@ -786,24 +826,76 @@ void main() {
         RenderCommand::clear();
     }
 
-    void RenderSystem::renderFrame(const glm::vec2 &viewportSize,
-                                   void *glfwWindowHandle,
-                                   float dt,
-                                   bool viewportActive,
-                                   const InputState &input,
-                                   bool useGameCamera,
-                                   uint32_t selectedEntityID)
+    void RenderSystem::executePickingPass(const RenderPacket& packet, void* glfwWindowHandle)
     {
-        if (!m_Initialized)
-            initialize(glfwWindowHandle);
+        // PickingID currently piggybacks on forward pass COLOR1 output.
+        (void)packet;
+        (void)glfwWindowHandle;
+    }
 
-        if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
+    void RenderSystem::executeSelectionOutlinePass(const RenderPacket& packet, void* glfwWindowHandle)
+    {
+        // TODO: selection outline pass.
+        (void)packet;
+        (void)glfwWindowHandle;
+    }
+
+    void RenderSystem::executeGizmoPass(const RenderPacket& packet, void* glfwWindowHandle)
+    {
+        // TODO: editor gizmo render pass.
+        (void)packet;
+        (void)glfwWindowHandle;
+    }
+
+    void RenderSystem::executeGridPass(const RenderPacket& packet, void* glfwWindowHandle)
+    {
+        // TODO: editor grid render pass.
+        (void)packet;
+        (void)glfwWindowHandle;
+    }
+
+    void RenderSystem::executeShadowPass(const RenderPacket& packet, void* glfwWindowHandle)
+    {
+        // TODO: shadow map pass.
+        (void)packet;
+        (void)glfwWindowHandle;
+    }
+
+    void RenderSystem::executePostProcessPass(const RenderPacket& packet, void* glfwWindowHandle)
+    {
+        // TODO: post-process pass chain.
+        (void)packet;
+        (void)glfwWindowHandle;
+    }
+
+    void RenderSystem::executeDebugNormalsPass(const RenderPacket& packet, void* glfwWindowHandle)
+    {
+        // TODO: debug normal visualization pass.
+        (void)packet;
+        (void)glfwWindowHandle;
+    }
+
+    void RenderSystem::renderFrame(const FrameContext& frame_context,
+                                   RenderFlags flags,
+                                   const EditorRenderExt* editor_ext)
+    {
+        void* window_handle = frame_context.window_handle;
+        if (!window_handle)
             return;
 
-        ensureFramebufferSize((uint32_t)viewportSize.x, (uint32_t)viewportSize.y);
+        if (!m_Initialized)
+            initialize(window_handle);
 
-        auto packet = buildRenderPacket(viewportSize, useGameCamera, dt, viewportActive, input, selectedEntityID);
-        executeForwardPass(packet, glfwWindowHandle);
+        if (frame_context.viewport_size.x <= 0.0f || frame_context.viewport_size.y <= 0.0f)
+            return;
+
+        ensureFramebufferSize((uint32_t)frame_context.viewport_size.x, (uint32_t)frame_context.viewport_size.y);
+
+        if (flags == RenderFlags::None)
+            return;
+
+        auto packet = buildRenderPacket(frame_context, flags, editor_ext);
+        executePasses(packet, flags, window_handle);
     }
     uint32_t RenderSystem::readEntityID(int x, int y) const
     {
