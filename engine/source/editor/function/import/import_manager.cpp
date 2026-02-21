@@ -6,8 +6,10 @@
 
 namespace Hybrid
 {
-    ImportManager::ImportManager(std::shared_ptr<AssetRegistry> registry, SaveMetaFn save_meta_fn)
-        : m_registry(std::move(registry)), m_save_meta_fn(std::move(save_meta_fn))
+    ImportManager::ImportManager(std::shared_ptr<AssetRegistry> registry,
+                                 std::shared_ptr<IVirtualFileSystem> vfs,
+                                 SaveMetaFn save_meta_fn)
+        : m_registry(std::move(registry)), m_vfs(std::move(vfs)), m_save_meta_fn(std::move(save_meta_fn))
     {
     }
 
@@ -31,6 +33,11 @@ namespace Hybrid
             result.message = "ImportManager: source_path is empty";
             return result;
         }
+        if (!m_vfs)
+        {
+            result.message = "ImportManager: vfs is null";
+            return result;
+        }
 
         const std::string ext = extractExtension(request.source_path);
         const auto importer = findImporter(request.preferred_type, ext);
@@ -40,7 +47,7 @@ namespace Hybrid
             return result;
         }
 
-        result = importer->importAsset(request, *m_registry);
+        result = importer->importAsset(request, *m_registry, *m_vfs);
         if (!result.success)
             return result;
 

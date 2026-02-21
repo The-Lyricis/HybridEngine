@@ -13,7 +13,9 @@ namespace Hybrid
     public:
         using SaveMetaFn = std::function<bool(const AssetMetadata&)>;
 
-        explicit ImportManager(std::shared_ptr<AssetRegistry> registry, SaveMetaFn save_meta_fn = {});
+        explicit ImportManager(std::shared_ptr<AssetRegistry> registry,
+                               std::shared_ptr<IVirtualFileSystem> vfs,
+                               SaveMetaFn save_meta_fn = {});
 
         void registerImporter(const std::shared_ptr<IAssetImporter>& importer);
         ImportResult importAsset(const ImportRequest& request);
@@ -24,6 +26,7 @@ namespace Hybrid
 
     private:
         std::shared_ptr<AssetRegistry> m_registry;
+        std::shared_ptr<IVirtualFileSystem> m_vfs;
         SaveMetaFn m_save_meta_fn;
         std::vector<std::shared_ptr<IAssetImporter>> m_importers;
     };

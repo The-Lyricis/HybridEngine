@@ -32,6 +32,20 @@ namespace Hybrid
         return {};
     }
 
+    static std::filesystem::path CollectCacheRoot(const std::filesystem::path& asset_root)
+    {
+        if (asset_root.empty())
+            return {};
+
+        const auto candidate = asset_root.parent_path() / "cache";
+        std::error_code ec;
+        std::filesystem::create_directories(candidate, ec);
+        if (ec)
+            return {};
+
+        return std::filesystem::weakly_canonical(candidate, ec);
+    }
+
     void RuntimeResourceSystem::initialize()
     {
         m_vfs = std::make_shared<NativeFileSystem>();
@@ -47,6 +61,10 @@ namespace Hybrid
         else
         {
             m_vfs->mount("asset", assetRoot, 0);
+            if (const auto cacheRoot = CollectCacheRoot(assetRoot); !cacheRoot.empty())
+            {
+                m_vfs->mount("cache", cacheRoot, 0);
+            }
             m_registry->setRoot(assetRoot);
             HBD_CORE_INFO("RuntimeResourceSystem using asset root: {}", assetRoot.string());
 

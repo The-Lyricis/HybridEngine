@@ -24,8 +24,10 @@ namespace Hybrid
 
         m_runtime = runtime_system;
         m_metaStore = std::make_unique<AssetMetaStore>(registry);
+        auto vfs = m_runtime->getVFS();
         m_importManager = std::make_shared<ImportManager>(
             registry,
+            vfs,
             [this](const AssetMetadata& meta) { return saveAssetMeta(meta); });
 
         registerDefaultImporters();
@@ -42,26 +44,6 @@ namespace Hybrid
             return out;
         }
         return m_importManager->importAsset(request);
-    }
-
-    AssetID EditorResourceSystem::importTexture2D(const std::string& source_path,
-                                                  const std::string& cooked_path,
-                                                  const std::string& hash)
-    {
-        ImportRequest request{};
-        request.source_path = source_path;
-        request.cooked_path = cooked_path;
-        request.hash = hash;
-        request.preferred_type = AssetType::Texture2D;
-
-        ImportResult result = importAsset(request);
-        if (!result.success)
-        {
-            HBD_CORE_ERROR("Editor import texture failed: {} ({})", source_path, result.message);
-            return {};
-        }
-
-        return result.primary_id;
     }
 
     bool EditorResourceSystem::saveAssetMeta(const AssetMetadata& meta)

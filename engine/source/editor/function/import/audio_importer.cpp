@@ -28,8 +28,11 @@ namespace Hybrid
         return isAudioExt(ext);
     }
 
-    ImportResult AudioImporter::importAsset(const ImportRequest& request, AssetRegistry& registry)
+    ImportResult AudioImporter::importAsset(const ImportRequest& request,
+                                            AssetRegistry& registry,
+                                            IVirtualFileSystem& vfs)
     {
+        (void)vfs;
         ImportResult out{};
 
         const auto pos = request.source_path.find(':');

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <string>
 
 #include "runtime/function/asset/runtime_resource_system.h"
 #include "runtime/function/asset/asset_meta_store.h"
@@ -15,9 +14,6 @@ namespace Hybrid
         bool initialize(const std::shared_ptr<RuntimeResourceSystem>& runtime_system);
 
         ImportResult importAsset(const ImportRequest& request);
-        AssetID importTexture2D(const std::string& source_path,
-                                const std::string& cooked_path = {},
-                                const std::string& hash = {});
         bool saveAssetMeta(const AssetMetadata& meta);
 
         std::shared_ptr<ImportManager> getImportManager() const { return m_importManager; }

@@ -28,8 +28,11 @@ namespace Hybrid
         return isMeshExt(ext);
     }
 
-    ImportResult MeshImporter::importAsset(const ImportRequest& request, AssetRegistry& registry)
+    ImportResult MeshImporter::importAsset(const ImportRequest& request,
+                                           AssetRegistry& registry,
+                                           IVirtualFileSystem& vfs)
     {
+        (void)vfs;
         ImportResult out{};
 
         const auto pos = request.source_path.find(':');

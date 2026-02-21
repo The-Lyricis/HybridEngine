@@ -4,6 +4,7 @@
 
 #include "import_types.h"
 #include "runtime/function/asset/asset_registry.h"
+#include "runtime/core/base/virtual_file_system.h"
 
 namespace Hybrid
 {
@@ -19,7 +20,9 @@ namespace Hybrid
         virtual bool supportsExtension(std::string_view ext) const = 0;
 
         // Build metadata (and later cooked outputs) for requested asset.
-        virtual ImportResult importAsset(const ImportRequest& request, AssetRegistry& registry) = 0;
+        virtual ImportResult importAsset(const ImportRequest& request,
+                                         AssetRegistry& registry,
+                                         IVirtualFileSystem& vfs) = 0;
     };
 } // namespace Hybrid
 
