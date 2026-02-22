@@ -9,7 +9,7 @@ namespace Hybrid
         if (!m_open) return;
 
         ImGui::Begin(getName(), &m_open);
-        ImGui::Text("Project (step1 skeleton)");
+        ImGui::Text("File Explorer and project settings..");
         ImGui::End();
     }
 }
