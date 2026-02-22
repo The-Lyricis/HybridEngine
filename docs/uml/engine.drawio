@@ -1,11 +1,29 @@
 <mxfile host="65bd71144e">
     <diagram id="1RbGJGafxdKMRQ3UTpC0" name="Page-1">
-        <mxGraphModel dx="237" dy="325" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0" adaptiveColors="auto">
+        <mxGraphModel dx="704" dy="542" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0" adaptiveColors="auto">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="3" value="&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;Hybrid Engine&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=2;fillWeight=4;hachureGap=8;hachureAngle=45;fillColor=#4D9900;sketch=1;" vertex="1" parent="1">
-                    <mxGeometry x="230" y="320" width="120" height="50" as="geometry"/>
+                <mxCell id="8" value="&lt;b&gt;Edior Application&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;gradientColor=none;fillColor=#FFB366;" vertex="1" parent="1">
+                    <mxGeometry x="360" y="360" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="13" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;shape=flexArrow;" edge="1" parent="1" source="9" target="10">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="9" value="&lt;b&gt;Engine Host&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;gradientColor=none;fillColor=#3399FF;" vertex="1" parent="1">
+                    <mxGeometry x="360" y="440" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="14" style="edgeStyle=none;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;shape=flexArrow;" edge="1" parent="1" source="10" target="11">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="10" value="&lt;b&gt;Runtime Systems&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;gradientColor=none;fillColor=#4D9900;" vertex="1" parent="1">
+                    <mxGeometry x="360" y="520" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="11" value="&lt;b&gt;Graphics Backend&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;gradientColor=none;fillColor=#808080;" vertex="1" parent="1">
+                    <mxGeometry x="360" y="600" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="12" style="edgeStyle=none;html=1;entryX=0.499;entryY=0.081;entryDx=0;entryDy=0;entryPerimeter=0;rounded=1;curved=0;shape=flexArrow;" edge="1" parent="1" source="8" target="9">
+                    <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>
