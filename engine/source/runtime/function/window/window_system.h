@@ -16,7 +16,7 @@ namespace Hybrid {
         bool shouldClose() { return glfwWindowShouldClose(m_window); }
         void cleanup();
 
-        GLFWwindow* getGLFWWindow() { return m_window; }
+        GLFWwindow* getNativeWindow() { return m_window; }
         std::shared_ptr<SurfaceIO> getSurfaceIO() { return m_surface_io; }
 
     private:

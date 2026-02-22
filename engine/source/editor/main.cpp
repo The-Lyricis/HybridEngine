@@ -22,7 +22,7 @@ int main(int argc, char** argv)
     services.editor_ext = &engine.getEditorRenderExt();
     services.consume_pick_result = [&engine](uint32_t& id) { return engine.consumePickResult(id); };
 
-    engine.pushOverlay(new Hybrid::ImGuiLayer(engine.getWindowSystem().getGLFWWindow()));
+    engine.pushOverlay(new Hybrid::ImGuiLayer(engine.getWindowSystem().getNativeWindow()));
     engine.pushLayer(new Hybrid::EditorLayer(std::move(services)));
 
     engine.run();

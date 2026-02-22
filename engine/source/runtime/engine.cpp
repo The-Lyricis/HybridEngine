@@ -14,7 +14,7 @@ namespace Hybrid
         m_Window = std::make_shared<WindowSystem>();
         m_Window->initialize(1280, 720, "Hybrid Engine");
 
-        GLFWwindow* window = m_Window->getGLFWWindow();
+        GLFWwindow* window = m_Window->getNativeWindow();
         if (!window)
         {
             HBD_CORE_ERROR("GLFW window is null.");
@@ -46,7 +46,7 @@ namespace Hybrid
         m_RenderSystem.initialize(window);
 
         auto scene = std::make_shared<Scene>();
-        m_SceneManager.SetActiveScene(scene);
+        m_SceneManager.setActiveScene(scene);
         m_RenderSystem.setScene(scene);
         m_FrameContext.scene = scene;
         m_FrameContext.window_handle = window;
@@ -119,7 +119,7 @@ namespace Hybrid
                 layer->onUpdate(dt);
             }
 
-            if (auto scene = m_SceneManager.GetActiveScene())
+            if (auto scene = m_SceneManager.getActiveScene())
             {
                 scene->onUpdate(dt);
             }
@@ -128,13 +128,13 @@ namespace Hybrid
 
             m_FrameContext.dt = dt;
             m_FrameContext.input = &m_InputLayer->getState();
-            m_FrameContext.scene = m_SceneManager.GetActiveScene();
+            m_FrameContext.scene = m_SceneManager.getActiveScene();
 
             glm::vec2 viewport_size = m_FrameContext.viewport_size;
             if (viewport_size.x <= 0.0f || viewport_size.y <= 0.0f)
             {
                 int fbw = 0, fbh = 0;
-                glfwGetFramebufferSize(m_Window->getGLFWWindow(), &fbw, &fbh);
+                glfwGetFramebufferSize(m_Window->getNativeWindow(), &fbw, &fbh);
                 viewport_size.x = static_cast<float>(std::max(1, fbw));
                 viewport_size.y = static_cast<float>(std::max(1, fbh));
                 m_FrameContext.viewport_size = viewport_size;

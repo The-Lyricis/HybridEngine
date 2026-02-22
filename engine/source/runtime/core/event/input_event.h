@@ -9,7 +9,7 @@ namespace Hybrid
     class KeyEvent : public Event
     {
     public:
-        int GetKeyCode() const { return m_KeyCode; }
+        int getKeyCode() const { return m_KeyCode; }
 
         EVENT_CLASS_CATEGORY(EventCategoryKeyboard | EventCategoryInput)
 
@@ -25,7 +25,7 @@ namespace Hybrid
         KeyPressedEvent(int keycode, bool isRepeat = false)
             : KeyEvent(keycode), m_IsRepeat(isRepeat) {}
 
-        bool IsRepeat() const { return m_IsRepeat; }
+        bool isRepeat() const { return m_IsRepeat; }
 
         std::string toString() const override
         {
@@ -119,7 +119,7 @@ namespace Hybrid
     class MouseButtonEvent : public Event
     {
     public:
-        int GetMouseButton() const { return m_Button; }
+        int getMouseButton() const { return m_Button; }
 
         EVENT_CLASS_CATEGORY(EventCategoryMouse | EventCategoryInput | EventCategoryMouseButton)
 

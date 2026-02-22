@@ -19,20 +19,20 @@ namespace Hybrid
         {
             EventDispatcher dispatcher(e);
             dispatcher.dispatch<KeyPressedEvent>([this](KeyPressedEvent& ev) {
-                if (!ev.IsRepeat())
-                    m_state.onKey(ev.GetKeyCode(), true);
+                if (!ev.isRepeat())
+                    m_state.onKey(ev.getKeyCode(), true);
                 return false;
                 });
             dispatcher.dispatch<KeyReleasedEvent>([this](KeyReleasedEvent& ev) {
-                m_state.onKey(ev.GetKeyCode(), false);
+                m_state.onKey(ev.getKeyCode(), false);
                 return false;
                 });
             dispatcher.dispatch<MouseButtonPressedEvent>([this](MouseButtonPressedEvent& ev) {
-                m_state.onMouseButton(ev.GetMouseButton(), true);
+                m_state.onMouseButton(ev.getMouseButton(), true);
                 return false;
                 });
             dispatcher.dispatch<MouseButtonReleasedEvent>([this](MouseButtonReleasedEvent& ev) {
-                m_state.onMouseButton(ev.GetMouseButton(), false);
+                m_state.onMouseButton(ev.getMouseButton(), false);
                 return false;
                 });
             dispatcher.dispatch<MouseMovedEvent>([this](MouseMovedEvent& ev) {
@@ -44,7 +44,7 @@ namespace Hybrid
                 return false;
                 });
             dispatcher.dispatch<KeyTypedEvent>([this](KeyTypedEvent& ev) {
-                m_state.onText(static_cast<char32_t>(ev.GetKeyCode()));
+                m_state.onText(static_cast<char32_t>(ev.getKeyCode()));
                 return false;
                 });
         }

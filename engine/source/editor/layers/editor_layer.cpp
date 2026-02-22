@@ -25,7 +25,7 @@ namespace Hybrid
             return;
         }
 
-        m_editor_ui.initialize(m_services.window->getGLFWWindow());
+        m_editor_ui.initialize(m_services.window->getNativeWindow());
         m_initialized = true;
     }
 
@@ -56,7 +56,7 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
-        auto active_scene = m_services.scene->GetActiveScene();
+        auto active_scene = m_services.scene->getActiveScene();
         m_editor_ui.setActiveScene(active_scene.get());
 
         auto& ctx = m_editor_ui.context();

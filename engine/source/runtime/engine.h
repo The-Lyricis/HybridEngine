@@ -47,7 +47,7 @@ namespace Hybrid
     private:
         bool m_Running = true;    // Main loop running state.
         bool m_Minimized = false; // Window minimized gate.
-        bool m_isPlayMode = false;
+        bool m_IsPlayMode = false;
 
         std::shared_ptr<WindowSystem> m_Window;        // Native window wrapper.
         std::unique_ptr<GraphicsContext> m_GraphicsContext; // Graphics backend context.
