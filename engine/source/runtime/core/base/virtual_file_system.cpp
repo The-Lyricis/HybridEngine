@@ -74,6 +74,45 @@ namespace Hybrid
 
         return std::nullopt;
     }
+    std::optional<std::filesystem::path> NativeFileSystem::resolveForWrite(const std::string& path) const
+    {
+        // Expected format: alias:relative
+        const auto pos = path.find(':');
+        if (pos == std::string::npos || pos + 1 >= path.size())
+            return std::nullopt;
+
+        const std::string alias = path.substr(0, pos);
+        std::string rel = path.substr(pos + 1);
+
+        if (rel.empty())
+            return std::nullopt;
+
+        // Strict mode: only alias:relative is accepted.
+        if (rel.front() == '/' || rel.front() == '\\')
+            return std::nullopt;
+
+        for (char& ch : rel)
+        {
+            if (ch == '\\')
+                ch = '/';
+        }
+
+        std::filesystem::path relPath(rel);
+        if (relPath.is_absolute())
+            return std::nullopt;
+
+        relPath = relPath.lexically_normal();
+        if (hasParentTraversal(relPath))
+            return std::nullopt;
+
+        auto it = m_mounts.find(alias);
+        if (it == m_mounts.end() || it->second.empty())
+            return std::nullopt;
+
+        // 选择最高优先级 mount（你的 mount() 已经按 priority 排序）
+        const auto& mount = it->second.front();
+        return mount.root / relPath;
+    }
 
     std::vector<char> NativeFileSystem::readAll(const std::string& path) const
     {

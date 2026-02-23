@@ -29,6 +29,7 @@ namespace Hybrid
 
         // 将逻辑路径解析为实际文件系统路径；失败返回 nullopt
         virtual std::optional<std::filesystem::path> resolve(const std::string& path) const = 0;
+        virtual std::optional<std::filesystem::path> resolveForWrite(const std::string& path) const =0;
 
         // 读取完整文件内容；失败返回空 vector
         virtual std::vector<char> readAll(const std::string& path) const = 0;
@@ -43,6 +44,8 @@ namespace Hybrid
         bool exists(const std::string& path) const override;
 
         std::optional<std::filesystem::path> resolve(const std::string& path) const override;
+
+        std::optional<std::filesystem::path> resolveForWrite(const std::string& path) const override;
 
         std::vector<char> readAll(const std::string& path) const override;
 

@@ -17,6 +17,7 @@ namespace Hybrid
         bool saveAssetMeta(const AssetMetadata& meta);
 
         std::shared_ptr<ImportManager> getImportManager() const { return m_importManager; }
+        void scanAssetsAndAutoCreateTextureMeta();
 
     private:
         void registerDefaultImporters();

@@ -16,6 +16,7 @@
 #include "runtime/function/scene/scene.h"
 #include "runtime/function/scene/scene_manager.h"
 #include "runtime/function/window/window_system.h"
+#include <editor/function/asset/editor_resource_system.h>
 
 namespace Hybrid
 {
@@ -55,6 +56,7 @@ namespace Hybrid
 
         InputLayer* m_InputLayer = nullptr;                    // Input aggregation layer.
         std::shared_ptr<RuntimeResourceSystem> m_ResourceSystem; // Runtime asset stack.
+        std::shared_ptr<EditorResourceSystem> m_EditorResourceSystem; // Editor asset stack.
         RenderSystem m_RenderSystem;                           // Rendering front-end.
         SceneManager m_SceneManager;                           // Active scene manager.
         FrameContext m_FrameContext{};                         // Per-frame runtime render payload.

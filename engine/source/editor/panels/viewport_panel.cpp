@@ -90,7 +90,7 @@ namespace Hybrid
             {
                 auto& tr = reg.get<TransformComponent>(ctx.selected);
 
-                // 【关键修复 1】在这里定义 model，确保后续 Manipulate 能用到它
+                // 在这里定义 model，确保后续 Manipulate 能用到它
                 glm::mat4 model = BuildModel(tr);
 
                 // ImGuizmo 配置
@@ -98,7 +98,6 @@ namespace Hybrid
                 ImGuizmo::SetDrawlist(); // 使用当前窗口 Drawlist
                 ImGuizmo::SetRect(canvasMin.x, canvasMin.y, canvasSize.x, canvasSize.y);
 
-                // 【关键修复 2】确保传入的是 glm::mat4 的指针
                 ImGuizmo::Manipulate(
                     glm::value_ptr(ctx.gizmo_view),
                     glm::value_ptr(ctx.gizmo_proj),

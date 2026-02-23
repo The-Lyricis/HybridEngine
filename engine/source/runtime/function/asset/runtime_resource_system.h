@@ -11,6 +11,7 @@
 #include "runtime/function/render/texture.h"
 #include "mesh.h"
 #include "material.h"
+#include <runtime/function/project/project_context.h>
 
 namespace Hybrid
 {
@@ -18,7 +19,8 @@ namespace Hybrid
     class RuntimeResourceSystem
     {
     public:
-        void initialize(); // Mount asset root, load meta index, init manager/loaders/defaults.
+        void initialize(const ProjectContext& ctx,
+            std::shared_ptr<IVirtualFileSystem> vfs); // Mount asset root, load meta index, init manager/loaders/defaults.
 
         std::shared_ptr<IVirtualFileSystem> getVFS() const { return m_vfs; }
         std::shared_ptr<AssetRegistry> getRegistry() const { return m_registry; }
@@ -40,5 +42,6 @@ namespace Hybrid
         std::shared_ptr<Texture>            m_defaultTexture; // 1x1 white fallback texture.
         std::shared_ptr<Material>           m_defaultMaterial; // Fallback material.
         std::shared_ptr<Mesh>               m_defaultMesh; // Fallback mesh.
+        ProjectContext m_project; // Project context for path resolution and info.
     };
 } // namespace Hybrid

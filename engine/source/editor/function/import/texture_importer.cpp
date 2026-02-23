@@ -102,7 +102,7 @@ namespace Hybrid
 
         const std::string cooked_path = request.cooked_path.empty() ? buildDefaultCookedPath(request.source_path)
                                                                     : request.cooked_path;
-        auto cooked_native = vfs.resolve(cooked_path);
+        auto cooked_native =vfs.resolveForWrite(cooked_path);
         if (!cooked_native)
         {
             stbi_image_free(pixels);

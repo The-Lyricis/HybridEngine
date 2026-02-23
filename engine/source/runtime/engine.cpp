@@ -6,11 +6,114 @@
 #include "runtime/core/base/macro.h"
 #include "runtime/core/log/log_system.h"
 
+#include <filesystem>
+#include <fstream>
+#include "runtime/function/project/project_loader.h"
+#include "runtime/function/project/project_context.h"
+
 namespace Hybrid
 {
     void HybridEngine::initialize()
     {
         LogSystem::initialize();
+
+        // ===== Project Bootstrap (CWD/GameProject) =====
+        namespace fs = std::filesystem;
+
+        const fs::path outputDir = fs::current_path();          // 当前工作目录（输出目录）
+        const fs::path projectRoot = outputDir / "GameProject";   // 项目根目录
+        const fs::path hyprojPath = projectRoot / "GameProject.hyproj";
+
+        const fs::path assetsDir = projectRoot / "Assets";
+        const fs::path cacheDir = projectRoot / "Cache";
+        const fs::path buildDir = projectRoot / "Build";
+        const fs::path settingsDir = projectRoot / "ProjectSettings";
+
+        std::error_code ec;
+
+        // 1) 创建必要目录
+        fs::create_directories(projectRoot, ec);
+        if (ec) {
+            HBD_CORE_ERROR("Failed to create ProjectRoot: {} ({})", projectRoot.string(), ec.message());
+            LogSystem::shutdown();
+            return;
+        }
+
+        ec.clear();
+        fs::create_directories(assetsDir, ec);
+        if (ec) {
+            HBD_CORE_ERROR("Failed to create Assets dir: {} ({})", assetsDir.string(), ec.message());
+            LogSystem::shutdown();
+            return;
+        }
+
+        ec.clear();
+        fs::create_directories(cacheDir, ec);
+        if (ec) {
+            HBD_CORE_ERROR("Failed to create Cache dir: {} ({})", cacheDir.string(), ec.message());
+            LogSystem::shutdown();
+            return;
+        }
+
+        ec.clear();
+        fs::create_directories(buildDir, ec);
+        if (ec) {
+            HBD_CORE_ERROR("Failed to create Build dir: {} ({})", buildDir.string(), ec.message());
+            LogSystem::shutdown();
+            return;
+        }
+
+        ec.clear();
+        fs::create_directories(settingsDir, ec);
+        if (ec) {
+            HBD_CORE_ERROR("Failed to create ProjectSettings dir: {} ({})", settingsDir.string(), ec.message());
+            LogSystem::shutdown();
+            return;
+        }
+
+        // 2) 生成默认 hyproj（如果不存在）
+        if (!fs::exists(hyprojPath))
+        {
+            std::ofstream ofs(hyprojPath, std::ios::out | std::ios::binary);
+            if (!ofs) {
+                HBD_CORE_ERROR("Failed to create hyproj: {}", hyprojPath.string());
+                LogSystem::shutdown();
+                return;
+            }
+
+            ofs << "# Auto-generated project file (debug)\n";
+            ofs << "name=GameProject\n";
+            ofs << "assets=Assets\n";
+            ofs << "cache=Cache\n";
+            ofs << "build=Build\n";
+            ofs << "settings=ProjectSettings\n";
+            ofs.close();
+
+            HBD_CORE_INFO("Created default hyproj: {}", fs::absolute(hyprojPath).string());
+        }
+
+        // 3) Load hyproj -> ProjectContext，并写入 ProjectService
+        Hybrid::ProjectContext pctx;
+        std::string perr;
+        if (!Hybrid::ProjectLoader::LoadFromFile(hyprojPath, pctx, perr))
+        {
+            HBD_CORE_ERROR("Project load failed: {}", perr);
+            HBD_CORE_ERROR("hyproj: {}", fs::absolute(hyprojPath).string());
+            LogSystem::shutdown();
+            return;
+        }
+
+        Hybrid::ProjectService::Set(pctx);
+
+        HBD_CORE_INFO("Project loaded: {}", fs::absolute(hyprojPath).string());
+        HBD_CORE_INFO("Project Root   : {}", pctx.root.string());
+        HBD_CORE_INFO("Assets         : {}", pctx.assets.string());
+        HBD_CORE_INFO("Cache          : {}", pctx.cache.string());
+        HBD_CORE_INFO("Build          : {}", pctx.build.string());
+        HBD_CORE_INFO("ProjectSettings: {}", pctx.settings.string());
+        // =============================================
+
+        // ===== Window / Graphics =====
         m_Window = std::make_shared<WindowSystem>();
         m_Window->initialize(1280, 720, "Hybrid Engine");
 
@@ -33,18 +136,33 @@ namespace Hybrid
         }
         m_GraphicsContext->init();
 
+        // ===== Resource System (Project-based) =====
         m_ResourceSystem = std::make_shared<RuntimeResourceSystem>();
-        m_ResourceSystem->initialize();
+        // 这里传 nullptr：RuntimeResourceSystem 内部会 fallback 创建 NativeFileSystem 并按 ctx 挂载（你已在 StepA 做过）
+        m_ResourceSystem->initialize(Hybrid::ProjectService::Get(), nullptr);
+
+        m_EditorResourceSystem = std::make_shared<EditorResourceSystem>();
+        if (!m_EditorResourceSystem->initialize(m_ResourceSystem))
+        {
+            HBD_CORE_ERROR("EditorResourceSystem initialization failed.");
+            m_Window->cleanup();
+            LogSystem::shutdown();
+            return;
+        }
+
         m_RenderSystem.setAssetManager(m_ResourceSystem->getManager());
 
+        // ===== Event / Layers =====
         auto surface_io = m_Window->getSurfaceIO();
         surface_io->registerOnEventFunc([this](Event& e) { onEvent(e); });
 
         m_InputLayer = new InputLayer();
         pushLayer(m_InputLayer);
 
+        // ===== Render =====
         m_RenderSystem.initialize(window);
 
+        // ===== Scene =====
         auto scene = std::make_shared<Scene>();
         m_SceneManager.setActiveScene(scene);
         m_RenderSystem.setScene(scene);
@@ -53,20 +171,20 @@ namespace Hybrid
 
         {
             auto cam = scene->createEntity("Game Camera");
-            cam.AddComponent<Hybrid::CameraComponent>(Hybrid::CameraComponent{true, 45.0f, 0.1f, 500.0f});
+            cam.AddComponent<Hybrid::CameraComponent>(Hybrid::CameraComponent{ true, 45.0f, 0.1f, 500.0f });
 
             auto& tr = cam.GetComponent<Hybrid::TransformComponent>();
-            tr.Position = {0.0f, 12.0f, 12.0f};
-            tr.Rotation = {glm::radians(-45.0f), 0.0f, 0.0f};
-            tr.Scale = {1.0f, 1.0f, 1.0f};
+            tr.Position = { 0.0f, 12.0f, 12.0f };
+            tr.Rotation = { glm::radians(-45.0f), 0.0f, 0.0f };
+            tr.Scale = { 1.0f, 1.0f, 1.0f };
         }
 
         auto sun = scene->createEntity("Sun");
         auto& dl = sun.AddComponent<Hybrid::DirectionalLightComponent>();
-        dl.Color = {1.0f, 1.0f, 1.0f};
+        dl.Color = { 1.0f, 1.0f, 1.0f };
         dl.Intensity = 1.0f;
         auto& sunTr = sun.GetComponent<Hybrid::TransformComponent>();
-        sunTr.Rotation = {glm::radians(-70.5f), glm::radians(-123.7f), 0.0f};
+        sunTr.Rotation = { glm::radians(-70.5f), glm::radians(-123.7f), 0.0f };
 
         {
             const int gridX = 5;
@@ -86,9 +204,9 @@ namespace Hybrid
                     mr.Primitive = 0;
 
                     auto& tr = cube.GetComponent<Hybrid::TransformComponent>();
-                    tr.Position = {startX + x * spacing, 0.0f, startZ + z * spacing};
-                    tr.Rotation = {0.0f, 0.0f, 0.0f};
-                    tr.Scale = {1.0f, 1.0f, 1.0f};
+                    tr.Position = { startX + x * spacing, 0.0f, startZ + z * spacing };
+                    tr.Rotation = { 0.0f, 0.0f, 0.0f };
+                    tr.Scale = { 1.0f, 1.0f, 1.0f };
                 }
             }
         }

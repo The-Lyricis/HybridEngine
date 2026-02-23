@@ -1,6 +1,7 @@
 #include "runtime_resource_system.h"
 
-#include <vector>
+#include <filesystem>
+#include <memory>
 
 #include "runtime/core/base/macro.h"
 #include "runtime/function/render/texture.h"
@@ -10,80 +11,93 @@
 
 namespace Hybrid
 {
-    static std::filesystem::path CollectAssetRoot()
+    void RuntimeResourceSystem::initialize(const ProjectContext& ctx,
+        std::shared_ptr<IVirtualFileSystem> vfs)
     {
-        std::vector<std::filesystem::path> roots;
+        m_project = ctx;
 
-#ifdef HYBRID_ROOT_DIR
-        roots.push_back(std::filesystem::path(HYBRID_ROOT_DIR) / "asset");
-#endif
-
-#ifdef HYBRID_PROJECT_ROOT_DIR
-        roots.push_back(std::filesystem::path(HYBRID_PROJECT_ROOT_DIR) / "engine" / "asset");
-#endif
-
-        for (auto& c : roots)
+        // 1) 使用外部注入的 VFS；为空则回退创建本地 VFS（避免空指针崩溃）
+        if (vfs)
         {
-            if (std::filesystem::exists(c))
-            {
-                return std::filesystem::canonical(c);
-            }
-        }
-        return {};
-    }
-
-    static std::filesystem::path CollectCacheRoot(const std::filesystem::path& asset_root)
-    {
-        if (asset_root.empty())
-            return {};
-
-        const auto candidate = asset_root.parent_path() / "cache";
-        std::error_code ec;
-        std::filesystem::create_directories(candidate, ec);
-        if (ec)
-            return {};
-
-        return std::filesystem::weakly_canonical(candidate, ec);
-    }
-
-    void RuntimeResourceSystem::initialize()
-    {
-        m_vfs = std::make_shared<NativeFileSystem>();
-        m_registry = std::make_shared<AssetRegistry>();
-        m_metaStore = std::make_unique<AssetMetaStore>(m_registry);
-
-        const auto assetRoot = CollectAssetRoot();
-
-        if (assetRoot.empty())
-        {
-            HBD_CORE_ERROR("Asset root not found. Tried HYBRID_ROOT_DIR / HYBRID_PROJECT_ROOT_DIR.");
+            m_vfs = std::move(vfs);
         }
         else
         {
-            m_vfs->mount("asset", assetRoot, 0);
-            if (const auto cacheRoot = CollectCacheRoot(assetRoot); !cacheRoot.empty())
-            {
-                m_vfs->mount("cache", cacheRoot, 0);
-            }
-            m_registry->setRoot(assetRoot);
-            HBD_CORE_INFO("RuntimeResourceSystem using asset root: {}", assetRoot.string());
-
-            if (m_metaStore)
-            {
-                const auto stat = m_metaStore->loadAll(assetRoot);
-                HBD_CORE_INFO("Asset meta load: total={}, loaded={}, failed={}",
-                              stat.total_files,
-                              stat.loaded,
-                              stat.failed);
-            }
+            HBD_CORE_WARN("RuntimeResourceSystem: injected VFS is null, fallback to NativeFileSystem.");
+            m_vfs = std::make_shared<NativeFileSystem>();
         }
 
+        // 2) Registry / MetaStore
+        m_registry = std::make_shared<AssetRegistry>();
+        m_metaStore = std::make_unique<AssetMetaStore>(m_registry);
+
+        // 3) 以 ProjectContext 为准：Assets 必须有效
+        const auto& assetsRoot = m_project.assets;
+        const auto& cacheRoot = m_project.cache;
+        const auto& projRoot = m_project.root;
+        const auto& buildRoot = m_project.build;
+
+        if (assetsRoot.empty() || !std::filesystem::exists(assetsRoot))
+        {
+            HBD_CORE_ERROR("RuntimeResourceSystem init failed: project assets root invalid: {}",
+                assetsRoot.empty() ? "<empty>" : assetsRoot.string());
+            return;
+        }
+
+        // 4) 挂载：保持与你 NativeFileSystem 的严格格式一致（alias:relative）
+        //    注意：mount 第三个参数是 priority
+        m_vfs->mount("asset", assetsRoot, 0);
+
+        if (!cacheRoot.empty())
+        {
+            std::error_code ec;
+            std::filesystem::create_directories(cacheRoot, ec);
+            if (ec)
+                HBD_CORE_WARN("RuntimeResourceSystem: create cache dir failed: {} ({})", cacheRoot.string(), ec.message());
+            m_vfs->mount("cache", cacheRoot, 0);
+        }
+
+        if (!projRoot.empty())
+        {
+            m_vfs->mount("project", projRoot, 0);
+        }
+
+        if (!buildRoot.empty())
+        {
+            std::error_code ec;
+            std::filesystem::create_directories(buildRoot, ec);
+            if (ec)
+                HBD_CORE_WARN("RuntimeResourceSystem: create build dir failed: {} ({})", buildRoot.string(), ec.message());
+            m_vfs->mount("build", buildRoot, 0);
+        }
+
+        // 5) Registry root 必须指向项目 Assets（EditorResourceSystem 保存 meta 依赖它）
+        m_registry->setRoot(assetsRoot);
+
+        HBD_CORE_INFO("RuntimeResourceSystem using project root : {}", projRoot.string());
+        HBD_CORE_INFO("RuntimeResourceSystem using assets root  : {}", assetsRoot.string());
+        HBD_CORE_INFO("RuntimeResourceSystem using cache root   : {}", cacheRoot.string());
+        HBD_CORE_INFO("RuntimeResourceSystem using build root   : {}", buildRoot.string());
+
+        // 6) Meta 从 Assets 下加载（与你 Editor 保存逻辑一致）
+        if (m_metaStore)
+        {
+            const auto stat = m_metaStore->loadAll(assetsRoot);
+            HBD_CORE_INFO("Asset meta load: total={}, loaded={}, failed={}",
+                stat.total_files,
+                stat.loaded,
+                stat.failed);
+        }
+
+        // 7) AssetManager
         m_manager = std::make_shared<AssetManager>(m_vfs, m_registry);
+
         registerDefaultLoaders();
         createDefaultTexture();
         createDefaultMaterial();
         createDefaultMesh();
-        HBD_CORE_TRACE("RuntimeResourceSystem initialized");
+
+        HBD_CORE_TRACE("RuntimeResourceSystem initialized (project-based)");
     }
 
     void RuntimeResourceSystem::registerDefaultLoaders()
@@ -98,16 +112,15 @@ namespace Hybrid
 
     void RuntimeResourceSystem::createDefaultTexture()
     {
-        // 使用 Texture 工厂创建 1x1 白色纹理
         TextureDesc desc;
-        desc.type   = TextureType::Tex2D;
+        desc.type = TextureType::Tex2D;
         desc.format = TextureFormat::RGBA8;
-        desc.width  = 1;
+        desc.width = 1;
         desc.height = 1;
         desc.layers = 1;
         desc.mipLevels = 1;
 
-        const uint8_t white[4] = {255, 255, 255, 255};
+        const uint8_t white[4] = { 255, 255, 255, 255 };
         m_defaultTexture = Texture::Create(desc, white, sizeof(white));
 
         if (m_manager && m_defaultTexture)
@@ -119,10 +132,10 @@ namespace Hybrid
     void RuntimeResourceSystem::createDefaultMaterial()
     {
         MaterialData data;
-        data.albedo_color = {1.0f, 1.0f, 1.0f, 1.0f};
-        data.metallic     = 0.0f;
-        data.roughness    = 1.0f;
-        data.ao           = 1.0f;
+        data.albedo_color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        data.metallic = 0.0f;
+        data.roughness = 1.0f;
+        data.ao = 1.0f;
 
         m_defaultMaterial = std::make_shared<Material>(data);
         if (m_manager && m_defaultMaterial)
