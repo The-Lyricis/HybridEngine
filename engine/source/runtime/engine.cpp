@@ -225,6 +225,8 @@ namespace Hybrid
         {
             const float dt = calculateDeltaTime();
 
+            m_EditorResourceSystem->tickAutoImport(dt);
+
             if (m_Minimized)
             {
                 m_Window->pollEvents();
