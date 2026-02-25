@@ -137,20 +137,11 @@ namespace Hybrid
         m_GraphicsContext->init();
 
         // ===== Resource System (Project-based) =====
-        m_ResourceSystem = std::make_shared<RuntimeResourceSystem>();
+        m_RuntimeResourceSystem = std::make_shared<RuntimeResourceSystem>();
         // 这里传 nullptr：RuntimeResourceSystem 内部会 fallback 创建 NativeFileSystem 并按 ctx 挂载（你已在 StepA 做过）
-        m_ResourceSystem->initialize(Hybrid::ProjectService::Get(), nullptr);
+        m_RuntimeResourceSystem->initialize(Hybrid::ProjectService::Get(), nullptr);
 
-        m_EditorResourceSystem = std::make_shared<EditorResourceSystem>();
-        if (!m_EditorResourceSystem->initialize(m_ResourceSystem))
-        {
-            HBD_CORE_ERROR("EditorResourceSystem initialization failed.");
-            m_Window->cleanup();
-            LogSystem::shutdown();
-            return;
-        }
-
-        m_RenderSystem.setAssetManager(m_ResourceSystem->getManager());
+        m_RenderSystem.setAssetManager(m_RuntimeResourceSystem->getManager());
 
         // ===== Event / Layers =====
         auto surface_io = m_Window->getSurfaceIO();
@@ -224,8 +215,6 @@ namespace Hybrid
         while (m_Running && !m_Window->shouldClose())
         {
             const float dt = calculateDeltaTime();
-
-            m_EditorResourceSystem->tickAutoImport(dt);
 
             if (m_Minimized)
             {

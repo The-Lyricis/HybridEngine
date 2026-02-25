@@ -20,6 +20,15 @@ namespace Hybrid
         m_importers.push_back(importer);
     }
 
+    bool ImportManager::canImport(const std::string& source_path, AssetType preferred_type) const
+    {
+        if (source_path.empty())
+            return false;
+
+        const std::string ext = extractExtension(source_path);
+        return static_cast<bool>(findImporter(preferred_type, ext));
+    }
+
     ImportResult ImportManager::importAsset(const ImportRequest& request)
     {
         ImportResult result{};
@@ -90,7 +99,8 @@ namespace Hybrid
         {
             for (const auto& importer : m_importers)
             {
-                if (importer && importer->primaryType() == preferred_type)
+                if (importer && importer->primaryType() == preferred_type &&
+                    (ext.empty() || importer->supportsExtension(ext)))
                     return importer;
             }
         }

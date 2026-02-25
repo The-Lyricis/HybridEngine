@@ -18,6 +18,7 @@ namespace Hybrid
                                SaveMetaFn save_meta_fn = {});
 
         void registerImporter(const std::shared_ptr<IAssetImporter>& importer);
+        bool canImport(const std::string& source_path, AssetType preferred_type = AssetType::Unknown) const;
         ImportResult importAsset(const ImportRequest& request);
 
     private:

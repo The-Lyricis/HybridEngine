@@ -1,50 +1,70 @@
-#pragma once
+﻿#pragma once
 
+#include <chrono>
+#include <cstdint>
+#include <deque>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <unordered_map>
 
-#include "editor/function/import/import_manager.h" // ImportManager/ImportRequest/ImportResult
+#include "editor/function/import/import_manager.h"
 
 namespace Hybrid
 {
     class RuntimeResourceSystem;
     class AssetMetaStore;
 
+    enum class AssetSourceChangeType : uint8_t
+    {
+        AddedOrModified = 0,
+        Removed
+    };
+
     class EditorResourceSystem
     {
     public:
-        bool initialize(const std::shared_ptr<RuntimeResourceSystem>& runtime_system);
+        bool initialize(RuntimeResourceSystem& runtime_system);
 
         ImportResult importAsset(const ImportRequest& request);
 
+        // Queue one logical source event (must be asset:relative).
+        void enqueueSourceChanged(const std::string& source_vpath,
+                                  AssetSourceChangeType change = AssetSourceChangeType::AddedOrModified);
 
-        // ===== 新增：运行中自动扫描导入 =====
-        // 在编辑器更新循环里每帧调用一次
-        void tickAutoImport(float dt);
+        // Consume queued import tasks with optional frame time budget.
+        void processImportQueue(uint32_t max_jobs_per_frame = 2, uint32_t max_ms_budget = 0);
 
-        // 可选：调参接口
-        void setAutoImportEnabled(bool enabled) { m_autoImportEnabled = enabled; }
-        void setAutoImportInterval(float seconds) { m_autoImportInterval = seconds; }
+        // One-shot startup check: enqueue only missing meta/cooked assets.
+        void bootstrapImportOnce();
 
     private:
+        struct PendingSourceChange
+        {
+            AssetSourceChangeType type = AssetSourceChangeType::AddedOrModified;
+            std::chrono::steady_clock::time_point last_event_time{};
+        };
+
         bool saveAssetMeta(const AssetMetadata& meta);
         void registerDefaultImporters();
 
-        // ===== 新增：内部实现 =====
-        void scanAndAutoImportTexturesOnce();
+        bool processOneEvent(const std::string& source_vpath, AssetSourceChangeType change);
+        bool handleUpsert(const std::string& source_vpath);
+        bool handleRemove(const std::string& source_vpath);
+
+        static bool normalizeAssetLogicalPath(const std::string& input, std::string& out_path);
+        static AssetSourceChangeType mergeChangeType(AssetSourceChangeType existing, AssetSourceChangeType incoming);
+        static std::string makeSimpleHash(const std::filesystem::path& file);
 
     private:
-        std::shared_ptr<RuntimeResourceSystem> m_runtime;
+        RuntimeResourceSystem* m_runtime = nullptr;
         std::unique_ptr<AssetMetaStore> m_metaStore;
         std::shared_ptr<ImportManager> m_importManager;
+        std::deque<std::string> m_event_queue;
+        std::unordered_map<std::string, PendingSourceChange> m_pending_changes;
+        bool m_bootstrap_done = false;
 
-        // ===== 新增：自动扫描状态 =====
-        bool  m_autoImportEnabled = true;
-        float m_autoImportTimer = 0.0f;
-        float m_autoImportInterval = 0.75f; // 建议 0.5~1.0 秒
-
-        // key = source vpath（asset:xxx.png），value = last hash（size+mtime）
-        std::unordered_map<std::string, std::string> m_seenTextureHash;
+        // Reserved for future anti-flap debounce control.
+        uint32_t m_min_settle_ms = 0;
     };
 } // namespace Hybrid
