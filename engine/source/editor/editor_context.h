@@ -35,5 +35,7 @@ namespace Hybrid
         bool gizmo_using = false;
         bool use_game_camera = false;
         bool viewport_image_hovered = false;
+
+        bool pan_tool = false;
     };
 } // namespace Hybrid

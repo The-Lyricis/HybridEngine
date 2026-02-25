@@ -84,6 +84,7 @@ namespace Hybrid
         editor_ext->use_game_camera = ctx.use_game_camera;
         editor_ext->selected_entity_id =
             (ctx.selected == entt::null) ? 0u : static_cast<uint32_t>(entt::to_integral(ctx.selected));
+        editor_ext->pan_tool = ctx.pan_tool;
 
         *render_flags = RenderFlags::Forward | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmos;
         if (editor_ext->selected_entity_id != 0)

@@ -8,6 +8,7 @@ namespace Hybrid
     struct EditorRenderExt
     {
         bool viewport_active = true;       // Whether editor viewport currently accepts input.
+        bool pan_tool = false;
         bool use_game_camera = true;       // True: use scene primary camera, false: editor camera.
         uint32_t selected_entity_id = 0;   // Selection used by outline/highlight passes.
 

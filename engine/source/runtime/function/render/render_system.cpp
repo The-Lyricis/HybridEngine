@@ -545,7 +545,13 @@ void main() {
         }
 
         // A) camera input/update (EditorCamera)
-        const bool cameraInputActive = (!use_game_camera) && viewport_active && (input != nullptr);
+        bool pan_tool = false;
+        if (editor_ext) pan_tool = editor_ext->pan_tool;
+
+        // Hand tool：允许相机输入（即使有 gizmo/选中）
+        // 非 Hand：沿用原逻辑
+        const bool cameraInputActive =
+            (!use_game_camera) && viewport_active && (input != nullptr);
 
         const float mdx = cameraInputActive ? input->getMouseDeltaX() : 0.0f;
         const float mdy = cameraInputActive ? input->getMouseDeltaY() : 0.0f;
@@ -554,6 +560,8 @@ void main() {
         const bool lmbDown = cameraInputActive && input->isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
         const bool mmbDown = cameraInputActive && input->isMouseDown(GLFW_MOUSE_BUTTON_MIDDLE);
         const bool rmbDown = cameraInputActive && input->isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
+
+        const bool lmbDown_for_pan = cameraInputActive && pan_tool && input->isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
 
         const bool keyW = cameraInputActive && input->isKeyDown(GLFW_KEY_W);
         const bool keyA = cameraInputActive && input->isKeyDown(GLFW_KEY_A);
@@ -570,8 +578,10 @@ void main() {
 
         if (!use_game_camera)
         {
+            const bool mmbForCamera = mmbDown || lmbDown_for_pan;
+
             m_Camera.update(frame_context.dt, cameraInputActive, mdx, mdy, scrollY,
-                lmbDown, mmbDown, rmbDown,
+                lmbDown, mmbForCamera, rmbDown,
                 keyW, keyA, keyS, keyD, keyQ, keyE,
                 keyShift, keyCtrl, keyAlt);
         }
