@@ -35,7 +35,7 @@ namespace Hybrid
             });
             return v;
         }
-
+        // Normalize logical path: trim, lowercase, ensure "asset:" prefix, and filter out invalid paths.
         bool isMetaLogicalPath(const std::string& logical_path)
         {
             const auto pos = logical_path.find(':');
@@ -86,6 +86,10 @@ namespace Hybrid
         return m_importManager->importAsset(request);
     }
 
+    // Queue one logical source event (must be asset:relative).
+    // Implementation details:
+    // - We normalize the logical path and filter out irrelevant events (e.g. non-importable files, meta files).
+    // - We coalesce multiple events for the same asset within a short time window by merging their change types and updating the timestamp. This helps to reduce redundant imports during
     void EditorResourceSystem::enqueueSourceChanged(const std::string& source_vpath, AssetSourceChangeType change)
     {
         if (!m_importManager)
@@ -97,7 +101,7 @@ namespace Hybrid
             HBD_CORE_WARN("EditorResourceSystem: ignore invalid source path {}", source_vpath);
             return;
         }
-
+        // We allow only importable files to trigger events, which helps to reduce noise (e.g. temp files, irrelevant assets).
         if (isMetaLogicalPath(normalized))
             return;
 
@@ -117,6 +121,11 @@ namespace Hybrid
         it->second.last_event_time = now;
     }
 
+    // Consume queued import tasks with optional frame time budget.
+    // One-shot startup check: enqueue only missing meta/cooked assets.
+    // Implementation details:
+    // - When processing events, we check the pending change type to decide how to handle it (upsert vs remove).
+    // - For upsert, we attempt to import the asset and save its meta. For remove, we delete the meta and unregister from registry. 
     void EditorResourceSystem::processImportQueue(uint32_t max_jobs_per_frame, uint32_t max_ms_budget)
     {
         if (!m_runtime || !m_importManager || max_jobs_per_frame == 0 || m_event_queue.empty())
@@ -164,7 +173,8 @@ namespace Hybrid
             ++jobs;
         }
     }
-
+    
+    // One-shot startup check: enqueue only missing meta/cooked assets.
     void EditorResourceSystem::bootstrapImportOnce()
     {
         if (m_bootstrap_done || !m_runtime || !m_importManager)

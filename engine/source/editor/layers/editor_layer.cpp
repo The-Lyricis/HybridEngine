@@ -18,7 +18,7 @@
 namespace Hybrid
 {
     EditorLayer::EditorLayer(EngineServices services) : Layer("EditorLayer"), m_services(std::move(services)) {}
-
+    
     void EditorLayer::onAttach()
     {
         if (!m_services.window || !m_services.render || !m_services.scene ||

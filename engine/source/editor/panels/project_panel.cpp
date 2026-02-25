@@ -477,10 +477,10 @@ namespace Hybrid
                     }
                 }
 
-                if (ImGui::MenuItem("Refresh"))
-                {
-                    gatherEntries(m_currentDir);
-                }
+                // if (ImGui::MenuItem("Refresh"))
+                // {
+                //     gatherEntries(m_currentDir);
+                // }
 
                 ImGui::EndPopup();
             }
