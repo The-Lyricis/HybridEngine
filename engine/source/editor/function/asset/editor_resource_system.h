@@ -18,10 +18,6 @@ namespace Hybrid
 
         ImportResult importAsset(const ImportRequest& request);
 
-        // 你已有：示例接口（可保留）
-        AssetID importTexture2D(const std::string& source_path,
-            const std::string& cooked_path,
-            const std::string& hash);
 
         // ===== 新增：运行中自动扫描导入 =====
         // 在编辑器更新循环里每帧调用一次
