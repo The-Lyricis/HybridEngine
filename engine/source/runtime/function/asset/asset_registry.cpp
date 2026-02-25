@@ -81,6 +81,21 @@ namespace Hybrid
         if (key.empty())
             return;
 
+        // If this id already exists under another path, clear stale path mapping first.
+        auto id_it = m_by_id.find(meta.id);
+        if (id_it != m_by_id.end())
+        {
+            const auto old_key = normalizeKey(id_it->second.source_path);
+            if (!old_key.empty() && old_key != key)
+            {
+                auto old_path_it = m_by_path.find(old_key);
+                if (old_path_it != m_by_path.end() && old_path_it->second == meta.id)
+                {
+                    m_by_path.erase(old_path_it);
+                }
+            }
+        }
+
         // If the path is re-registered with a new id, remove stale metadata entry.
         auto pit = m_by_path.find(key);
         if (pit != m_by_path.end() && pit->second != meta.id)

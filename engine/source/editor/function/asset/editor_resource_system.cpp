@@ -251,7 +251,9 @@ namespace Hybrid
 
             if (need_enqueue)
             {
-                enqueueSourceChanged(source_vpath, AssetSourceChangeType::AddedOrModified);
+                const AssetSourceChangeType change =
+                    has_meta ? AssetSourceChangeType::Modified : AssetSourceChangeType::Added;
+                enqueueSourceChanged(source_vpath, change);
             }
         }
 
@@ -260,6 +262,79 @@ namespace Hybrid
                       scanned,
                       queued_missing_meta,
                       queued_missing_cooked);
+    }
+
+    bool EditorResourceSystem::moveAsset(const std::string& old_source_vpath, const std::string& new_source_vpath)
+    {
+        if (!m_runtime || !m_metaStore)
+            return false;
+
+        std::string old_norm;
+        std::string new_norm;
+        if (!normalizeAssetLogicalPath(old_source_vpath, old_norm) ||
+            !normalizeAssetLogicalPath(new_source_vpath, new_norm))
+        {
+            HBD_CORE_WARN("EditorResourceSystem: move asset path invalid ({} -> {})",
+                          old_source_vpath,
+                          new_source_vpath);
+            return false;
+        }
+
+        if (old_norm == new_norm)
+            return true;
+
+        auto registry = m_runtime->getRegistry();
+        auto vfs = m_runtime->getVFS();
+        if (!registry || !vfs)
+            return false;
+
+        const auto* old_meta = registry->findByPath(old_norm);
+        if (!old_meta)
+        {
+            // No old metadata entry: fallback to normal add/remove flow.
+            enqueueSourceChanged(old_norm, AssetSourceChangeType::Removed);
+            enqueueSourceChanged(new_norm, AssetSourceChangeType::Added);
+            return false;
+        }
+
+        AssetMetadata moved = *old_meta;
+        moved.source_path = new_norm;
+        moved.is_valid = true;
+
+        if (auto source_physical = vfs->resolve(new_norm))
+        {
+            moved.hash = makeSimpleHash(*source_physical);
+        }
+
+        const auto& assets_root = registry->getRoot();
+        if (assets_root.empty())
+        {
+            HBD_CORE_ERROR("EditorResourceSystem move failed: asset root is empty");
+            return false;
+        }
+
+        // Persist new path first, then remove old meta file.
+        if (!m_metaStore->saveOne(moved, assets_root))
+        {
+            HBD_CORE_ERROR("EditorResourceSystem move failed: save new meta {}",
+                           moved.source_path);
+            return false;
+        }
+
+        if (!m_metaStore->removeOne(old_norm, assets_root))
+        {
+            HBD_CORE_WARN("EditorResourceSystem move: old meta remove failed {}", old_norm);
+        }
+
+        // Keep id stable, only update path/hash mapping.
+        auto clear_pending = [this](const std::string& path) {
+            m_pending_changes.erase(path);
+            m_event_queue.erase(std::remove(m_event_queue.begin(), m_event_queue.end(), path), m_event_queue.end());
+        };
+        clear_pending(old_norm);
+        clear_pending(new_norm);
+        registry->registerAsset(moved);
+        return true;
     }
 
     bool EditorResourceSystem::saveAssetMeta(const AssetMetadata& meta)
@@ -300,13 +375,19 @@ namespace Hybrid
 
     bool EditorResourceSystem::processOneEvent(const std::string& source_vpath, AssetSourceChangeType change)
     {
-        if (change == AssetSourceChangeType::Removed)
+        switch (change)
+        {
+        case AssetSourceChangeType::Added:
+        case AssetSourceChangeType::Modified:
+            return handleUpsert(source_vpath, change);
+        case AssetSourceChangeType::Removed:
             return handleRemove(source_vpath);
-
-        return handleUpsert(source_vpath);
+        default:
+            return false;
+        }
     }
 
-    bool EditorResourceSystem::handleUpsert(const std::string& source_vpath)
+    bool EditorResourceSystem::handleUpsert(const std::string& source_vpath, AssetSourceChangeType change)
     {
         if (!m_runtime || !m_importManager)
             return false;
@@ -348,7 +429,8 @@ namespace Hybrid
             return false;
         }
 
-        HBD_CORE_INFO("EditorResourceSystem: imported {}", source_vpath);
+        const char* op = (change == AssetSourceChangeType::Added) ? "imported(new)" : "reimported(modified)";
+        HBD_CORE_INFO("EditorResourceSystem: {} {}", op, source_vpath);
         return true;
     }
 
@@ -443,13 +525,13 @@ namespace Hybrid
     AssetSourceChangeType EditorResourceSystem::mergeChangeType(AssetSourceChangeType existing,
                                                                 AssetSourceChangeType incoming)
     {
-        if (incoming == AssetSourceChangeType::Removed)
+        if (existing == AssetSourceChangeType::Removed || incoming == AssetSourceChangeType::Removed)
             return AssetSourceChangeType::Removed;
 
-        if (existing == AssetSourceChangeType::Removed && incoming == AssetSourceChangeType::AddedOrModified)
-            return AssetSourceChangeType::AddedOrModified;
+        if (existing == AssetSourceChangeType::Added || incoming == AssetSourceChangeType::Added)
+            return AssetSourceChangeType::Added;
 
-        return AssetSourceChangeType::AddedOrModified;
+        return AssetSourceChangeType::Modified;
     }
 
     std::string EditorResourceSystem::makeSimpleHash(const std::filesystem::path& file)

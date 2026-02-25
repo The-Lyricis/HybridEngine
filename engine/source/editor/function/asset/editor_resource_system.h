@@ -17,7 +17,8 @@ namespace Hybrid
 
     enum class AssetSourceChangeType : uint8_t
     {
-        AddedOrModified = 0,
+        Added = 0,
+        Modified,
         Removed
     };
 
@@ -30,18 +31,20 @@ namespace Hybrid
 
         // Queue one logical source event (must be asset:relative).
         void enqueueSourceChanged(const std::string& source_vpath,
-                                  AssetSourceChangeType change = AssetSourceChangeType::AddedOrModified);
+                                  AssetSourceChangeType change = AssetSourceChangeType::Modified);
 
         // Consume queued import tasks with optional frame time budget.
         void processImportQueue(uint32_t max_jobs_per_frame = 2, uint32_t max_ms_budget = 0);
 
         // One-shot startup check: enqueue only missing meta/cooked assets.
         void bootstrapImportOnce();
+        // Handle UI rename/move with stable AssetID.
+        bool moveAsset(const std::string& old_source_vpath, const std::string& new_source_vpath);
 
     private:
         struct PendingSourceChange
         {
-            AssetSourceChangeType type = AssetSourceChangeType::AddedOrModified;
+            AssetSourceChangeType type = AssetSourceChangeType::Modified;
             std::chrono::steady_clock::time_point last_event_time{};
         };
 
@@ -49,7 +52,7 @@ namespace Hybrid
         void registerDefaultImporters();
 
         bool processOneEvent(const std::string& source_vpath, AssetSourceChangeType change);
-        bool handleUpsert(const std::string& source_vpath);
+        bool handleUpsert(const std::string& source_vpath, AssetSourceChangeType change);
         bool handleRemove(const std::string& source_vpath);
 
         static bool normalizeAssetLogicalPath(const std::string& input, std::string& out_path);

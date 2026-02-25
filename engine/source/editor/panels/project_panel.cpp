@@ -58,14 +58,17 @@ namespace Hybrid
 
     void ProjectPanel::notifyAssetChange(EditorContext& ctx, const std::filesystem::path& rel, bool removed) const
     {
-        if (rel.empty() || !ctx.notify_asset_source_changed)
+        if (rel.empty() || !ctx.notify_asset_source_event)
             return;
 
         const auto ext = rel.extension();
         if (ext == ".meta")
             return;
 
-        ctx.notify_asset_source_changed(relToAssetVPath(rel), removed);
+        AssetSourceEvent event{};
+        event.type = removed ? AssetSourceEventType::Removed : AssetSourceEventType::Added;
+        event.path = relToAssetVPath(rel);
+        ctx.notify_asset_source_event(event);
     }
 
     void ProjectPanel::notifyAssetChangeRecursive(EditorContext& ctx,
@@ -164,10 +167,32 @@ namespace Hybrid
         if (ec)
             return false;
 
+        auto notifyAssetMove = [this, &ctx](const std::filesystem::path& old_rel,
+                                            const std::filesystem::path& new_rel) {
+            if (old_rel.empty() || new_rel.empty())
+                return;
+            if (old_rel.extension() == ".meta" || new_rel.extension() == ".meta")
+                return;
+
+            if (ctx.notify_asset_source_event)
+            {
+                AssetSourceEvent event{};
+                event.type = AssetSourceEventType::Moved;
+                event.old_path = relToAssetVPath(old_rel);
+                event.new_path = relToAssetVPath(new_rel);
+                ctx.notify_asset_source_event(event);
+                return;
+            }
+
+            // Backward-compatible fallback.
+            notifyAssetChange(ctx, old_rel, true);
+            notifyAssetChange(ctx, new_rel, false);
+        };
+
         std::vector<std::filesystem::path> old_files;
         if (from_is_dir)
         {
-            notifyAssetChangeRecursive(ctx, from, true, &old_files);
+            notifyAssetChangeRecursive(ctx, from, false, &old_files);
         }
 
         std::filesystem::rename(from, to, ec);
@@ -178,8 +203,6 @@ namespace Hybrid
         {
             for (const auto& old_rel : old_files)
             {
-                notifyAssetChange(ctx, old_rel, true);
-
                 std::filesystem::path old_abs = m_assetsRoot / old_rel;
                 auto sub = std::filesystem::relative(old_abs, from, ec);
                 if (ec)
@@ -196,19 +219,21 @@ namespace Hybrid
                     continue;
                 }
 
-                notifyAssetChange(ctx, new_rel, false);
+                notifyAssetMove(old_rel, new_rel);
             }
             return true;
         }
 
         auto old_rel = std::filesystem::relative(from, m_assetsRoot, ec);
-        if (!ec)
-            notifyAssetChange(ctx, old_rel, true);
+        if (ec)
+            return false;
 
         ec.clear();
         auto new_rel = std::filesystem::relative(to, m_assetsRoot, ec);
-        if (!ec)
-            notifyAssetChange(ctx, new_rel, false);
+        if (ec)
+            return false;
+
+        notifyAssetMove(old_rel, new_rel);
 
         return true;
     }
@@ -477,10 +502,10 @@ namespace Hybrid
                     }
                 }
 
-                // if (ImGui::MenuItem("Refresh"))
-                // {
-                //     gatherEntries(m_currentDir);
-                // }
+                if (ImGui::MenuItem("Refresh"))
+                {
+                    gatherEntries(m_currentDir);
+                }
 
                 ImGui::EndPopup();
             }

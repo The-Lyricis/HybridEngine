@@ -18,7 +18,6 @@
 namespace Hybrid
 {
     EditorLayer::EditorLayer(EngineServices services) : Layer("EditorLayer"), m_services(std::move(services)) {}
-    
     void EditorLayer::onAttach()
     {
         if (!m_services.window || !m_services.render || !m_services.scene ||
@@ -55,7 +54,7 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
-        m_editor_ui.context().notify_asset_source_changed = {};
+        m_editor_ui.context().notify_asset_source_event = {};
         m_editor_ui.shutdown();
         m_initialized = false;
     }
@@ -143,13 +142,27 @@ namespace Hybrid
             return;
 
         auto& ctx = m_editor_ui.context();
-        ctx.notify_asset_source_changed = [this](const std::string& source_vpath, bool removed) {
+        ctx.notify_asset_source_event = [this](const AssetSourceEvent& event) {
             if (!m_services.editor_resources)
                 return;
 
-            m_services.editor_resources->enqueueSourceChanged(
-                source_vpath,
-                removed ? AssetSourceChangeType::Removed : AssetSourceChangeType::AddedOrModified);
+            switch (event.type)
+            {
+            case AssetSourceEventType::Added:
+                m_services.editor_resources->enqueueSourceChanged(event.path, AssetSourceChangeType::Added);
+                break;
+            case AssetSourceEventType::Modified:
+                m_services.editor_resources->enqueueSourceChanged(event.path, AssetSourceChangeType::Modified);
+                break;
+            case AssetSourceEventType::Removed:
+                m_services.editor_resources->enqueueSourceChanged(event.path, AssetSourceChangeType::Removed);
+                break;
+            case AssetSourceEventType::Moved:
+                (void)m_services.editor_resources->moveAsset(event.old_path, event.new_path);
+                break;
+            default:
+                break;
+            }
         };
     }
 
@@ -164,8 +177,10 @@ namespace Hybrid
                 return;
 
             const AssetSourceChangeType change =
-                (type == FileWatcherChangeType::Removed) ? AssetSourceChangeType::Removed
-                                                         : AssetSourceChangeType::AddedOrModified;
+                (type == FileWatcherChangeType::Removed)
+                    ? AssetSourceChangeType::Removed
+                    : (type == FileWatcherChangeType::Added ? AssetSourceChangeType::Added
+                                                            : AssetSourceChangeType::Modified);
             m_services.editor_resources->enqueueSourceChanged(source_vpath, change);
         });
     }
