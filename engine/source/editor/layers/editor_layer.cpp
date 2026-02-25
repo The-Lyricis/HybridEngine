@@ -1,16 +1,19 @@
 #include "editor_layer.h"
 
 #include <entt/entity/entity.hpp>
+#include <system_error>
 #include <utility>
 
 #include "editor/editor_context.h"
+#include "editor/function/asset/editor_resource_system.h"
 #include "runtime/core/base/macro.h"
+#include "runtime/function/asset/runtime_resource_system.h"
 #include "runtime/function/render/editor_render_ext.h"
 #include "runtime/function/render/frame_context.h"
 #include "runtime/function/render/render_flags.h"
-#include "runtime/function/window/window_system.h"
-#include "runtime/function/scene/scene_manager.h"
 #include "runtime/function/render/render_system.h"
+#include "runtime/function/scene/scene_manager.h"
+#include "runtime/function/window/window_system.h"
 
 namespace Hybrid
 {
@@ -26,6 +29,24 @@ namespace Hybrid
         }
 
         m_editor_ui.initialize(m_services.window->getNativeWindow());
+        bindAssetChangeCallback();
+
+        if (m_services.resources && m_services.resources->getRegistry())
+        {
+            m_assets_root = m_services.resources->getRegistry()->getRoot();
+            if (!m_assets_root.empty())
+            {
+                if (!m_file_watcher.initialize(m_assets_root, true))
+                {
+                    HBD_CORE_WARN("EditorLayer: file watcher init failed at {}", m_assets_root.string());
+                }
+            }
+        }
+
+        if (m_services.editor_resources)
+        {
+            m_services.editor_resources->bootstrapImportOnce();
+        }
         m_initialized = true;
     }
 
@@ -34,13 +55,24 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
+        m_editor_ui.context().notify_asset_source_changed = {};
         m_editor_ui.shutdown();
         m_initialized = false;
     }
 
     void EditorLayer::onUpdate(float /*dt*/)
     {
-        if (!m_initialized || !m_services.consume_pick_result)
+        if (!m_initialized)
+            return;
+
+        pollFileWatcher();
+
+        if (m_services.editor_resources)
+        {
+            m_services.editor_resources->processImportQueue(4, 2);
+        }
+
+        if (!m_services.consume_pick_result)
             return;
 
         uint32_t picked = 0;
@@ -103,5 +135,59 @@ namespace Hybrid
         {
             editor_ext->request_pick = false;
         }
+    }
+
+    void EditorLayer::bindAssetChangeCallback()
+    {
+        if (!m_services.editor_resources)
+            return;
+
+        auto& ctx = m_editor_ui.context();
+        ctx.notify_asset_source_changed = [this](const std::string& source_vpath, bool removed) {
+            if (!m_services.editor_resources)
+                return;
+
+            m_services.editor_resources->enqueueSourceChanged(
+                source_vpath,
+                removed ? AssetSourceChangeType::Removed : AssetSourceChangeType::AddedOrModified);
+        };
+    }
+
+    void EditorLayer::pollFileWatcher()
+    {
+        if (!m_services.editor_resources || !m_file_watcher.isInitialized())
+            return;
+
+        m_file_watcher.poll([this](const std::filesystem::path& physical_path, FileWatcherChangeType type) {
+            std::string source_vpath;
+            if (!toAssetVPath(physical_path, source_vpath))
+                return;
+
+            const AssetSourceChangeType change =
+                (type == FileWatcherChangeType::Removed) ? AssetSourceChangeType::Removed
+                                                         : AssetSourceChangeType::AddedOrModified;
+            m_services.editor_resources->enqueueSourceChanged(source_vpath, change);
+        });
+    }
+
+    bool EditorLayer::toAssetVPath(const std::filesystem::path& physical_path, std::string& out_vpath) const
+    {
+        out_vpath.clear();
+        if (m_assets_root.empty() || physical_path.empty())
+            return false;
+
+        std::error_code ec;
+        auto rel = std::filesystem::relative(physical_path, m_assets_root, ec);
+        if (ec || rel.empty())
+            return false;
+
+        std::string rel_str = rel.generic_string();
+        while (!rel_str.empty() && (rel_str.front() == '/' || rel_str.front() == '\\'))
+            rel_str.erase(rel_str.begin());
+        if (rel_str.empty())
+            return false;
+
+        out_vpath = std::string("asset:") + rel_str;
+        return true;
     }
 } // namespace Hybrid

@@ -9,6 +9,7 @@ namespace Hybrid
     class RenderSystem;
     class SceneManager;
     class RuntimeResourceSystem;
+    class EditorResourceSystem;
     class InputLayer;
     struct FrameContext;
     enum class RenderFlags : uint32_t;
@@ -21,6 +22,7 @@ namespace Hybrid
         RenderSystem* render = nullptr;                  // Render system API.
         SceneManager* scene = nullptr;                   // Scene lifecycle/selection source.
         RuntimeResourceSystem* resources = nullptr;      // Runtime asset services.
+        EditorResourceSystem* editor_resources = nullptr;// Editor import/persistence services.
         InputLayer* input = nullptr;                     // Per-frame input state.
         FrameContext* frame_context = nullptr;           // Shared frame payload for renderer.
         RenderFlags* render_flags = nullptr;             // Per-frame pass mask.

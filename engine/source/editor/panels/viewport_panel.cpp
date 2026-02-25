@@ -14,8 +14,66 @@
 #include "runtime/function/scene/scene.h"
 #include "runtime/function/scene/components.h"
 
+#include <stb_image.h>
+#include <glad/gl.h>
+
 namespace Hybrid
 {
+    // -----------------------------
+    // OpenGL texture loader (RGBA8)
+    // -----------------------------
+    static GLuint LoadTextureRGBA8(const std::string& path)
+    {
+        int w = 0, h = 0, comp = 0;
+        stbi_set_flip_vertically_on_load(0);
+        unsigned char* data = stbi_load(path.c_str(), &w, &h, &comp, 4);
+        if (!data || w <= 0 || h <= 0)
+        {
+            if (data) stbi_image_free(data);
+            return 0;
+        }
+
+        GLuint tex = 0;
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        stbi_image_free(data);
+        return tex;
+    }
+
+    struct ToolIcons
+    {
+        GLuint hand = 0;
+        GLuint move = 0;
+        GLuint rotate = 0;
+        GLuint scale = 0;
+        bool loaded = false;
+
+        void destroy()
+        {
+            auto del = [](GLuint& t)
+                {
+                    if (t)
+                    {
+                        glDeleteTextures(1, &t);
+                        t = 0;
+                    }
+                };
+            del(hand); del(move); del(rotate); del(scale);
+            loaded = false;
+        }
+    };
+
+    static ToolIcons g_ToolIcons;
+
     static glm::mat4 BuildModel(const TransformComponent& tr)
     {
         glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
@@ -28,31 +86,30 @@ namespace Hybrid
     static ToolMode s_Tool = ToolMode::Move;
     static ImGuizmo::MODE s_GizmoSpace = ImGuizmo::LOCAL;
 
-    static void PushToolButtonStyle(bool active)
+    static void PushActiveToolStyle(bool active)
     {
         if (!active) return;
-        // 简单高亮：更接近 Unity 的“选中态”
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.95f, 0.90f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.45f, 0.95f, 1.00f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.20f, 0.40f, 0.90f, 1.00f));
     }
 
-    static void PopToolButtonStyle(bool active)
+    static void PopActiveToolStyle(bool active)
     {
         if (!active) return;
         ImGui::PopStyleColor(3);
     }
 
-    // 返回：是否点击了工具栏（用于屏蔽 picking）
-    static bool DrawUnityToolBar(const ImVec2& canvasMin)
+    // 返回：本帧是否与工具栏发生交互（用于屏蔽 picking）
+    static bool DrawUnityToolBarPNG(const ImVec2& canvasMin)
     {
-        bool clicked = false;
+        bool interacted = false;
 
         // Unity 快捷键：Q/W/E/R
-        if (ImGui::IsKeyPressed(ImGuiKey_Q)) s_Tool = ToolMode::Hand;
-        if (ImGui::IsKeyPressed(ImGuiKey_W)) s_Tool = ToolMode::Move;
-        if (ImGui::IsKeyPressed(ImGuiKey_E)) s_Tool = ToolMode::Rotate;
-        if (ImGui::IsKeyPressed(ImGuiKey_R)) s_Tool = ToolMode::Scale;
+        if (ImGui::IsKeyPressed(ImGuiKey_Q)) { s_Tool = ToolMode::Hand;   interacted = true; }
+        if (ImGui::IsKeyPressed(ImGuiKey_W)) { s_Tool = ToolMode::Move;   interacted = true; }
+        if (ImGui::IsKeyPressed(ImGuiKey_E)) { s_Tool = ToolMode::Rotate; interacted = true; }
+        if (ImGui::IsKeyPressed(ImGuiKey_R)) { s_Tool = ToolMode::Scale;  interacted = true; }
 
         ImGui::SetNextWindowPos(ImVec2(canvasMin.x + 8.0f, canvasMin.y + 8.0f));
         ImGui::SetNextWindowBgAlpha(0.55f);
@@ -70,42 +127,56 @@ namespace Hybrid
 
         const ImVec2 btnSize(34.0f, 34.0f);
 
-        auto ToolButton = [&](const char* icon, const char* tip, ToolMode mode)
+        auto ImageToolButton = [&](GLuint tex, const char* tip, ToolMode mode)
             {
                 const bool active = (s_Tool == mode);
-                PushToolButtonStyle(active);
-                if (ImGui::Button(icon, btnSize))
+                PushActiveToolStyle(active);
+
+                ImGui::PushID((int)mode);
+                bool pressed = false;
+
+                if (tex != 0)
+                {
+                    // 说明：ImageButton 在不同 ImGui 版本签名略有差异，你当前版本大概率支持这个最常见签名
+                    ImVec2 uv0(0, 0), uv1(1, 1);
+                    ImVec4 bg(0, 0, 0, 0);           // 背景透明（高亮由按钮颜色控制）
+                    ImVec4 tint(1, 1, 1, 1);         // 原色显示
+                    pressed = ImGui::ImageButton("##toolbtn", (ImTextureID)(intptr_t)tex, btnSize, uv0, uv1, bg, tint);
+                }
+                else
+                {
+                    // fallback
+                    const char* name = (mode == ToolMode::Hand) ? "Hand" :
+                        (mode == ToolMode::Move) ? "Move" :
+                        (mode == ToolMode::Rotate) ? "Rot" : "Scl";
+                    pressed = ImGui::Button(name, btnSize);
+                }
+
+                if (pressed)
                 {
                     s_Tool = mode;
-                    clicked = true;
+                    interacted = true;
                 }
-                PopToolButtonStyle(active);
 
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
                     ImGui::SetTooltip("%s", tip);
+
+                ImGui::PopID();
+                PopActiveToolStyle(active);
             };
 
-        // 图标占位（你可换成 FontAwesome）
-        ToolButton("🖐", "Hand (Q)\nPan / Navigate", ToolMode::Hand);
-        ToolButton("⇄", "Move (W)", ToolMode::Move);
-        ToolButton("⟳", "Rotate (E)", ToolMode::Rotate);
-        ToolButton("⬚", "Scale (R)", ToolMode::Scale);
+        ImageToolButton(g_ToolIcons.hand, "Hand (Q)\nPan / Navigate", ToolMode::Hand);
+        ImageToolButton(g_ToolIcons.move, "Move (W)", ToolMode::Move);
+        ImageToolButton(g_ToolIcons.rotate, "Rotate (E)", ToolMode::Rotate);
+        ImageToolButton(g_ToolIcons.scale, "Scale (R)", ToolMode::Scale);
 
-        ImGui::Separator();
 
-        // Local/World 切换（Unity 在旋转/移动常用）
-        if (s_Tool != ToolMode::Scale)
-        {
-            const bool isLocal = (s_GizmoSpace == ImGuizmo::LOCAL);
-            if (ImGui::Button(isLocal ? "Local" : "World", ImVec2(btnSize.x * 1.0f, 0)))
-            {
-                s_GizmoSpace = isLocal ? ImGuizmo::WORLD : ImGuizmo::LOCAL;
-                clicked = true;
-            }
-        }
+        // 如果鼠标在工具栏窗口上，也认为发生交互（防止点击空白也触发 picking）
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
+            interacted = true;
 
         ImGui::End();
-        return clicked;
+        return interacted;
     }
 
     void ViewportPanel::onImGuiRender(EditorContext& ctx)
@@ -114,6 +185,19 @@ namespace Hybrid
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
         ImGui::Begin("Viewport", &m_open);
+
+        // 一次性加载工具栏图标
+        if (!g_ToolIcons.loaded)
+        {
+            const std::string base = std::string(HYBRID_ROOT_DIR) + "/resource/";
+
+            g_ToolIcons.hand = LoadTextureRGBA8(base + "icon_editorTools_pan.png");
+            g_ToolIcons.move = LoadTextureRGBA8(base + "icon_editorTools_drag.png");
+            g_ToolIcons.rotate = LoadTextureRGBA8(base + "icon_editorTools_rotate.png");
+            g_ToolIcons.scale = LoadTextureRGBA8(base + "icon_editorTools_scale.png");
+
+            g_ToolIcons.loaded = (g_ToolIcons.hand && g_ToolIcons.move && g_ToolIcons.rotate && g_ToolIcons.scale);
+        }
 
         // --- 顶部相机模式 ---
         {
@@ -148,7 +232,7 @@ namespace Hybrid
         ctx.viewport_min = canvasMin;
         ctx.viewport_max = canvasMax;
 
-        // Game camera：禁用 gizmo（按你之前需求）
+        // Game camera：禁用 gizmo/picking
         if (ctx.use_game_camera)
         {
             ctx.gizmo_using = false;
@@ -158,15 +242,16 @@ namespace Hybrid
             return;
         }
 
-        // --- Unity 风格工具栏 ---
-        const bool toolbarClicked = DrawUnityToolBar(canvasMin);
+        // --- Unity 风格工具栏（PNG） ---
+        const bool toolbarInteracted = DrawUnityToolBarPNG(canvasMin);
+
+        // Hand 模式：给 RenderSystem/Engine 用
+        ctx.pan_tool = (s_Tool == ToolMode::Hand);
 
         // --- Gizmo ---
-        ctx.pan_tool = (s_Tool == ToolMode::Hand);
         bool gizmoOver = false;
         ctx.gizmo_using = false;
 
-        // Hand 模式：不显示 gizmo（但允许选中与相机导航）
         const bool wantGizmo =
             (s_Tool == ToolMode::Move || s_Tool == ToolMode::Rotate || s_Tool == ToolMode::Scale);
 
@@ -186,7 +271,6 @@ namespace Hybrid
                 if (s_Tool == ToolMode::Rotate) op = ImGuizmo::ROTATE;
                 if (s_Tool == ToolMode::Scale)  op = ImGuizmo::SCALE;
 
-                // Snap（Unity：Ctrl 吸附）
                 bool snapping = ImGui::GetIO().KeyCtrl;
                 float snap[3] = { 0.5f, 0.5f, 0.5f };
                 if (op == ImGuizmo::ROTATE) { snap[0] = 15.0f; snap[1] = 15.0f; snap[2] = 15.0f; }
@@ -196,7 +280,7 @@ namespace Hybrid
                     glm::value_ptr(ctx.gizmo_view),
                     glm::value_ptr(ctx.gizmo_proj),
                     op,
-                    (op == ImGuizmo::SCALE) ? ImGuizmo::LOCAL : s_GizmoSpace,
+                    ImGuizmo::LOCAL,
                     glm::value_ptr(model),
                     nullptr,
                     snapping ? snap : nullptr
@@ -217,10 +301,10 @@ namespace Hybrid
             }
         }
 
-        // --- Picking：工具栏点击 / gizmo hit / gizmo using 时不触发 ---
+        // --- Picking：工具栏交互 / gizmo hit / gizmo using 时不触发 ---
         if (ctx.viewport_image_hovered &&
             ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-            !toolbarClicked &&
+            !toolbarInteracted &&
             !ctx.gizmo_using &&
             !gizmoOver)
         {

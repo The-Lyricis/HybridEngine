@@ -16,7 +16,6 @@
 #include "runtime/function/scene/scene.h"
 #include "runtime/function/scene/scene_manager.h"
 #include "runtime/function/window/window_system.h"
-#include <editor/function/asset/editor_resource_system.h>
 
 namespace Hybrid
 {
@@ -35,7 +34,7 @@ namespace Hybrid
         WindowSystem& getWindowSystem() const { return *m_Window; }
         RenderSystem& getRenderSystem() { return m_RenderSystem; }
         SceneManager& getSceneManager() { return m_SceneManager; }
-        RuntimeResourceSystem& getResourceSystem() const { return *m_ResourceSystem; }
+        RuntimeResourceSystem& getResourceSystem() const { return *m_RuntimeResourceSystem; }
         InputLayer& getInputLayer() const { return *m_InputLayer; }
         FrameContext& getFrameContext() { return m_FrameContext; }
         RenderFlags& getRenderFlags() { return m_RenderFlags; }
@@ -55,8 +54,7 @@ namespace Hybrid
         LayerStack m_LayerStack;                       // Layer and overlay stack.
 
         InputLayer* m_InputLayer = nullptr;                    // Input aggregation layer.
-        std::shared_ptr<RuntimeResourceSystem> m_ResourceSystem; // Runtime asset stack.
-        std::shared_ptr<EditorResourceSystem> m_EditorResourceSystem; // Editor asset stack.
+        std::shared_ptr<RuntimeResourceSystem> m_RuntimeResourceSystem; // Runtime asset stack.
         RenderSystem m_RenderSystem;                           // Rendering front-end.
         SceneManager m_SceneManager;                           // Active scene manager.
         FrameContext m_FrameContext{};                         // Per-frame runtime render payload.

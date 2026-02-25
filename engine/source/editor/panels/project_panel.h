@@ -1,6 +1,8 @@
-#pragma once
+﻿#pragma once
+
 #include "i_editor_panel.h"
 
+#include <chrono>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -20,21 +22,30 @@ namespace Hybrid
     private:
         struct Entry
         {
-            std::filesystem::path physical; // 物理路径
-            std::filesystem::path rel;      // 相对 Assets 的路径
+            std::filesystem::path physical;
+            std::filesystem::path rel;
             bool is_dir = false;
         };
 
         void ensureRootInit();
-        void renderToolbar();
-        void renderDirectoryTree();
-        void renderContent();
+        void renderToolbar(EditorContext& ctx);
+        void renderDirectoryTree(EditorContext& ctx);
+        void renderContent(EditorContext& ctx);
+        void renderRenamePopup(EditorContext& ctx);
 
         void gatherEntries(const std::filesystem::path& dir);
         bool isHiddenFile(const std::filesystem::path& p) const;
         bool isMetaFile(const std::filesystem::path& p) const;
 
         std::string relToAssetVPath(const std::filesystem::path& rel) const;
+        void notifyAssetChange(EditorContext& ctx, const std::filesystem::path& rel, bool removed) const;
+        void notifyAssetChangeRecursive(EditorContext& ctx,
+                                        const std::filesystem::path& root,
+                                        bool removed,
+                                        std::vector<std::filesystem::path>* out_rel_files = nullptr) const;
+        bool createFolder(const std::string& folder_name);
+        bool deleteEntry(EditorContext& ctx, const Entry& e);
+        bool renameEntry(EditorContext& ctx, const std::filesystem::path& from, const std::filesystem::path& to);
 
     private:
         std::filesystem::path m_assetsRoot;
@@ -44,7 +55,19 @@ namespace Hybrid
         std::vector<Entry> m_entries;
 
         std::string m_selectedRelStr;
-
         bool m_showMetaFiles = false;
+
+        // Create-folder UI state.
+        bool m_openCreateFolderPopup = false;
+        char m_newFolderName[128] = "NewFolder";
+
+        // Rename UI state.
+        bool m_openRenamePopup = false;
+        std::filesystem::path m_renameFrom;
+        char m_renameInput[128] = {};
+
+        // Auto-refresh current folder view for external file changes.
+        std::chrono::steady_clock::time_point m_lastAutoRefresh{};
+        float m_autoRefreshIntervalSec = 0.3f;
     };
 } // namespace Hybrid
