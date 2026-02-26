@@ -3,7 +3,9 @@
 #include <cstdint>
 #include <string>
 
+#include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include "runtime/function/asset/asset_type.h"
@@ -25,6 +27,18 @@ namespace Hybrid
         glm::vec3 Position{0.0f, 0.0f, 0.0f};
         glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
         glm::vec3 Scale{1.0f, 1.0f, 1.0f};
+
+        // Intrusive hierarchy links.
+        entt::entity Parent = entt::null;
+        entt::entity FirstChild = entt::null;
+        entt::entity NextSibling = entt::null;
+        entt::entity PrevSibling = entt::null;
+
+        // Cached matrices.
+        glm::mat4 LocalMatrix{1.0f};
+        glm::mat4 WorldMatrix{1.0f};
+        bool DirtyLocal = true;
+        bool DirtyWorld = true;
     };
 
     struct CameraComponent

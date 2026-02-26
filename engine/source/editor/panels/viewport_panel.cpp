@@ -14,6 +14,7 @@
 
 #include "runtime/function/scene/scene.h"
 #include "runtime/function/scene/components.h"
+#include "runtime/function/scene/entity.h"
 #include "runtime/core/base/math_util.h"
 
 #include <stb_image.h>
@@ -78,10 +79,7 @@ namespace Hybrid
 
     static glm::mat4 BuildModel(const TransformComponent& tr)
     {
-        glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
-        glm::mat4 R = MathUtil::mat4FromQuat(tr.Rotation);
-        glm::mat4 S = glm::scale(glm::mat4(1.0f), tr.Scale);
-        return T * R * S;
+        return tr.WorldMatrix;
     }
 
     enum class ToolMode { Hand, Move, Rotate, Scale };
@@ -298,11 +296,30 @@ namespace Hybrid
                     glm::vec3 scale{};
                     glm::quat rotation{};
                     glm::vec3 translation{};
-                    if (glm::decompose(model, scale, rotation, translation, skew, perspective))
+                    glm::mat4 local = model;
+                    if (tr.Parent != entt::null && reg.valid(tr.Parent) && reg.all_of<TransformComponent>(tr.Parent))
                     {
-                        tr.Position = translation;
-                        tr.Scale = scale;
-                        tr.Rotation = MathUtil::normalizeQuat(rotation);
+                        const auto& parent_tr = reg.get<TransformComponent>(tr.Parent);
+                        local = glm::inverse(parent_tr.WorldMatrix) * model;
+                    }
+
+                    if (glm::decompose(local, scale, rotation, translation, skew, perspective))
+                    {
+                        if (op == ImGuizmo::TRANSLATE)
+                        {
+                            tr.Position = translation;
+                        }
+                        else if (op == ImGuizmo::ROTATE)
+                        {
+                            tr.Rotation = MathUtil::normalizeQuat(rotation);
+                        }
+                        else if (op == ImGuizmo::SCALE)
+                        {
+                            tr.Scale = scale;
+                        }
+
+                        tr.DirtyLocal = true;
+                        ctx.active_scene->MarkDirtyRecursive(Entity(ctx.selected, &reg, ctx.active_scene));
                     }
                 }
             }

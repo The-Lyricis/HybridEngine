@@ -33,15 +33,6 @@ namespace Hybrid
 
     namespace
     {
-        // TransformComponent -> Model Matrix
-        static glm::mat4 buildModel(const Hybrid::TransformComponent &tr)
-        {
-            glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
-            glm::mat4 R = MathUtil::mat4FromQuat(tr.Rotation);
-            glm::mat4 S = glm::scale(glm::mat4(1.0f), tr.Scale);
-            return T * R * S;
-        }
-
         // Scene Camera (Transform + CameraComponent) -> ViewProjection
         static bool getSceneViewProj(Hybrid::Scene &scene, float aspect, glm::mat4 &outViewProj)
         {
@@ -68,9 +59,7 @@ namespace Hybrid
             glm::mat4 proj = glm::perspective(glm::radians(cam.FovY), aspect, cam.Near, cam.Far);
 
             // View: inverse of camera world transform
-            glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
-            glm::mat4 R = MathUtil::mat4FromQuat(tr.Rotation);
-            glm::mat4 viewMat = glm::inverse(T * R);
+            glm::mat4 viewMat = glm::inverse(tr.WorldMatrix);
 
             outViewProj = proj * viewMat;
             return true;
@@ -78,7 +67,7 @@ namespace Hybrid
 
         static glm::vec3 lightDirectionFromTransform(const Hybrid::TransformComponent &tr)
         {
-            const glm::vec3 dir = glm::normalize(MathUtil::normalizeQuat(tr.Rotation) * glm::vec3(0.0f, 0.0f, -1.0f));
+            const glm::vec3 dir = glm::vec3(tr.WorldMatrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
             const float len = glm::length(dir);
             if (len < 1e-4f)
                 return glm::vec3(0.0f, -1.0f, 0.0f);
@@ -104,11 +93,9 @@ namespace Hybrid
 
             outProj = glm::perspective(glm::radians(cam.FovY), aspect, cam.Near, cam.Far);
 
-            glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
-            glm::mat4 R = MathUtil::mat4FromQuat(tr.Rotation);
-            outView = glm::inverse(T * R);
+            outView = glm::inverse(tr.WorldMatrix);
 
-            outCamPos = tr.Position;
+            outCamPos = glm::vec3(tr.WorldMatrix[3]);
             return true;
         }
     }
@@ -664,7 +651,7 @@ void main() {
                 item.meshId = mr.Mesh;
                 item.materialId = mr.Material;
                 item.primitive = mr.Primitive;
-                item.model = buildModel(tr);
+                item.model = tr.WorldMatrix;
                 item.tint = mr.Tint;
                 item.entityID = (uint32_t)entt::to_integral(e);
                 item.selected = (selected_entity_id != 0 && item.entityID == selected_entity_id);
