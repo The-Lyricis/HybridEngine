@@ -3,6 +3,7 @@
 
 #include "runtime/function/scene/scene.h"
 #include "runtime/function/scene/components.h"
+#include "runtime/core/base/math_util.h"
 
 #include <imgui.h>
 #include <entt/entt.hpp>
@@ -62,7 +63,27 @@ namespace Hybrid
         if (auto* tr = reg.try_get<TransformComponent>(ctx.selected))
         {
             DrawVec3Control("Position", tr->Position, 0.05f);
-            DrawVec3Control("Rotation", tr->Rotation, 0.02f);
+            glm::vec3 euler_deg = MathUtil::eulerDegreesFromQuat(tr->Rotation);
+            if (euler_deg.x > 180.0f) euler_deg.x -= 360.0f;
+            if (euler_deg.y > 180.0f) euler_deg.y -= 360.0f;
+            if (euler_deg.z > 180.0f) euler_deg.z -= 360.0f;
+            if (euler_deg.x < -180.0f) euler_deg.x += 360.0f;
+            if (euler_deg.y < -180.0f) euler_deg.y += 360.0f;
+            if (euler_deg.z < -180.0f) euler_deg.z += 360.0f;
+
+            ImGui::PushID("Rotation");
+            ImGui::Columns(2);
+            ImGui::SetColumnWidth(0, 90.0f);
+            ImGui::TextUnformatted("Rotation");
+            ImGui::NextColumn();
+            const bool rot_changed = ImGui::DragFloat3("##v", &euler_deg.x, 0.2f);
+            ImGui::Columns(1);
+            ImGui::PopID();
+
+            if (rot_changed)
+            {
+                tr->Rotation = MathUtil::quatFromEulerDegrees(euler_deg);
+            }
             DrawVec3Control("Scale", tr->Scale, 0.05f);
         }
 

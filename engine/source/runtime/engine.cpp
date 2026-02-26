@@ -4,6 +4,7 @@
 #include <string>
 
 #include "runtime/core/base/macro.h"
+#include "runtime/core/base/math_util.h"
 #include "runtime/core/log/log_system.h"
 
 #include <filesystem>
@@ -166,7 +167,7 @@ namespace Hybrid
 
             auto& tr = cam.GetComponent<Hybrid::TransformComponent>();
             tr.Position = { 0.0f, 12.0f, 12.0f };
-            tr.Rotation = { glm::radians(-45.0f), 0.0f, 0.0f };
+            tr.Rotation = MathUtil::quatFromEulerRadians({ glm::radians(-45.0f), 0.0f, 0.0f });
             tr.Scale = { 1.0f, 1.0f, 1.0f };
         }
 
@@ -175,7 +176,7 @@ namespace Hybrid
         dl.Color = { 1.0f, 1.0f, 1.0f };
         dl.Intensity = 1.0f;
         auto& sunTr = sun.GetComponent<Hybrid::TransformComponent>();
-        sunTr.Rotation = { glm::radians(-70.5f), glm::radians(-123.7f), 0.0f };
+        sunTr.Rotation = MathUtil::quatFromEulerRadians({ glm::radians(-70.5f), glm::radians(-123.7f), 0.0f });
 
         {
             const int gridX = 5;
@@ -196,7 +197,7 @@ namespace Hybrid
 
                     auto& tr = cube.GetComponent<Hybrid::TransformComponent>();
                     tr.Position = { startX + x * spacing, 0.0f, startZ + z * spacing };
-                    tr.Rotation = { 0.0f, 0.0f, 0.0f };
+                    tr.Rotation = glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f };
                     tr.Scale = { 1.0f, 1.0f, 1.0f };
                 }
             }

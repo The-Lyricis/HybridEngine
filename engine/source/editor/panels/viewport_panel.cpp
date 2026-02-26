@@ -6,13 +6,15 @@
 #include <ImGuizmo.h>
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/euler_angles.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 
 #include "runtime/function/scene/scene.h"
 #include "runtime/function/scene/components.h"
+#include "runtime/core/base/math_util.h"
 
 #include <stb_image.h>
 #include <glad/gl.h>
@@ -77,7 +79,7 @@ namespace Hybrid
     static glm::mat4 BuildModel(const TransformComponent& tr)
     {
         glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
-        glm::mat4 R = glm::yawPitchRoll(tr.Rotation.y, tr.Rotation.x, tr.Rotation.z);
+        glm::mat4 R = MathUtil::mat4FromQuat(tr.Rotation);
         glm::mat4 S = glm::scale(glm::mat4(1.0f), tr.Scale);
         return T * R * S;
     }
@@ -291,12 +293,17 @@ namespace Hybrid
 
                 if (ctx.gizmo_using)
                 {
-                    float t[3], rDeg[3], s[3];
-                    ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(model), t, rDeg, s);
-
-                    tr.Position = { t[0], t[1], t[2] };
-                    tr.Rotation = { glm::radians(rDeg[0]), glm::radians(rDeg[1]), glm::radians(rDeg[2]) };
-                    tr.Scale = { s[0], s[1], s[2] };
+                    glm::vec3 skew{};
+                    glm::vec4 perspective{};
+                    glm::vec3 scale{};
+                    glm::quat rotation{};
+                    glm::vec3 translation{};
+                    if (glm::decompose(model, scale, rotation, translation, skew, perspective))
+                    {
+                        tr.Position = translation;
+                        tr.Scale = scale;
+                        tr.Rotation = MathUtil::normalizeQuat(rotation);
+                    }
                 }
             }
         }

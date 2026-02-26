@@ -11,11 +11,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
-
-
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/euler_angles.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include "runtime/function/render/renderer.h"
 #include "runtime/function/render/render_command.h"
@@ -26,6 +22,7 @@
 #include "runtime/function/scene/scene.h"
 #include "runtime/function/scene/components.h"
 #include "runtime/core/base/macro.h"
+#include "runtime/core/base/math_util.h"
 #include "runtime/function/asset/asset_manager.h"
 #include "runtime/function/asset/material.h"
 #include "runtime/function/asset/mesh.h"
@@ -40,7 +37,7 @@ namespace Hybrid
         static glm::mat4 buildModel(const Hybrid::TransformComponent &tr)
         {
             glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
-            glm::mat4 R = glm::yawPitchRoll(tr.Rotation.y, tr.Rotation.x, tr.Rotation.z); // yaw, pitch, roll
+            glm::mat4 R = MathUtil::mat4FromQuat(tr.Rotation);
             glm::mat4 S = glm::scale(glm::mat4(1.0f), tr.Scale);
             return T * R * S;
         }
@@ -72,7 +69,7 @@ namespace Hybrid
 
             // View: inverse of camera world transform
             glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
-            glm::mat4 R = glm::yawPitchRoll(tr.Rotation.y, tr.Rotation.x, tr.Rotation.z);
+            glm::mat4 R = MathUtil::mat4FromQuat(tr.Rotation);
             glm::mat4 viewMat = glm::inverse(T * R);
 
             outViewProj = proj * viewMat;
@@ -81,8 +78,7 @@ namespace Hybrid
 
         static glm::vec3 lightDirectionFromTransform(const Hybrid::TransformComponent &tr)
         {
-            const glm::mat4 R = glm::yawPitchRoll(tr.Rotation.y, tr.Rotation.x, tr.Rotation.z);
-            const glm::vec3 dir = glm::vec3(R * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
+            const glm::vec3 dir = glm::normalize(MathUtil::normalizeQuat(tr.Rotation) * glm::vec3(0.0f, 0.0f, -1.0f));
             const float len = glm::length(dir);
             if (len < 1e-4f)
                 return glm::vec3(0.0f, -1.0f, 0.0f);
@@ -109,7 +105,7 @@ namespace Hybrid
             outProj = glm::perspective(glm::radians(cam.FovY), aspect, cam.Near, cam.Far);
 
             glm::mat4 T = glm::translate(glm::mat4(1.0f), tr.Position);
-            glm::mat4 R = glm::yawPitchRoll(tr.Rotation.y, tr.Rotation.x, tr.Rotation.z);
+            glm::mat4 R = MathUtil::mat4FromQuat(tr.Rotation);
             outView = glm::inverse(T * R);
 
             outCamPos = tr.Position;
