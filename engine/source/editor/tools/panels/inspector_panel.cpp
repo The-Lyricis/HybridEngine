@@ -1,9 +1,9 @@
-﻿#include "inspector_panel.h"
+#include "inspector_panel.h"
 #include "editor/core/editor_context.h"
 
-#include "runtime/function/scene/scene.h"
-#include "runtime/function/scene/components.h"
-#include "runtime/function/scene/entity.h"
+#include "runtime/modules/scene/scene.h"
+#include "runtime/modules/scene/components.h"
+#include "runtime/modules/scene/entity.h"
 #include "runtime/core/base/math_util.h"
 
 #include <imgui.h>
@@ -49,7 +49,7 @@ namespace Hybrid
             return;
         }
 
-        // Name锛堟寜 TagComponent 绀轰緥锛?
+        // Name (from TagComponent).
         if (auto* tag = reg.try_get<TagComponent>(ctx.selected))
         {
             char buffer[256]{};
@@ -100,4 +100,3 @@ namespace Hybrid
         ImGui::End();
     }
 }
-

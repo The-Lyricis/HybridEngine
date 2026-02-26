@@ -28,6 +28,7 @@ namespace Hybrid
 
         void drawPanels();
         void drawViewport(uint32_t colorTexID);
+        void updateViewportState();
 
         void setActiveScene(Scene* scene);
         void setViewportTexture(uint32_t colorTexID);

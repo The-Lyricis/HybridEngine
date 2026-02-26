@@ -10,6 +10,7 @@ namespace Hybrid
         const char* getName() const override { return "Viewport"; }
 
         void setTexture(uint32_t colorTex) { m_colorTextureID = colorTex; }
+        void updateViewportState(EditorContext& ctx);
         void onImGuiRender(EditorContext& ctx) override;
 
     private:

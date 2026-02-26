@@ -1,9 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 #include <vector>
 
-#include "runtime/function/asset/asset_type.h"
+#include "runtime/modules/asset/asset_type.h"
 
 namespace Hybrid
 {
@@ -31,4 +31,5 @@ namespace Hybrid
         std::vector<AssetMetadata> assets;
     };
 } // namespace Hybrid
+
 

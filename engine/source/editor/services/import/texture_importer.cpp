@@ -1,4 +1,4 @@
-#include "texture_importer.h"
+﻿#include "texture_importer.h"
 
 #include <algorithm>
 #include <cctype>
@@ -7,7 +7,7 @@
 
 #include <stb_image.h>
 
-#include "runtime/function/asset/texture_cooked_format.h"
+#include "runtime/modules/asset/texture_cooked_format.h"
 
 namespace Hybrid
 {
@@ -164,3 +164,4 @@ namespace Hybrid
         return out;
     }
 } // namespace Hybrid
+

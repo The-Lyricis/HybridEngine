@@ -1,4 +1,4 @@
-﻿#include "editor_ui.h"
+#include "editor_ui.h"
 
 #include <ImGuizmo.h>
 #include <imgui_internal.h>
@@ -93,6 +93,22 @@ namespace Hybrid
 
         m_ViewportPanel->setTexture(colorTexID);
         m_ViewportPanel->onImGuiRender(*m_ctx);
+    }
+
+    void EditorUI::updateViewportState()
+    {
+        if (!m_initialized || !m_ctx || !m_ViewportPanel)
+            return;
+
+        if (!m_ViewportPanel->isOpen())
+        {
+            m_ctx->viewport_hovered = false;
+            m_ctx->viewport_image_hovered = false;
+            m_ctx->viewport_focused = false;
+            return;
+        }
+
+        m_ViewportPanel->updateViewportState(*m_ctx);
     }
 
     void EditorUI::setActiveScene(Scene* scene)

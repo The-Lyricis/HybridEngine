@@ -1,4 +1,4 @@
-﻿#include "viewport_panel.h"
+#include "viewport_panel.h"
 #include "editor/core/editor_context.h"
 
 #include <imgui.h>
@@ -12,9 +12,9 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 
-#include "runtime/function/scene/scene.h"
-#include "runtime/function/scene/components.h"
-#include "runtime/function/scene/entity.h"
+#include "runtime/modules/scene/scene.h"
+#include "runtime/modules/scene/components.h"
+#include "runtime/modules/scene/entity.h"
 #include "runtime/core/base/math_util.h"
 
 #include <stb_image.h>
@@ -100,12 +100,12 @@ namespace Hybrid
         ImGui::PopStyleColor(3);
     }
 
-    // 杩斿洖锛氭湰甯ф槸鍚︿笌宸ュ叿鏍忓彂鐢熶氦浜掞紙鐢ㄤ簬灞忚斀 picking锛?
+    // Returns whether this frame interacted with the toolbar (used to block picking).
     static bool DrawUnityToolBarPNG(const ImVec2& canvasMin)
     {
         bool interacted = false;
 
-        // Unity 蹇嵎閿細Q/W/E/R
+        // Unity-style shortcuts: Q / W / E / R
         if (ImGui::IsKeyPressed(ImGuiKey_Q)) { s_Tool = ToolMode::Hand;   interacted = true; }
         if (ImGui::IsKeyPressed(ImGuiKey_W)) { s_Tool = ToolMode::Move;   interacted = true; }
         if (ImGui::IsKeyPressed(ImGuiKey_E)) { s_Tool = ToolMode::Rotate; interacted = true; }
@@ -137,10 +137,10 @@ namespace Hybrid
 
                 if (tex != 0)
                 {
-                    // 璇存槑锛欼mageButton 鍦ㄤ笉鍚?ImGui 鐗堟湰绛惧悕鐣ユ湁宸紓锛屼綘褰撳墠鐗堟湰澶ф鐜囨敮鎸佽繖涓渶甯歌绛惧悕
+                    // ImageButton signature varies slightly by ImGui version.
                     ImVec2 uv0(0, 0), uv1(1, 1);
-                    ImVec4 bg(0, 0, 0, 0);           // 鑳屾櫙閫忔槑锛堥珮浜敱鎸夐挳棰滆壊鎺у埗锛?
-                    ImVec4 tint(1, 1, 1, 1);         // 鍘熻壊鏄剧ず
+                    ImVec4 bg(0, 0, 0, 0);           // Transparent background.
+                    ImVec4 tint(1, 1, 1, 1);         // Keep original icon color.
                     pressed = ImGui::ImageButton("##toolbtn", (ImTextureID)(intptr_t)tex, btnSize, uv0, uv1, bg, tint);
                 }
                 else
@@ -171,12 +171,43 @@ namespace Hybrid
         ImageToolButton(g_ToolIcons.scale, "Scale (R)", ToolMode::Scale);
 
 
-        // 濡傛灉榧犳爣鍦ㄥ伐鍏锋爮绐楀彛涓婏紝涔熻涓哄彂鐢熶氦浜掞紙闃叉鐐瑰嚮绌虹櫧涔熻Е鍙?picking锛?
+        // Treat hovering on toolbar as interaction to suppress viewport picking.
         if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
             interacted = true;
 
         ImGui::End();
         return interacted;
+    }
+
+    void ViewportPanel::updateViewportState(EditorContext& ctx)
+    {
+        if (!m_open)
+        {
+            ctx.viewport_image_hovered = false;
+            ctx.viewport_hovered = false;
+            ctx.viewport_focused = false;
+            return;
+        }
+
+        const bool has_canvas_rect =
+            (ctx.viewport_max.x > ctx.viewport_min.x) &&
+            (ctx.viewport_max.y > ctx.viewport_min.y);
+        const bool hovered = has_canvas_rect &&
+            ImGui::IsMouseHoveringRect(ctx.viewport_min, ctx.viewport_max, false);
+        ctx.viewport_image_hovered = hovered;
+        ctx.viewport_hovered = hovered;
+
+        if (hovered &&
+            (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
+             ImGui::IsMouseClicked(ImGuiMouseButton_Middle) ||
+             ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
+        {
+            ctx.viewport_focused = true;
+        }
+        else if (!hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            ctx.viewport_focused = false;
+        }
     }
 
     void ViewportPanel::onImGuiRender(EditorContext& ctx)
@@ -186,7 +217,7 @@ namespace Hybrid
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
         ImGui::Begin("Viewport", &m_open);
 
-        // 涓€娆℃€у姞杞藉伐鍏锋爮鍥炬爣
+        // Lazy-load toolbar icons once.
         if (!g_ToolIcons.loaded)
         {
             const std::string base = std::string(HYBRID_ROOT_DIR) + "/assets/icons/";
@@ -199,21 +230,20 @@ namespace Hybrid
             g_ToolIcons.loaded = (g_ToolIcons.hand && g_ToolIcons.move && g_ToolIcons.rotate && g_ToolIcons.scale);
         }
 
-        // --- 椤堕儴鐩告満妯″紡 ---
+        // Camera mode controls.
         {
             ImGui::SetCursorPosX(5.0f);
             ImGui::TextUnformatted("Camera:");
             ImGui::SameLine();
             ImGui::TextUnformatted(ctx.use_game_camera ? "Game" : "Editor");
             ImGui::SameLine();
-
             if (ImGui::Button(ctx.use_game_camera ? "Switch to Editor Camera" : "Switch to Game Camera"))
                 ctx.use_game_camera = !ctx.use_game_camera;
 
             ImGui::Separator();
         }
 
-        // --- 鐢婚潰鍖哄煙 ---
+        // Viewport canvas region.
         ImVec2 canvasMin = ImGui::GetCursorScreenPos();
         ImVec2 canvasSize = ImGui::GetContentRegionAvail();
         if (canvasSize.x < 1.0f) canvasSize.x = 1.0f;
@@ -223,7 +253,7 @@ namespace Hybrid
         ImDrawList* dl = ImGui::GetWindowDrawList();
         dl->AddImage((ImTextureID)(intptr_t)m_colorTextureID, canvasMin, canvasMax, { 0, 1 }, { 1, 0 });
 
-        // hover/focus锛堜粎鐢婚潰鍖哄煙锛?
+        // Viewport canvas region.
         ctx.viewport_image_hovered = ImGui::IsMouseHoveringRect(canvasMin, canvasMax, false);
         ctx.viewport_hovered = ctx.viewport_image_hovered;
         ctx.viewport_focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
@@ -232,7 +262,7 @@ namespace Hybrid
         ctx.viewport_min = canvasMin;
         ctx.viewport_max = canvasMax;
 
-        // Game camera锛氱鐢?gizmo/picking
+        // Game camera mode: disable gizmo and picking requests.
         if (ctx.use_game_camera)
         {
             ctx.gizmo_using = false;
@@ -242,10 +272,10 @@ namespace Hybrid
             return;
         }
 
-        // --- Unity 椋庢牸宸ュ叿鏍忥紙PNG锛?---
+        // Unity-style toolbar (PNG icons).
         const bool toolbarInteracted = DrawUnityToolBarPNG(canvasMin);
 
-        // Hand 妯″紡锛氱粰 RenderSystem/Engine 鐢?
+        // Hand mode flag consumed by runtime camera control path.
         ctx.pan_tool = (s_Tool == ToolMode::Hand);
 
         // --- Gizmo ---
@@ -264,7 +294,7 @@ namespace Hybrid
                 glm::mat4 model = BuildModel(tr);
 
                 ImGuizmo::SetOrthographic(false);
-                ImGuizmo::SetDrawlist(); // 浣犵殑鐗堟湰鍙敤
+                ImGuizmo::SetDrawlist(); // Draw into current ImGui window draw list.
                 ImGuizmo::SetRect(canvasMin.x, canvasMin.y, canvasSize.x, canvasSize.y);
 
                 ImGuizmo::OPERATION op = ImGuizmo::TRANSLATE;
@@ -325,7 +355,7 @@ namespace Hybrid
             }
         }
 
-        // --- Picking锛氬伐鍏锋爮浜や簰 / gizmo hit / gizmo using 鏃朵笉瑙﹀彂 ---
+        // Picking: ignore clicks when toolbar/gizmo is interacting.
         if (ctx.viewport_image_hovered &&
             ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
             !toolbarInteracted &&
@@ -349,5 +379,3 @@ namespace Hybrid
     }
 
 } // namespace Hybrid
-
-

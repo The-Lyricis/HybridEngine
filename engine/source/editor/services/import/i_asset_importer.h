@@ -1,10 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <string_view>
 
 #include "import_types.h"
-#include "runtime/function/asset/asset_registry.h"
-#include "runtime/core/base/virtual_file_system.h"
+#include "runtime/modules/asset/asset_registry.h"
+#include "runtime/core/base/vfs/virtual_file_system.h"
 
 namespace Hybrid
 {
@@ -25,4 +25,5 @@ namespace Hybrid
                                          IVirtualFileSystem& vfs) = 0;
     };
 } // namespace Hybrid
+
 

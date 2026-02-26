@@ -12,10 +12,12 @@ namespace Hybrid
     public:
         explicit ImGuiLayer(GLFWwindow* window);
 
+        void onBeginFrame() override;
         void onAttach() override;
         void onDetach() override;
         void onUpdate(float dt) override;
         void onImGuiRender() override;
+        void onEndFrame() override;
 
     private:
         GLFWwindow* m_window = nullptr; // Host window for ImGui backend.

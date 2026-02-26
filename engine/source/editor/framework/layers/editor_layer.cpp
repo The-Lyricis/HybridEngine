@@ -1,19 +1,23 @@
-﻿#include "editor_layer.h"
+#include "editor_layer.h"
 
 #include <entt/entity/entity.hpp>
 #include <system_error>
 #include <utility>
 
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+
 #include "editor/core/editor_context.h"
 #include "editor/services/asset/editor_resource_system.h"
 #include "runtime/core/base/macro.h"
-#include "runtime/function/asset/runtime_resource_system.h"
-#include "runtime/function/render/editor_render_ext.h"
-#include "runtime/function/render/frame_context.h"
-#include "runtime/function/render/render_flags.h"
-#include "runtime/function/render/render_system.h"
-#include "runtime/function/scene/scene_manager.h"
-#include "runtime/function/window/window_system.h"
+#include "runtime/modules/asset/runtime_resource_system.h"
+#include "runtime/modules/input/input_layer.h"
+#include "runtime/modules/render/runtime/editor_render_ext.h"
+#include "runtime/modules/render/runtime/frame_context.h"
+#include "runtime/modules/render/runtime/render_flags.h"
+#include "runtime/modules/render/runtime/render_system.h"
+#include "runtime/modules/scene/scene_manager.h"
+#include "runtime/modules/window/window_system.h"
 
 namespace Hybrid
 {
@@ -54,16 +58,22 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
+        if (m_services.editor_ext)
+        {
+            m_services.editor_ext->has_editor_camera = false;
+        }
         m_editor_ui.context().notify_asset_source_event = {};
         m_editor_ui.shutdown();
         m_initialized = false;
     }
 
-    void EditorLayer::onUpdate(float /*dt*/)
+    void EditorLayer::onUpdate(float dt)
     {
         if (!m_initialized)
             return;
 
+        m_editor_ui.updateViewportState();
+        updateEditorCamera(dt);
         pollFileWatcher();
 
         if (m_services.editor_resources)
@@ -71,15 +81,18 @@ namespace Hybrid
             m_services.editor_resources->processImportQueue(4, 2);
         }
 
-        if (!m_services.consume_pick_result)
-            return;
+        if (m_services.consume_pick_result)
+        {
+            uint32_t picked = 0;
+            if (m_services.consume_pick_result(picked))
+            {
+                auto& ctx = m_editor_ui.context();
+                ctx.selected = (picked == 0) ? entt::null : static_cast<entt::entity>(picked);
+            }
+        }
 
-        uint32_t picked = 0;
-        if (!m_services.consume_pick_result(picked))
-            return;
-
-        auto& ctx = m_editor_ui.context();
-        ctx.selected = (picked == 0) ? entt::null : static_cast<entt::entity>(picked);
+        // Pre-render sync: publish this frame's camera/render inputs.
+        updateFrameContext();
     }
 
     void EditorLayer::onImGuiRender()
@@ -97,8 +110,6 @@ namespace Hybrid
 
         m_editor_ui.drawPanels();
         m_editor_ui.drawViewport(m_services.render->getSceneColorTexture());
-
-        updateFrameContext();
     }
 
     void EditorLayer::updateFrameContext()
@@ -116,6 +127,17 @@ namespace Hybrid
         editor_ext->selected_entity_id =
             (ctx.selected == entt::null) ? 0u : static_cast<uint32_t>(entt::to_integral(ctx.selected));
         editor_ext->pan_tool = ctx.pan_tool;
+        if (!ctx.use_game_camera)
+        {
+            editor_ext->has_editor_camera = true;
+            editor_ext->editor_view = m_editor_camera.getView();
+            editor_ext->editor_proj = m_editor_camera.getProjection();
+            editor_ext->editor_camera_pos = m_editor_camera.getPosition();
+        }
+        else
+        {
+            editor_ext->has_editor_camera = false;
+        }
 
         *render_flags = RenderFlags::Forward | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmos;
         if (editor_ext->selected_entity_id != 0)
@@ -134,6 +156,61 @@ namespace Hybrid
         {
             editor_ext->request_pick = false;
         }
+    }
+
+    void EditorLayer::updateEditorCamera(float dt)
+    {
+        if (!m_services.input || !m_services.editor_ext)
+            return;
+
+        auto& ctx = m_editor_ui.context();
+        if (ctx.viewport_size.x > 1.0f && ctx.viewport_size.y > 1.0f)
+        {
+            m_editor_camera.setViewportSize(ctx.viewport_size.x, ctx.viewport_size.y);
+        }
+
+        const bool camera_input_active = !ctx.use_game_camera && ctx.viewport_image_hovered;
+        const InputState& input = m_services.input->getState();
+
+        const float mdx = camera_input_active ? input.getMouseDeltaX() : 0.0f;
+        const float mdy = camera_input_active ? input.getMouseDeltaY() : 0.0f;
+        const float scroll_y = camera_input_active ? input.getScrollDeltaY() : 0.0f;
+
+        const bool lmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
+        const bool mmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_MIDDLE);
+        const bool rmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
+        const bool mmb_for_camera = mmb_down || (ctx.pan_tool && lmb_down);
+
+        const bool key_w = camera_input_active && input.isKeyDown(GLFW_KEY_W);
+        const bool key_a = camera_input_active && input.isKeyDown(GLFW_KEY_A);
+        const bool key_s = camera_input_active && input.isKeyDown(GLFW_KEY_S);
+        const bool key_d = camera_input_active && input.isKeyDown(GLFW_KEY_D);
+        const bool key_q = camera_input_active && input.isKeyDown(GLFW_KEY_Q);
+        const bool key_e = camera_input_active && input.isKeyDown(GLFW_KEY_E);
+        const bool key_shift = camera_input_active &&
+            (input.isKeyDown(GLFW_KEY_LEFT_SHIFT) || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT));
+        const bool key_ctrl = camera_input_active &&
+            (input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || input.isKeyDown(GLFW_KEY_RIGHT_CONTROL));
+        const bool key_alt = camera_input_active &&
+            (input.isKeyDown(GLFW_KEY_LEFT_ALT) || input.isKeyDown(GLFW_KEY_RIGHT_ALT));
+
+        m_editor_camera.update(dt,
+                               camera_input_active,
+                               mdx,
+                               mdy,
+                               scroll_y,
+                               lmb_down,
+                               mmb_for_camera,
+                               rmb_down,
+                               key_w,
+                               key_a,
+                               key_s,
+                               key_d,
+                               key_q,
+                               key_e,
+                               key_shift,
+                               key_ctrl,
+                               key_alt);
     }
 
     void EditorLayer::bindAssetChangeCallback()
@@ -206,4 +283,3 @@ namespace Hybrid
         return true;
     }
 } // namespace Hybrid
-

@@ -41,7 +41,7 @@ namespace Hybrid
         m_initialized = false;
     }
 
-    void ImGuiLayer::onUpdate(float /*dt*/)
+    void ImGuiLayer::onBeginFrame()
     {
         if (!m_initialized)
             return;
@@ -51,7 +51,15 @@ namespace Hybrid
         ImGui::NewFrame();
     }
 
+    void ImGuiLayer::onUpdate(float /*dt*/)
+    {
+    }
+
     void ImGuiLayer::onImGuiRender()
+    {
+    }
+
+    void ImGuiLayer::onEndFrame()
     {
         if (!m_initialized)
             return;

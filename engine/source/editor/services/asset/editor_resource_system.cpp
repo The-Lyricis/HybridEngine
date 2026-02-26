@@ -6,9 +6,9 @@
 #include <system_error>
 
 #include "runtime/core/base/macro.h"
-#include "runtime/function/asset/asset_meta_store.h"
-#include "runtime/function/asset/asset_registry.h"
-#include "runtime/function/asset/runtime_resource_system.h"
+#include "runtime/modules/asset/asset_meta_store.h"
+#include "runtime/modules/asset/asset_registry.h"
+#include "runtime/modules/asset/runtime_resource_system.h"
 
 #include "editor/services/import/audio_importer.h"
 #include "editor/services/import/mesh_importer.h"
@@ -549,4 +549,5 @@ namespace Hybrid
         return std::to_string(static_cast<unsigned long long>(size)) + "_" + std::to_string(ticks);
     }
 } // namespace Hybrid
+
 
