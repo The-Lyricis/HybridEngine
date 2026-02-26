@@ -1,7 +1,7 @@
-#include "hierarchy_panel.h"
+﻿#include "hierarchy_panel.h"
 
-#include "../editor_context.h"
-#include "../editor_drag_drop.h"
+#include "editor/core/editor_context.h"
+#include "editor/core/editor_drag_drop.h"
 
 #include "runtime/function/scene/components.h"
 #include "runtime/function/scene/scene.h"
@@ -229,3 +229,4 @@ namespace Hybrid
         ImGui::End();
     }
 } // namespace Hybrid
+

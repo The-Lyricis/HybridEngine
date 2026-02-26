@@ -1,32 +1,16 @@
-﻿#pragma once
+#pragma once
 
-#include <cstdint>
 #include <functional>
-#include <string>
 
 #include <entt/entt.hpp>
 #include <glm/mat4x4.hpp>
 #include <imgui.h>
 
+#include "editor/core/editor_types.h"
+
 namespace Hybrid
 {
     class Scene;
-
-    enum class AssetSourceEventType : uint8_t
-    {
-        Added = 0,
-        Modified,
-        Removed,
-        Moved
-    };
-
-    struct AssetSourceEvent
-    {
-        AssetSourceEventType type = AssetSourceEventType::Modified;
-        std::string path;      // Added/Modified/Removed 用
-        std::string old_path;  // Moved 用
-        std::string new_path;  // Moved 用
-    };
 
     struct EditorContext
     {
@@ -51,7 +35,6 @@ namespace Hybrid
         bool use_game_camera = false;
         bool viewport_image_hovered = false;
 
-        // Notify editor asset pipeline about source file events.
         std::function<void(const AssetSourceEvent&)> notify_asset_source_event;
         bool pan_tool = false;
     };

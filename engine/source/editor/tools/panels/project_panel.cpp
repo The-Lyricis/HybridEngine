@@ -1,6 +1,6 @@
 ﻿#include "project_panel.h"
 
-#include "../editor_context.h"
+#include "editor/core/editor_context.h"
 
 #include <algorithm>
 #include <cstring>
@@ -599,3 +599,4 @@ namespace Hybrid
         ImGui::End();
     }
 } // namespace Hybrid
+

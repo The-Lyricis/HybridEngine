@@ -1,13 +1,13 @@
-#include "editor_ui.h"
+﻿#include "editor_ui.h"
 
 #include <ImGuizmo.h>
 #include <imgui_internal.h>
 
-#include "editor/editor_context.h"
-#include "editor/panels/hierarchy_panel.h"
-#include "editor/panels/inspector_panel.h"
-#include "editor/panels/project_panel.h"
-#include "editor/panels/viewport_panel.h"
+#include "editor/core/editor_context.h"
+#include "editor/tools/panels/hierarchy_panel.h"
+#include "editor/tools/panels/inspector_panel.h"
+#include "editor/tools/panels/project_panel.h"
+#include "editor/tools/panels/viewport_panel.h"
 #include "runtime/core/base/macro.h"
 
 namespace Hybrid
@@ -219,3 +219,5 @@ namespace Hybrid
         ImGui::DockBuilderFinish(m_DockSpaceID);
     }
 } // namespace Hybrid
+
+

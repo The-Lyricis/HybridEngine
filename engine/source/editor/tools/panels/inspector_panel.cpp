@@ -1,5 +1,5 @@
-#include "inspector_panel.h"
-#include "../editor_context.h"
+﻿#include "inspector_panel.h"
+#include "editor/core/editor_context.h"
 
 #include "runtime/function/scene/scene.h"
 #include "runtime/function/scene/components.h"
@@ -49,7 +49,7 @@ namespace Hybrid
             return;
         }
 
-        // Name（按 TagComponent 示例）
+        // Name锛堟寜 TagComponent 绀轰緥锛?
         if (auto* tag = reg.try_get<TagComponent>(ctx.selected))
         {
             char buffer[256]{};
@@ -100,3 +100,4 @@ namespace Hybrid
         ImGui::End();
     }
 }
+

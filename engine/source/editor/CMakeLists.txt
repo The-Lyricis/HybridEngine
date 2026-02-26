@@ -1,13 +1,9 @@
-cmake_minimum_required(VERSION 3.16)
+﻿cmake_minimum_required(VERSION 3.16)
 
 set(TARGET_NAME HybridEditor)
 
-# 建议：不要在子目录里 set 全局 CMAKE_CXX_STANDARD（会影响全工程）
-# 但你原本就这么做了，这里保留，同时也在 target 上显式设置一次以确保一致
-set(CMAKE_CXX_STANDARD 17)
-
 # ------------------------------------------------------------
-# Sources: 最新结构为 editor/ 下直接放 .cpp/.h，且有 panels 子目录
+# Sources：最新结构为 editor/ 下直接放 .cpp/.h，并且有 panels 子目录
 # ------------------------------------------------------------
 file(GLOB_RECURSE EDITOR_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
@@ -21,10 +17,10 @@ file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
 
 # ------------------------------------------------------------
 # Piccolo 风格：显式把 .rc 资源编进可执行文件，给 exe 设定图标
-# 资源目录在 editor/resource
+# 资源目录在 editor/assets/win
 # ------------------------------------------------------------
-set(APP_ICON_RC  "${CMAKE_CURRENT_SOURCE_DIR}/resource/app_icon.rc")
-set(APP_ICON_ICO "${CMAKE_CURRENT_SOURCE_DIR}/resource/app_icon.ico")
+set(APP_ICON_RC  "${CMAKE_CURRENT_SOURCE_DIR}/assets/win/app_icon.rc")
+set(APP_ICON_ICO "${CMAKE_CURRENT_SOURCE_DIR}/assets/win/app_icon.ico")
 
 if(WIN32 AND EXISTS "${APP_ICON_RC}" AND EXISTS "${APP_ICON_ICO}")
     set(EDITOR_RESOURCES "${APP_ICON_RC}")
@@ -60,10 +56,11 @@ target_link_libraries(${TARGET_NAME} PRIVATE HybridRuntime)
 # 关键更新：include 根目录改为 editor 目录本身（包含 panels 子目录）
 target_include_directories(${TARGET_NAME} PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${ENGINE_ROOT_DIR}/source>
 )
 
 # -------------------------
-# Post-build: 统一部署到 ${BINARY_ROOT_DIR}
+# Post-build：统一部署到 ${BINARY_ROOT_DIR}
 # -------------------------
 
 # 1) bin 目录 + 拷贝输出
@@ -74,13 +71,13 @@ add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
             "${BINARY_ROOT_DIR}"
 )
 
-# 2) 拷贝 editor/resource（仅当存在）
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resource")
+# 2) 拷贝 editor/assets（仅当存在）
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets")
     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}/resource"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}/assets"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/resource"
-                "${BINARY_ROOT_DIR}/resource"
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+                "${BINARY_ROOT_DIR}/assets"
     )
 endif()
 
@@ -106,7 +103,7 @@ if(EXISTS "${ENGINE_ROOT_DIR}/shader")
     )
 endif()
 
-# ---- ImGuizmo (Editor-only) ----
+# ---- ImGuizmo（Editor-only）----
 target_include_directories(${TARGET_NAME} PRIVATE
     ${ENGINE_ROOT_DIR}/3rdparty/ImGuizmo
 )

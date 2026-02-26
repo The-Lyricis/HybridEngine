@@ -8,7 +8,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "editor/function/import/import_manager.h"
+#include "editor/services/import/import_manager.h"
 
 namespace Hybrid
 {
@@ -71,3 +71,4 @@ namespace Hybrid
         uint32_t m_min_settle_ms = 0;
     };
 } // namespace Hybrid
+

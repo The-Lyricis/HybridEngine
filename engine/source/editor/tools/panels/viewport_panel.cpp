@@ -1,5 +1,5 @@
-#include "viewport_panel.h"
-#include "../editor_context.h"
+﻿#include "viewport_panel.h"
+#include "editor/core/editor_context.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -100,12 +100,12 @@ namespace Hybrid
         ImGui::PopStyleColor(3);
     }
 
-    // 返回：本帧是否与工具栏发生交互（用于屏蔽 picking）
+    // 杩斿洖锛氭湰甯ф槸鍚︿笌宸ュ叿鏍忓彂鐢熶氦浜掞紙鐢ㄤ簬灞忚斀 picking锛?
     static bool DrawUnityToolBarPNG(const ImVec2& canvasMin)
     {
         bool interacted = false;
 
-        // Unity 快捷键：Q/W/E/R
+        // Unity 蹇嵎閿細Q/W/E/R
         if (ImGui::IsKeyPressed(ImGuiKey_Q)) { s_Tool = ToolMode::Hand;   interacted = true; }
         if (ImGui::IsKeyPressed(ImGuiKey_W)) { s_Tool = ToolMode::Move;   interacted = true; }
         if (ImGui::IsKeyPressed(ImGuiKey_E)) { s_Tool = ToolMode::Rotate; interacted = true; }
@@ -137,10 +137,10 @@ namespace Hybrid
 
                 if (tex != 0)
                 {
-                    // 说明：ImageButton 在不同 ImGui 版本签名略有差异，你当前版本大概率支持这个最常见签名
+                    // 璇存槑锛欼mageButton 鍦ㄤ笉鍚?ImGui 鐗堟湰绛惧悕鐣ユ湁宸紓锛屼綘褰撳墠鐗堟湰澶ф鐜囨敮鎸佽繖涓渶甯歌绛惧悕
                     ImVec2 uv0(0, 0), uv1(1, 1);
-                    ImVec4 bg(0, 0, 0, 0);           // 背景透明（高亮由按钮颜色控制）
-                    ImVec4 tint(1, 1, 1, 1);         // 原色显示
+                    ImVec4 bg(0, 0, 0, 0);           // 鑳屾櫙閫忔槑锛堥珮浜敱鎸夐挳棰滆壊鎺у埗锛?
+                    ImVec4 tint(1, 1, 1, 1);         // 鍘熻壊鏄剧ず
                     pressed = ImGui::ImageButton("##toolbtn", (ImTextureID)(intptr_t)tex, btnSize, uv0, uv1, bg, tint);
                 }
                 else
@@ -171,7 +171,7 @@ namespace Hybrid
         ImageToolButton(g_ToolIcons.scale, "Scale (R)", ToolMode::Scale);
 
 
-        // 如果鼠标在工具栏窗口上，也认为发生交互（防止点击空白也触发 picking）
+        // 濡傛灉榧犳爣鍦ㄥ伐鍏锋爮绐楀彛涓婏紝涔熻涓哄彂鐢熶氦浜掞紙闃叉鐐瑰嚮绌虹櫧涔熻Е鍙?picking锛?
         if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
             interacted = true;
 
@@ -186,10 +186,10 @@ namespace Hybrid
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
         ImGui::Begin("Viewport", &m_open);
 
-        // 一次性加载工具栏图标
+        // 涓€娆℃€у姞杞藉伐鍏锋爮鍥炬爣
         if (!g_ToolIcons.loaded)
         {
-            const std::string base = std::string(HYBRID_ROOT_DIR) + "/resource/";
+            const std::string base = std::string(HYBRID_ROOT_DIR) + "/assets/icons/";
 
             g_ToolIcons.hand = LoadTextureRGBA8(base + "icon_editorTools_pan.png");
             g_ToolIcons.move = LoadTextureRGBA8(base + "icon_editorTools_drag.png");
@@ -199,7 +199,7 @@ namespace Hybrid
             g_ToolIcons.loaded = (g_ToolIcons.hand && g_ToolIcons.move && g_ToolIcons.rotate && g_ToolIcons.scale);
         }
 
-        // --- 顶部相机模式 ---
+        // --- 椤堕儴鐩告満妯″紡 ---
         {
             ImGui::SetCursorPosX(5.0f);
             ImGui::TextUnformatted("Camera:");
@@ -213,7 +213,7 @@ namespace Hybrid
             ImGui::Separator();
         }
 
-        // --- 画面区域 ---
+        // --- 鐢婚潰鍖哄煙 ---
         ImVec2 canvasMin = ImGui::GetCursorScreenPos();
         ImVec2 canvasSize = ImGui::GetContentRegionAvail();
         if (canvasSize.x < 1.0f) canvasSize.x = 1.0f;
@@ -223,7 +223,7 @@ namespace Hybrid
         ImDrawList* dl = ImGui::GetWindowDrawList();
         dl->AddImage((ImTextureID)(intptr_t)m_colorTextureID, canvasMin, canvasMax, { 0, 1 }, { 1, 0 });
 
-        // hover/focus（仅画面区域）
+        // hover/focus锛堜粎鐢婚潰鍖哄煙锛?
         ctx.viewport_image_hovered = ImGui::IsMouseHoveringRect(canvasMin, canvasMax, false);
         ctx.viewport_hovered = ctx.viewport_image_hovered;
         ctx.viewport_focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
@@ -232,7 +232,7 @@ namespace Hybrid
         ctx.viewport_min = canvasMin;
         ctx.viewport_max = canvasMax;
 
-        // Game camera：禁用 gizmo/picking
+        // Game camera锛氱鐢?gizmo/picking
         if (ctx.use_game_camera)
         {
             ctx.gizmo_using = false;
@@ -242,10 +242,10 @@ namespace Hybrid
             return;
         }
 
-        // --- Unity 风格工具栏（PNG） ---
+        // --- Unity 椋庢牸宸ュ叿鏍忥紙PNG锛?---
         const bool toolbarInteracted = DrawUnityToolBarPNG(canvasMin);
 
-        // Hand 模式：给 RenderSystem/Engine 用
+        // Hand 妯″紡锛氱粰 RenderSystem/Engine 鐢?
         ctx.pan_tool = (s_Tool == ToolMode::Hand);
 
         // --- Gizmo ---
@@ -264,7 +264,7 @@ namespace Hybrid
                 glm::mat4 model = BuildModel(tr);
 
                 ImGuizmo::SetOrthographic(false);
-                ImGuizmo::SetDrawlist(); // 你的版本可用
+                ImGuizmo::SetDrawlist(); // 浣犵殑鐗堟湰鍙敤
                 ImGuizmo::SetRect(canvasMin.x, canvasMin.y, canvasSize.x, canvasSize.y);
 
                 ImGuizmo::OPERATION op = ImGuizmo::TRANSLATE;
@@ -325,7 +325,7 @@ namespace Hybrid
             }
         }
 
-        // --- Picking：工具栏交互 / gizmo hit / gizmo using 时不触发 ---
+        // --- Picking锛氬伐鍏锋爮浜や簰 / gizmo hit / gizmo using 鏃朵笉瑙﹀彂 ---
         if (ctx.viewport_image_hovered &&
             ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
             !toolbarInteracted &&
@@ -349,3 +349,5 @@ namespace Hybrid
     }
 
 } // namespace Hybrid
+
+

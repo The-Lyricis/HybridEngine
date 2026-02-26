@@ -1,10 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <filesystem>
 
-#include "editor/editor_ui.h"
-#include "editor/engine_services.h"
-#include "editor/function/asset/file_watcher.h"
+#include "editor/framework/ui/editor_ui.h"
+#include "editor/core/engine_services.h"
+#include "editor/services/asset/file_watcher.h"
 #include "runtime/core/event/layer.h"
 
 namespace Hybrid
@@ -34,3 +34,4 @@ namespace Hybrid
         bool m_initialized = false;        // Guard against partial startup/shutdown.
     };
 } // namespace Hybrid
+

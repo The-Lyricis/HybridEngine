@@ -10,9 +10,9 @@
 #include "runtime/function/asset/asset_registry.h"
 #include "runtime/function/asset/runtime_resource_system.h"
 
-#include "editor/function/import/audio_importer.h"
-#include "editor/function/import/mesh_importer.h"
-#include "editor/function/import/texture_importer.h"
+#include "editor/services/import/audio_importer.h"
+#include "editor/services/import/mesh_importer.h"
+#include "editor/services/import/texture_importer.h"
 
 namespace Hybrid
 {
@@ -549,3 +549,4 @@ namespace Hybrid
         return std::to_string(static_cast<unsigned long long>(size)) + "_" + std::to_string(ticks);
     }
 } // namespace Hybrid
+
