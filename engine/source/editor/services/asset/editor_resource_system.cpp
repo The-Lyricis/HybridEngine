@@ -1,4 +1,4 @@
-﻿#include "editor_resource_system.h"
+#include "editor_resource_system.h"
 
 #include <algorithm>
 #include <cctype>
@@ -13,6 +13,7 @@
 #include "editor/services/import/audio_importer.h"
 #include "editor/services/import/mesh_importer.h"
 #include "editor/services/import/texture_importer.h"
+#include "editor/services/import/scene_importer.h"
 
 namespace Hybrid
 {
@@ -371,6 +372,7 @@ namespace Hybrid
         m_importManager->registerImporter(std::make_shared<TextureImporter>());
         m_importManager->registerImporter(std::make_shared<MeshImporter>());
         m_importManager->registerImporter(std::make_shared<AudioImporter>());
+        m_importManager->registerImporter(std::make_shared<SceneImporter>());
     }
 
     bool EditorResourceSystem::processOneEvent(const std::string& source_vpath, AssetSourceChangeType change)
