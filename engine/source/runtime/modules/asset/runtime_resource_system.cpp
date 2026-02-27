@@ -106,7 +106,7 @@ namespace Hybrid
         m_manager->registerLoader<Texture>(texLoader);
 
         // Stub loaders for Mesh / Material锛堝悗缁浛鎹负瀹為檯瀹炵幇锛?
-        m_manager->registerLoader<Mesh>(std::make_shared<StubMeshLoader>());
+        m_manager->registerLoader<Mesh>(std::make_shared<MeshCookedLoader>());
         m_manager->registerLoader<Material>(std::make_shared<StubMaterialLoader>());
     }
 

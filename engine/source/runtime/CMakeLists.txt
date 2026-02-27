@@ -31,7 +31,7 @@ target_compile_options(${TARGET_NAME}
 )
 
 target_link_libraries(${TARGET_NAME}
-    PUBLIC glfw glad glm imgui stb
+    PUBLIC glfw glad glm imgui stb tinyobjloader
     PUBLIC spdlog::spdlog EnTT::EnTT nlohmann_json::nlohmann_json
 )
 

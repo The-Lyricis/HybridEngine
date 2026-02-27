@@ -84,3 +84,20 @@ endif()
 if(TARGET nlohmann_json)
     set_target_properties(nlohmann_json PROPERTIES FOLDER ${third_party_folder}/nlohmann_json)
 endif()
+
+# ---- tinyobjloader ----
+if(NOT TARGET tinyobjloader)
+    set(TINYOBJLOADER_DIR "${CMAKE_CURRENT_LIST_DIR}/tinyobjloader")
+
+    add_library(tinyobjloader STATIC
+        "${TINYOBJLOADER_DIR}/tinyobjloader_impl.cpp"
+    )
+
+    target_include_directories(tinyobjloader PUBLIC
+        "${TINYOBJLOADER_DIR}"
+    )
+
+    set_target_properties(tinyobjloader PROPERTIES
+        FOLDER ${third_party_folder}/tinyobjloader
+    )
+endif()

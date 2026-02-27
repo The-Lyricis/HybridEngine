@@ -621,8 +621,8 @@ void main() {
         m_SceneFB->bind();
         RenderCommand::setViewport(0, 0, m_SceneFB->getWidth(), m_SceneFB->getHeight());
         Renderer::beginFrame({0.1f, 0.1f, 0.12f, 1.0f});
-
-        // 娓?ID buffer锛圕OLOR1锛?
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        // Clear color to black and EntityID to 0 for picking/outline.
         uint32_t zero = 0;
         glClearBufferuiv(GL_COLOR, 1, &zero);
 
@@ -732,6 +732,8 @@ void main() {
         }
 
         // 5) end pass
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
         Renderer::endFrame();
         m_SceneFB->unbind();
 

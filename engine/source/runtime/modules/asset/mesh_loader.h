@@ -4,10 +4,13 @@
 
 namespace Hybrid
 {
-    class StubMeshLoader : public IAssetLoader<Mesh>
+    class MeshCookedLoader : public IAssetLoader<Mesh>
     {
     public:
         AssetType assetType() const override { return AssetType::Mesh; }
         std::shared_ptr<Mesh> load(const AssetMetadata& meta, IVirtualFileSystem& vfs) override;
     };
+
+    // Backward-compatible alias.
+    using StubMeshLoader = MeshCookedLoader;
 }
