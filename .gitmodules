@@ -19,3 +19,6 @@
 [submodule "engine/3rdparty/nlohmann_json"]
 	path = engine/3rdparty/nlohmann_json
 	url = https://github.com/nlohmann/json.git
+[submodule "ThirdParty/tinyobjloader"]
+	path = ThirdParty/tinyobjloader
+	url = https://github.com/tinyobjloader/tinyobjloader.git
