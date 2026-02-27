@@ -90,7 +90,7 @@ if(NOT TARGET tinyobjloader)
     set(TINYOBJLOADER_DIR "${CMAKE_CURRENT_LIST_DIR}/tinyobjloader")
 
     add_library(tinyobjloader STATIC
-        "${TINYOBJLOADER_DIR}/tinyobjloader_impl.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/tinyobjloader_impl.cpp"
     )
 
     target_include_directories(tinyobjloader PUBLIC
