@@ -51,7 +51,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 # MSVC 下关闭“警告当错误”
 target_compile_options(${TARGET_NAME} PRIVATE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/WX->")
 
-target_link_libraries(${TARGET_NAME} PRIVATE HybridRuntime)
+target_link_libraries(${TARGET_NAME} PRIVATE HybridRuntime tinyobjloader)
 
 # 关键更新：include 根目录改为 editor 目录本身（包含 panels 子目录）
 target_include_directories(${TARGET_NAME} PRIVATE
@@ -81,18 +81,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets")
     )
 endif()
 
-# 3) 拷贝 engine/asset（仅当存在）
-if(EXISTS "${ENGINE_ROOT_DIR}/asset")
-    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E remove_directory
-                "${BINARY_ROOT_DIR}/asset"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${ENGINE_ROOT_DIR}/asset"
-                "${BINARY_ROOT_DIR}/asset"
-    )
-endif()
-
-# 4)（可选但通常需要）拷贝 engine/shader（仅当存在）
+# 3)拷贝 engine/shader（仅当存在）
 if(EXISTS "${ENGINE_ROOT_DIR}/shader")
     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E remove_directory

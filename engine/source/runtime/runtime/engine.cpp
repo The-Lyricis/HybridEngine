@@ -162,6 +162,8 @@ namespace Hybrid
         m_FrameContext.scene = scene;
         m_FrameContext.window_handle = window;
 
+        
+        // ===== Hardcoded Scene Setup for Demo =====
         {
             auto cam = scene->createEntity("Game Camera");
             cam.AddComponent<Hybrid::CameraComponent>(Hybrid::CameraComponent{ true, 45.0f, 0.1f, 500.0f });
@@ -170,16 +172,14 @@ namespace Hybrid
             tr.Position = { 0.0f, 12.0f, 12.0f };
             tr.Rotation = MathUtil::quatFromEulerRadians({ glm::radians(-45.0f), 0.0f, 0.0f });
             tr.Scale = { 1.0f, 1.0f, 1.0f };
-        }
 
-        auto sun = scene->createEntity("Sun");
+            auto sun = scene->createEntity("Sun");
         auto& dl = sun.AddComponent<Hybrid::DirectionalLightComponent>();
         dl.Color = { 1.0f, 1.0f, 1.0f };
         dl.Intensity = 1.0f;
         auto& sunTr = sun.GetComponent<Hybrid::TransformComponent>();
         sunTr.Rotation = MathUtil::quatFromEulerRadians({ glm::radians(-70.5f), glm::radians(-123.7f), 0.0f });
 
-        {
             const int gridX = 5;
             const int gridZ = 5;
             const float spacing = 2.0f;
@@ -202,6 +202,26 @@ namespace Hybrid
                     tr.Scale = { 1.0f, 1.0f, 1.0f };
                 }
             }
+
+            if (m_RuntimeResourceSystem && m_RuntimeResourceSystem->getRegistry())
+{
+            const auto* mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/rock-a.obj");
+            if (mesh_meta)
+            {
+                auto rock = scene->createEntity("ROCK-A");
+                auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
+                mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
+                mr.Primitive = 0;
+
+                auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
+                tr.Position = {0.0f, 0.0f, 0.0f};
+                tr.Scale = {1.0f, 1.0f, 1.0f};
+            }
+            else
+            {
+                HBD_CORE_WARN("rock-a.obj meta not found in registry");
+            }
+}
         }
 
         int fbw = 0, fbh = 0;
