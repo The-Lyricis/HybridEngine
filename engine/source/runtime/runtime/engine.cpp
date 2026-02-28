@@ -529,6 +529,7 @@ namespace Hybrid
                     auto cube = scene->createEntity(name);
 
                     auto& mr = cube.AddComponent<Hybrid::MeshRendererComponent>();
+                    mr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
                     mr.Primitive = 0;
 
                     auto& tr = cube.GetComponent<Hybrid::TransformComponent>();

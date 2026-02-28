@@ -3,6 +3,7 @@
 #include "editor/core/editor_context.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <functional>
 #include <system_error>
@@ -372,7 +373,8 @@ namespace Hybrid
         drawNode = [&](const std::filesystem::path& dir) {
             const auto name = (dir == m_assetsRoot) ? std::string("Assets") : dir.filename().string();
 
-            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanFullWidth;
+            ImGuiTreeNodeFlags flags =
+                ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanFullWidth;
             if (dir == m_currentDir)
                 flags |= ImGuiTreeNodeFlags_Selected;
 
@@ -401,9 +403,11 @@ namespace Hybrid
             if (!hasChildDir)
                 flags |= ImGuiTreeNodeFlags_Leaf;
 
-            const bool opened = ImGui::TreeNodeEx(name.c_str(), flags);
+            const auto node_hash = std::hash<std::filesystem::path>{}(dir);
+            const bool opened =
+                ImGui::TreeNodeEx(reinterpret_cast<const void*>(static_cast<uintptr_t>(node_hash)), flags, "%s", name.c_str());
 
-            if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+            if (ImGui::IsItemClicked())
             {
                 m_currentDir = dir;
                 gatherEntries(m_currentDir);
@@ -452,7 +456,12 @@ namespace Hybrid
 
         ImGui::Separator();
 
-        for (const auto& e : m_entries)
+        std::filesystem::path pending_open_dir;
+        bool request_refresh = false;
+        bool request_clear_selection = false;
+
+        const std::vector<Entry> entries_snapshot = m_entries;
+        for (const auto& e : entries_snapshot)
         {
             const std::string name = e.physical.filename().string();
             const std::string relStr = e.rel.empty() ? std::string{} : e.rel.generic_string();
@@ -460,19 +469,23 @@ namespace Hybrid
             const char* prefix = e.is_dir ? "[DIR] " : "      ";
 
             const bool selected = (!relStr.empty() && relStr == m_selectedRelStr);
-            if (ImGui::Selectable((std::string(prefix) + name).c_str(), selected))
+            const bool clicked =
+                ImGui::Selectable((std::string(prefix) + name).c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick);
+            if (clicked)
             {
                 m_selectedRelStr = relStr;
             }
 
-            if (e.is_dir && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+            const bool double_clicked = ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+
+            if (e.is_dir && double_clicked)
             {
-                m_currentDir = e.physical;
-                gatherEntries(m_currentDir);
-                m_selectedRelStr.clear();
+                pending_open_dir = e.physical;
+                request_clear_selection = true;
+                break;
             }
 
-            if (!e.is_dir && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+            if (!e.is_dir && double_clicked)
             {
                 if (e.rel.extension() == ".scene")
                 {
@@ -508,20 +521,32 @@ namespace Hybrid
                 {
                     if (deleteEntry(ctx, e))
                     {
-                        gatherEntries(m_currentDir);
+                        request_refresh = true;
                         if (m_selectedRelStr == relStr)
-                            m_selectedRelStr.clear();
+                            request_clear_selection = true;
                     }
                 }
 
                 if (ImGui::MenuItem("Refresh"))
                 {
-                    gatherEntries(m_currentDir);
+                    request_refresh = true;
                 }
 
                 ImGui::EndPopup();
             }
         }
+
+        if (!pending_open_dir.empty())
+        {
+            m_currentDir = pending_open_dir;
+            request_refresh = true;
+        }
+
+        if (request_refresh)
+            gatherEntries(m_currentDir);
+
+        if (request_clear_selection)
+            m_selectedRelStr.clear();
 
         renderRenamePopup(ctx);
     }
