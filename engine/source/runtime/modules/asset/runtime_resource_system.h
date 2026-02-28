@@ -9,7 +9,6 @@
 #include "asset_meta_store.h"
 #include "runtime/core/base/vfs/virtual_file_system.h"
 #include "runtime/modules/render/public/texture.h"
-#include "mesh.h"
 #include "material.h"
 #include <runtime/modules/project/project_context.h>
 
@@ -25,6 +24,7 @@ namespace Hybrid
         std::shared_ptr<IVirtualFileSystem> getVFS() const { return m_vfs; }
         std::shared_ptr<AssetRegistry> getRegistry() const { return m_registry; }
         std::shared_ptr<AssetManager> getManager() const { return m_manager; }
+        AssetID getBuiltinCubeMeshID() const { return m_builtinCubeMeshId; }
 
     private:
         void registerDefaultLoaders(); // Register runtime loaders (texture/mesh/material).
@@ -32,7 +32,7 @@ namespace Hybrid
         // Default runtime fallback assets.
         void createDefaultTexture();
         void createDefaultMaterial();
-        void createDefaultMesh();
+        void createBuiltinCubeMesh();
 
     private:
         std::shared_ptr<IVirtualFileSystem> m_vfs;      // Logical path -> native file access.
@@ -41,7 +41,7 @@ namespace Hybrid
         std::unique_ptr<AssetMetaStore>     m_metaStore; // Meta file read path at startup.
         std::shared_ptr<Texture>            m_defaultTexture; // 1x1 white fallback texture.
         std::shared_ptr<Material>           m_defaultMaterial; // Fallback material.
-        std::shared_ptr<Mesh>               m_defaultMesh; // Fallback mesh.
+        AssetID                             m_builtinCubeMeshId{}; // Built-in cube mesh asset id.
         ProjectContext m_project; // Project context for path resolution and info.
     };
 } // namespace Hybrid

@@ -40,6 +40,17 @@ namespace Hybrid
         return AssetFuture<T>(std::move(fut));
     }
 
+    template <typename T> void AssetManager::registerResident(AssetID id, const std::shared_ptr<T>& asset)
+    {
+        if (id.value == 0 || !asset)
+            return;
+
+        std::scoped_lock lock(m_mutex);
+        m_cache[id] = std::static_pointer_cast<void>(asset);
+        m_state[id] = AssetState::Loaded;
+        m_inFlight.erase(id);
+    }
+
     template <typename T> void AssetManager::setDefault(const std::shared_ptr<T>& def)
     {
         std::scoped_lock lock(m_mutex);

@@ -621,7 +621,6 @@ void main() {
         m_SceneFB->bind();
         RenderCommand::setViewport(0, 0, m_SceneFB->getWidth(), m_SceneFB->getHeight());
         Renderer::beginFrame({0.1f, 0.1f, 0.12f, 1.0f});
-        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         // Clear color to black and EntityID to 0 for picking/outline.
         uint32_t zero = 0;
         glClearBufferuiv(GL_COLOR, 1, &zero);
@@ -675,15 +674,13 @@ void main() {
             // 4) draw items
             for (const auto &item : packet.items)
             {
-                std::shared_ptr<Mesh> cpuMesh;
                 AssetID meshId = item.meshId;
-                if (meshId.value != 0)
-                    cpuMesh = m_AssetManager->loadSync<Mesh>(meshId);
+                if (meshId.value == 0)
+                    continue;
+
+                std::shared_ptr<Mesh> cpuMesh = m_AssetManager->loadSync<Mesh>(meshId);
                 if (!cpuMesh)
-                {
-                    cpuMesh = m_AssetManager->getDefault<Mesh>();
-                    meshId = AssetID{};
-                }
+                    continue;
 
                 auto *meshGPU = getOrCreateMeshGPU(meshId, cpuMesh);
                 if (!meshGPU)
@@ -732,8 +729,6 @@ void main() {
         }
 
         // 5) end pass
-        //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
         Renderer::endFrame();
         m_SceneFB->unbind();
 

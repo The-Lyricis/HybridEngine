@@ -57,6 +57,7 @@ namespace Hybrid
         template <typename T> std::shared_ptr<T> loadSync(AssetID id);
 
         template <typename T> AssetFuture<T> loadAsync(AssetID id);
+        template <typename T> void registerResident(AssetID id, const std::shared_ptr<T>& asset);
 
         void unload(AssetID id);
         AssetState getState(AssetID id) const;

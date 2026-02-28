@@ -8,6 +8,7 @@
 #include "opengl_texture2d_loader.h"
 #include "mesh_loader.h"
 #include "material_loader.h"
+#include "mesh.h"
 
 namespace Hybrid
 {
@@ -95,7 +96,7 @@ namespace Hybrid
         registerDefaultLoaders();
         createDefaultTexture();
         createDefaultMaterial();
-        createDefaultMesh();
+        createBuiltinCubeMesh();
 
         HBD_CORE_TRACE("RuntimeResourceSystem initialized (project-based)");
     }
@@ -144,14 +145,41 @@ namespace Hybrid
         }
     }
 
-    void RuntimeResourceSystem::createDefaultMesh()
+    void RuntimeResourceSystem::createBuiltinCubeMesh()
     {
-        m_defaultMesh = Mesh::CreateCube();
-        if (m_manager && m_defaultMesh)
+        if (!m_registry || !m_manager)
+            return;
+
+        constexpr const char* kBuiltinCubePath = "builtin:Cube";
+
+        AssetMetadata meta{};
+        if (const auto* existing = m_registry->findByPath(kBuiltinCubePath))
         {
-            m_manager->setDefault<Mesh>(m_defaultMesh);
+            meta = *existing;
         }
+        else
+        {
+            meta.id = m_registry->generateUniqueID();
+            meta.type = AssetType::Mesh;
+            meta.source_path = kBuiltinCubePath;
+            meta.cooked_path.clear();
+            meta.hash = "builtin_cube_v1";
+            meta.is_valid = true;
+            m_registry->registerAsset(meta);
+        }
+
+        auto cube = Mesh::CreateCube();
+        if (!cube)
+        {
+            HBD_CORE_WARN("RuntimeResourceSystem: failed to build built-in cube mesh");
+            return;
+        }
+
+        m_builtinCubeMeshId = meta.id;
+        m_manager->registerResident<Mesh>(m_builtinCubeMeshId, cube);
+        HBD_CORE_INFO("RuntimeResourceSystem: built-in cube mesh asset {}", m_builtinCubeMeshId.value);
     }
+
 } // namespace Hybrid
 
 

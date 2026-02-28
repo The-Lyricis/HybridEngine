@@ -34,7 +34,8 @@ namespace Hybrid
 
         // 1) Create required directories.
         fs::create_directories(projectRoot, ec);
-        if (ec) {
+        if (ec)
+        {
             HBD_CORE_ERROR("Failed to create ProjectRoot: {} ({})", projectRoot.string(), ec.message());
             LogSystem::shutdown();
             return;
@@ -42,7 +43,8 @@ namespace Hybrid
 
         ec.clear();
         fs::create_directories(assetsDir, ec);
-        if (ec) {
+        if (ec)
+        {
             HBD_CORE_ERROR("Failed to create Assets dir: {} ({})", assetsDir.string(), ec.message());
             LogSystem::shutdown();
             return;
@@ -50,7 +52,8 @@ namespace Hybrid
 
         ec.clear();
         fs::create_directories(cacheDir, ec);
-        if (ec) {
+        if (ec)
+        {
             HBD_CORE_ERROR("Failed to create Cache dir: {} ({})", cacheDir.string(), ec.message());
             LogSystem::shutdown();
             return;
@@ -58,7 +61,8 @@ namespace Hybrid
 
         ec.clear();
         fs::create_directories(buildDir, ec);
-        if (ec) {
+        if (ec)
+        {
             HBD_CORE_ERROR("Failed to create Build dir: {} ({})", buildDir.string(), ec.message());
             LogSystem::shutdown();
             return;
@@ -66,7 +70,8 @@ namespace Hybrid
 
         ec.clear();
         fs::create_directories(settingsDir, ec);
-        if (ec) {
+        if (ec)
+        {
             HBD_CORE_ERROR("Failed to create ProjectSettings dir: {} ({})", settingsDir.string(), ec.message());
             LogSystem::shutdown();
             return;
@@ -76,7 +81,8 @@ namespace Hybrid
         if (!fs::exists(hyprojPath))
         {
             std::ofstream ofs(hyprojPath, std::ios::out | std::ios::binary);
-            if (!ofs) {
+            if (!ofs)
+            {
                 HBD_CORE_ERROR("Failed to create hyproj: {}", hyprojPath.string());
                 LogSystem::shutdown();
                 return;
@@ -118,7 +124,7 @@ namespace Hybrid
         m_Window = std::make_shared<WindowSystem>();
         m_Window->initialize(1280, 720, "Hybrid Engine");
 
-        GLFWwindow* window = m_Window->getNativeWindow();
+        GLFWwindow *window = m_Window->getNativeWindow();
         if (!window)
         {
             HBD_CORE_ERROR("GLFW window is null.");
@@ -147,7 +153,8 @@ namespace Hybrid
 
         // ===== Event / Layers =====
         auto surface_io = m_Window->getSurfaceIO();
-        surface_io->registerOnEventFunc([this](Event& e) { onEvent(e); });
+        surface_io->registerOnEventFunc([this](Event &e)
+                                        { onEvent(e); });
 
         m_InputLayer = new InputLayer();
         pushLayer(m_InputLayer);
@@ -162,23 +169,22 @@ namespace Hybrid
         m_FrameContext.scene = scene;
         m_FrameContext.window_handle = window;
 
-        
         // ===== Hardcoded Scene Setup for Demo =====
         {
             auto cam = scene->createEntity("Game Camera");
-            cam.AddComponent<Hybrid::CameraComponent>(Hybrid::CameraComponent{ true, 45.0f, 0.1f, 500.0f });
+            cam.AddComponent<Hybrid::CameraComponent>(Hybrid::CameraComponent{true, 45.0f, 0.1f, 500.0f});
 
-            auto& tr = cam.GetComponent<Hybrid::TransformComponent>();
-            tr.Position = { 0.0f, 12.0f, 12.0f };
-            tr.Rotation = MathUtil::quatFromEulerRadians({ glm::radians(-45.0f), 0.0f, 0.0f });
-            tr.Scale = { 1.0f, 1.0f, 1.0f };
+            auto &tr = cam.GetComponent<Hybrid::TransformComponent>();
+            tr.Position = {0.0f, 12.0f, 12.0f};
+            tr.Rotation = MathUtil::quatFromEulerRadians({glm::radians(-45.0f), 0.0f, 0.0f});
+            tr.Scale = {1.0f, 1.0f, 1.0f};
 
             auto sun = scene->createEntity("Sun");
-        auto& dl = sun.AddComponent<Hybrid::DirectionalLightComponent>();
-        dl.Color = { 1.0f, 1.0f, 1.0f };
-        dl.Intensity = 1.0f;
-        auto& sunTr = sun.GetComponent<Hybrid::TransformComponent>();
-        sunTr.Rotation = MathUtil::quatFromEulerRadians({ glm::radians(-70.5f), glm::radians(-123.7f), 0.0f });
+            auto &dl = sun.AddComponent<Hybrid::DirectionalLightComponent>();
+            dl.Color = {1.0f, 1.0f, 1.0f};
+            dl.Intensity = 1.0f;
+            auto &sunTr = sun.GetComponent<Hybrid::TransformComponent>();
+            sunTr.Rotation = MathUtil::quatFromEulerRadians({glm::radians(-70.5f), glm::radians(-123.7f), 0.0f});
 
             const int gridX = 5;
             const int gridZ = 5;
@@ -186,42 +192,64 @@ namespace Hybrid
             const float startX = -0.5f * (gridX - 1) * spacing;
             const float startZ = -0.5f * (gridZ - 1) * spacing;
 
-            for (int z = 0; z < gridZ; ++z)
-            {
-                for (int x = 0; x < gridX; ++x)
-                {
-                    std::string name = "Cube_" + std::to_string(z) + "_" + std::to_string(x);
-                    auto cube = scene->createEntity(name);
+            // for (int z = 0; z < gridZ; ++z)
+            // {
+            //     for (int x = 0; x < gridX; ++x)
+            //     {
+            //         std::string name = "Cube_" + std::to_string(z) + "_" + std::to_string(x);
+            //         auto cube = scene->createEntity(name);
 
-                    auto& mr = cube.AddComponent<Hybrid::MeshRendererComponent>();
-                    mr.Primitive = 0;
+            //         auto &mr = cube.AddComponent<Hybrid::MeshRendererComponent>();
+            //         if (m_RuntimeResourceSystem)
+            //         {
+            //             mr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
+            //         }
+            //         mr.Primitive = 0;
 
-                    auto& tr = cube.GetComponent<Hybrid::TransformComponent>();
-                    tr.Position = { startX + x * spacing, 0.0f, startZ + z * spacing };
-                    tr.Rotation = glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f };
-                    tr.Scale = { 1.0f, 1.0f, 1.0f };
-                }
-            }
+            //         auto &tr = cube.GetComponent<Hybrid::TransformComponent>();
+            //         tr.Position = {startX + x * spacing, 0.0f, startZ + z * spacing};
+            //         tr.Rotation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
+            //         tr.Scale = {1.0f, 1.0f, 1.0f};
+            //     }
+            // }
 
             if (m_RuntimeResourceSystem && m_RuntimeResourceSystem->getRegistry())
-{
-            const auto* mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/rock-a.obj");
-            if (mesh_meta)
             {
-                auto rock = scene->createEntity("ROCK-A");
-                auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
-                mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
-                mr.Primitive = 0;
+                const AssetMetadata *mesh_meta;
+                // mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/icosphere.obj");
+                // if (mesh_meta)
+                // {
+                //     auto rock = scene->createEntity("ICO");
+                //     auto &mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
+                //     mr.Mesh = mesh_meta->id; // 关键：绑定导入出来的 Mesh 资产
+                //     mr.Primitive = 0;
 
-                auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
-                tr.Position = {0.0f, 0.0f, 0.0f};
-                tr.Scale = {1.0f, 1.0f, 1.0f};
+                //     auto &tr = rock.GetComponent<Hybrid::TransformComponent>();
+                //     tr.Position = {0.0f, 4.0f, 0.0f};
+                //     tr.Scale = {1.0f, 1.0f, 1.0f};
+                // }
+                // else
+                // {
+                //     HBD_CORE_WARN("icosphere.obj meta not found in registry");
+                // }
+
+                mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/tree.obj");
+                if (mesh_meta)
+                {
+                    auto rock = scene->createEntity("Tree");
+                    auto &mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
+                    mr.Mesh = mesh_meta->id;
+                    mr.Primitive = 0;
+
+                    auto &tr = rock.GetComponent<Hybrid::TransformComponent>();
+                    tr.Position = {2.0f, 4.0f, 0.0f};
+                    tr.Scale = {1.0f, 1.0f, 1.0f};
+                }
+                else
+                {
+                    HBD_CORE_WARN("tree.obj meta not found in registry");
+                }
             }
-            else
-            {
-                HBD_CORE_WARN("rock-a.obj meta not found in registry");
-            }
-}
         }
 
         int fbw = 0, fbh = 0;
@@ -239,7 +267,7 @@ namespace Hybrid
             const float dt = calculateDeltaTime();
             m_Window->pollEvents();
 
-            for (Layer* layer : m_LayerStack)
+            for (Layer *layer : m_LayerStack)
             {
                 layer->onBeginFrame();
             }
@@ -254,7 +282,7 @@ namespace Hybrid
                 continue;
             }
 
-            for (Layer* layer : m_LayerStack)
+            for (Layer *layer : m_LayerStack)
             {
                 layer->onUpdate(dt);
             }
@@ -280,7 +308,7 @@ namespace Hybrid
 
             m_RenderSystem.renderFrame(m_FrameContext, m_RenderFlags, &m_EditorRenderExt);
 
-            for (Layer* layer : m_LayerStack)
+            for (Layer *layer : m_LayerStack)
             {
                 layer->onImGuiRender();
             }
@@ -301,7 +329,7 @@ namespace Hybrid
         }
     }
 
-    void HybridEngine::onEvent(Event& e)
+    void HybridEngine::onEvent(Event &e)
     {
         if (m_InputLayer)
         {
@@ -309,12 +337,13 @@ namespace Hybrid
         }
 
         EventDispatcher dispatcher(e);
-        dispatcher.dispatch<WindowCloseEvent>([this](WindowCloseEvent&) {
+        dispatcher.dispatch<WindowCloseEvent>([this](WindowCloseEvent &)
+                                              {
             m_Running = false;
-            return true;
-        });
+            return true; });
 
-        dispatcher.dispatch<WindowResizeEvent>([this](WindowResizeEvent& ev) {
+        dispatcher.dispatch<WindowResizeEvent>([this](WindowResizeEvent &ev)
+                                               {
             if (ev.getWidth() == 0 || ev.getHeight() == 0)
             {
                 m_Minimized = true;
@@ -324,8 +353,7 @@ namespace Hybrid
             m_Minimized = false;
             m_RenderSystem.onWindowResize(static_cast<uint32_t>(ev.getWidth()), static_cast<uint32_t>(ev.getHeight()));
             m_FrameContext.viewport_size = {static_cast<float>(ev.getWidth()), static_cast<float>(ev.getHeight())};
-            return false;
-        });
+            return false; });
 
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
@@ -337,7 +365,7 @@ namespace Hybrid
         }
     }
 
-    void HybridEngine::pushLayer(Layer* layer)
+    void HybridEngine::pushLayer(Layer *layer)
     {
         if (!layer)
             return;
@@ -345,7 +373,7 @@ namespace Hybrid
         layer->onAttach();
     }
 
-    void HybridEngine::pushOverlay(Layer* layer)
+    void HybridEngine::pushOverlay(Layer *layer)
     {
         if (!layer)
             return;
@@ -353,7 +381,7 @@ namespace Hybrid
         layer->onAttach();
     }
 
-    bool HybridEngine::consumePickResult(uint32_t& out_entity_id)
+    bool HybridEngine::consumePickResult(uint32_t &out_entity_id)
     {
         if (!m_HasPendingPickResult)
             return false;
