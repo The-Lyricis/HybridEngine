@@ -1,7 +1,6 @@
-﻿#include "scene.h"
+#include "scene.h"
 
 #include <glm/gtc/matrix_transform.hpp>
-
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 
@@ -40,59 +39,6 @@ namespace Hybrid
             return true;
         }
 
-        void detachFromParentLinks(entt::registry& reg, entt::entity child)
-        {
-            if (!hasTransform(reg, child))
-                return;
-
-            auto& ct = reg.get<TransformComponent>(child);
-
-            if (hasTransform(reg, ct.Parent))
-            {
-                auto& pt = reg.get<TransformComponent>(ct.Parent);
-                if (pt.FirstChild == child)
-                {
-                    pt.FirstChild = ct.NextSibling;
-                }
-            }
-
-            if (hasTransform(reg, ct.PrevSibling))
-            {
-                reg.get<TransformComponent>(ct.PrevSibling).NextSibling = ct.NextSibling;
-            }
-
-            if (hasTransform(reg, ct.NextSibling))
-            {
-                reg.get<TransformComponent>(ct.NextSibling).PrevSibling = ct.PrevSibling;
-            }
-
-            ct.Parent = entt::null;
-            ct.NextSibling = entt::null;
-            ct.PrevSibling = entt::null;
-        }
-
-        void attachToParentLinks(entt::registry& reg, entt::entity child, entt::entity parent)
-        {
-            if (!hasTransform(reg, child))
-                return;
-
-            auto& ct = reg.get<TransformComponent>(child);
-            ct.Parent = parent;
-            ct.PrevSibling = entt::null;
-            ct.NextSibling = entt::null;
-
-            if (!hasTransform(reg, parent))
-                return;
-
-            auto& pt = reg.get<TransformComponent>(parent);
-            ct.NextSibling = pt.FirstChild;
-            if (hasTransform(reg, pt.FirstChild))
-            {
-                reg.get<TransformComponent>(pt.FirstChild).PrevSibling = child;
-            }
-            pt.FirstChild = child;
-        }
-
         void markDirtyRecursiveImpl(entt::registry& reg, entt::entity root)
         {
             if (!hasTransform(reg, root))
@@ -106,9 +52,7 @@ namespace Hybrid
             {
                 entt::entity next = entt::null;
                 if (hasTransform(reg, child))
-                {
                     next = reg.get<TransformComponent>(child).NextSibling;
-                }
 
                 markDirtyRecursiveImpl(reg, child);
                 child = next;
@@ -116,9 +60,9 @@ namespace Hybrid
         }
 
         void updateNodeRecursive(entt::registry& reg,
-                                 entt::entity node,
-                                 const glm::mat4& parent_world,
-                                 bool parent_world_dirty)
+            entt::entity node,
+            const glm::mat4& parent_world,
+            bool parent_world_dirty)
         {
             if (!hasTransform(reg, node))
                 return;
@@ -147,9 +91,7 @@ namespace Hybrid
             {
                 entt::entity next = entt::null;
                 if (hasTransform(reg, child))
-                {
                     next = reg.get<TransformComponent>(child).NextSibling;
-                }
 
                 updateNodeRecursive(reg, child, world_for_children, world_changed);
                 child = next;
@@ -157,16 +99,68 @@ namespace Hybrid
         }
     } // namespace
 
+    // -------------------------
+    // UUID / Entity Map
+    // -------------------------
+
+    void Scene::onEntityCreated(Entity e)
+    {
+        // 容错：保证 IDComponent 存在
+        if (!e.HasComponent<IDComponent>())
+            e.AddComponent<IDComponent>(IDComponent{ UUIDGenerator::New() });
+
+        const auto id = e.GetComponent<IDComponent>().ID;
+        if (id.value != 0)
+            m_EntityMap[id.value] = e.GetHandle();
+    }
+
+    void Scene::onEntityDestroyed(entt::entity h)
+    {
+        if (!m_Registry.valid(h))
+            return;
+
+        if (auto* id = m_Registry.try_get<IDComponent>(h))
+        {
+            if (id->ID.value != 0)
+                m_EntityMap.erase(id->ID.value);
+        }
+    }
+
+    Entity Scene::findEntityByUUID(UUID id) const
+    {
+        if (id.value == 0)
+            return Entity{};
+
+        auto it = m_EntityMap.find(id.value);
+        if (it == m_EntityMap.end())
+            return Entity{};
+
+        if (!m_Registry.valid(it->second))
+            return Entity{};
+
+        // 你的 Entity 包装如果只接受非 const 指针，这里需要 const_cast
+        return Entity(it->second, const_cast<entt::registry*>(&m_Registry), const_cast<Scene*>(this));
+    }
+
+    // -------------------------
+    // Create / Destroy
+    // -------------------------
+
     Entity Scene::createEntity(const std::string& name)
     {
-        entt::entity handle = m_Registry.create();
+        return createEntityWithUUID(UUIDGenerator::New(), name);
+    }
 
+    Entity Scene::createEntityWithUUID(UUID id, const std::string& name)
+    {
+        entt::entity handle = m_Registry.create();
         Entity entity(handle, &m_Registry, this);
 
-        entity.AddComponent<IDComponent>(IDComponent{m_NextID++});
-        entity.AddComponent<TagComponent>(TagComponent{name});
+        entity.AddComponent<IDComponent>(IDComponent{ id });
+        entity.AddComponent<TagComponent>(TagComponent{ name });
         entity.AddComponent<TransformComponent>();
 
+        onEntityCreated(entity);
         return entity;
     }
 
@@ -184,6 +178,98 @@ namespace Hybrid
         e.AddComponent<MeshRendererComponent>();
         return e;
     }
+
+    void Scene::destroyEntity(Entity entity)
+    {
+        DestroyEntityRecursive(entity);
+    }
+
+    void Scene::DestroyEntityRecursive(Entity e)
+    {
+        if (!e.IsValid() || e.GetScene() != this)
+            return;
+
+        const entt::entity h = e.GetHandle();
+        if (!m_Registry.valid(h))
+            return;
+
+        // 先递归销毁孩子
+        if (hasTransform(m_Registry, h))
+        {
+            entt::entity child = m_Registry.get<TransformComponent>(h).FirstChild;
+            while (child != entt::null)
+            {
+                entt::entity next = entt::null;
+                if (hasTransform(m_Registry, child))
+                    next = m_Registry.get<TransformComponent>(child).NextSibling;
+
+                DestroyEntityRecursive(Entity(child, &m_Registry, this));
+                child = next;
+            }
+
+            // 再统一断链（修复父节点 firstChild 悬空问题）
+            detachFromParentLinks(h);
+        }
+
+        onEntityDestroyed(h);
+        m_Registry.destroy(h);
+    }
+
+    // -------------------------
+    // Parent Links (moved into Scene)
+    // -------------------------
+
+    void Scene::detachFromParentLinks(entt::entity child)
+    {
+        if (!hasTransform(m_Registry, child))
+            return;
+
+        auto& ct = m_Registry.get<TransformComponent>(child);
+
+        // 修复父节点 FirstChild
+        if (hasTransform(m_Registry, ct.Parent))
+        {
+            auto& pt = m_Registry.get<TransformComponent>(ct.Parent);
+            if (pt.FirstChild == child)
+                pt.FirstChild = ct.NextSibling;
+        }
+
+        // 修复兄弟链
+        if (hasTransform(m_Registry, ct.PrevSibling))
+            m_Registry.get<TransformComponent>(ct.PrevSibling).NextSibling = ct.NextSibling;
+
+        if (hasTransform(m_Registry, ct.NextSibling))
+            m_Registry.get<TransformComponent>(ct.NextSibling).PrevSibling = ct.PrevSibling;
+
+        ct.Parent = entt::null;
+        ct.NextSibling = entt::null;
+        ct.PrevSibling = entt::null;
+    }
+
+    void Scene::attachToParentLinks(entt::entity child, entt::entity parent)
+    {
+        if (!hasTransform(m_Registry, child))
+            return;
+
+        auto& ct = m_Registry.get<TransformComponent>(child);
+        ct.Parent = parent;
+        ct.PrevSibling = entt::null;
+        ct.NextSibling = entt::null;
+
+        if (!hasTransform(m_Registry, parent))
+            return;
+
+        auto& pt = m_Registry.get<TransformComponent>(parent);
+        ct.NextSibling = pt.FirstChild;
+        if (hasTransform(m_Registry, pt.FirstChild))
+            m_Registry.get<TransformComponent>(pt.FirstChild).PrevSibling = child;
+
+        pt.FirstChild = child;
+    }
+
+    // -------------------------
+    // Relationship ops
+    // -------------------------
 
     bool Scene::SetParent(Entity child, Entity parent, bool worldPositionStays)
     {
@@ -207,6 +293,7 @@ namespace Hybrid
             if (parent_h == child_h)
                 return false;
 
+            // 注意：这里我们用了“严格后代”语义，避免 self=true 的困惑
             if (IsDescendant(parent, child))
                 return false;
         }
@@ -215,23 +302,21 @@ namespace Hybrid
         if (child_tc.Parent == parent_h)
             return true;
 
-        glm::mat4 old_world{1.0f};
+        glm::mat4 old_world{ 1.0f };
         if (worldPositionStays)
         {
             updateTransformHierarchy();
             old_world = child_tc.WorldMatrix;
         }
 
-        detachFromParentLinks(m_Registry, child_h);
-        attachToParentLinks(m_Registry, child_h, parent_h);
+        detachFromParentLinks(child_h);
+        attachToParentLinks(child_h, parent_h);
 
         if (worldPositionStays)
         {
-            glm::mat4 parent_world{1.0f};
+            glm::mat4 parent_world{ 1.0f };
             if (hasTransform(m_Registry, parent_h))
-            {
                 parent_world = m_Registry.get<TransformComponent>(parent_h).WorldMatrix;
-            }
 
             const glm::mat4 new_local = glm::inverse(parent_world) * old_world;
             auto& updated_tc = m_Registry.get<TransformComponent>(child_h);
@@ -265,14 +350,15 @@ namespace Hybrid
         const entt::entity ancestor_h = ancestor.GetHandle();
         entt::entity current = node.GetHandle();
 
+        // 严格后代：先跳到 parent，再判断
         while (hasTransform(m_Registry, current))
         {
+            current = m_Registry.get<TransformComponent>(current).Parent;
+            if (current == entt::null)
+                break;
             if (current == ancestor_h)
                 return true;
-
-            current = m_Registry.get<TransformComponent>(current).Parent;
         }
-
         return false;
     }
 
@@ -280,44 +366,12 @@ namespace Hybrid
     {
         if (!root.IsValid() || root.GetScene() != this)
             return;
-
         markDirtyRecursiveImpl(m_Registry, root.GetHandle());
     }
 
-    void Scene::DestroyEntityRecursive(Entity e)
-    {
-        if (!e.IsValid() || e.GetScene() != this)
-            return;
-
-        const entt::entity h = e.GetHandle();
-        if (!m_Registry.valid(h))
-            return;
-
-        if (hasTransform(m_Registry, h))
-        {
-            entt::entity child = m_Registry.get<TransformComponent>(h).FirstChild;
-            while (child != entt::null)
-            {
-                entt::entity next = entt::null;
-                if (hasTransform(m_Registry, child))
-                {
-                    next = m_Registry.get<TransformComponent>(child).NextSibling;
-                }
-
-                DestroyEntityRecursive(Entity(child, &m_Registry, this));
-                child = next;
-            }
-
-            detachFromParentLinks(m_Registry, h);
-        }
-
-        m_Registry.destroy(h);
-    }
-
-    void Scene::destroyEntity(Entity entity)
-    {
-        DestroyEntityRecursive(entity);
-    }
+    // -------------------------
+    // Update
+    // -------------------------
 
     void Scene::onUpdate(float dt)
     {
@@ -325,29 +379,46 @@ namespace Hybrid
         updateTransformHierarchy();
     }
 
-    void Scene::updateTransformHierarchy()
+    std::vector<Entity> Scene::getRootEntities() const
     {
+        std::vector<Entity> roots;
         auto view = m_Registry.view<TransformComponent>();
-
-        for (auto e : view)
-        {
-            auto& tc = view.get<TransformComponent>(e);
-            if (tc.Parent != entt::null && !hasTransform(m_Registry, tc.Parent))
-            {
-                tc.Parent = entt::null;
-                tc.NextSibling = entt::null;
-                tc.PrevSibling = entt::null;
-                tc.DirtyWorld = true;
-            }
-        }
+        roots.reserve(view.size());
 
         for (auto e : view)
         {
             const auto& tc = view.get<TransformComponent>(e);
             if (tc.Parent == entt::null)
             {
-                updateNodeRecursive(m_Registry, e, glm::mat4(1.0f), false);
+                roots.emplace_back(e, const_cast<entt::registry*>(&m_Registry), const_cast<Scene*>(this));
             }
         }
+        return roots;
     }
+
+    void Scene::updateTransformHierarchy()
+    {
+        auto view = m_Registry.view<TransformComponent>();
+
+        // 1) 修复非法 parent：用统一断链函数，避免悬空 FirstChild
+        for (auto e : view)
+        {
+            auto& tc = view.get<TransformComponent>(e);
+            if (tc.Parent != entt::null && !hasTransform(m_Registry, tc.Parent))
+            {
+                detachFromParentLinks(e);
+                tc.DirtyWorld = true;
+            }
+        }
+
+        // 2) 从根更新
+        for (auto e : view)
+        {
+            const auto& tc = view.get<TransformComponent>(e);
+            if (tc.Parent == entt::null)
+                updateNodeRecursive(m_Registry, e, glm::mat4(1.0f), false);
+        }
+    }
+    
+
 } // namespace Hybrid

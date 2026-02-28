@@ -1,4 +1,4 @@
-﻿#include "runtime_resource_system.h"
+#include "runtime_resource_system.h"
 
 #include <filesystem>
 #include <memory>
@@ -8,6 +8,7 @@
 #include "opengl_texture2d_loader.h"
 #include "mesh_loader.h"
 #include "material_loader.h"
+#include "scene_loader.h"
 #include "mesh.h"
 
 namespace Hybrid
@@ -109,6 +110,7 @@ namespace Hybrid
         // Stub loaders for Mesh / Material锛堝悗缁浛鎹负瀹為檯瀹炵幇锛?
         m_manager->registerLoader<Mesh>(std::make_shared<MeshCookedLoader>());
         m_manager->registerLoader<Material>(std::make_shared<StubMaterialLoader>());
+        m_manager->registerLoader<Scene>(std::make_shared<SceneLoader>());
     }
 
     void RuntimeResourceSystem::createDefaultTexture()

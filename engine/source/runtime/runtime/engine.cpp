@@ -9,11 +9,338 @@
 
 #include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include "runtime/modules/project/project_loader.h"
 #include "runtime/modules/project/project_context.h"
+#include "runtime/modules/scene/scene_serializer.h"
 
 namespace Hybrid
 {
+    static void EnsureDemoScenes(const std::filesystem::path& assetsDir)
+    {
+        namespace fs = std::filesystem;
+        using json = nlohmann::json;
+
+        const fs::path scenesDir = assetsDir / "Scenes";
+        const fs::path aPath = scenesDir / "DemoA.scene";
+        const fs::path bPath = scenesDir / "DemoB.scene";
+
+        std::error_code ec;
+        fs::create_directories(scenesDir, ec);
+        if (ec)
+            return;
+
+        auto write = [](const fs::path& path, const json& root) -> bool
+            {
+                std::ofstream ofs(path, std::ios::out | std::ios::trunc);
+                if (!ofs)
+                    return false;
+                ofs << root.dump(4);
+                return true;
+            };
+
+        auto makeRoot = []() -> json
+            {
+                json root;
+                root["meta"] = { {"version", 2} };
+                root["entities"] = json::array();
+                return root;
+            };
+
+        auto pushEntity = [](json& root,
+            uint64_t uuid,
+            const std::string& name,
+            uint64_t parent_uuid,
+            const glm::vec3& t,
+            const glm::quat& r,
+            const glm::vec3& s,
+            bool addMeshRenderer,
+            int primitive,
+            const glm::vec4& tint,
+            bool addCamera,
+            bool cameraPrimary,
+            float cameraFovY,
+            float cameraNear,
+            float cameraFar,
+            bool addDirLight,
+            const glm::vec3& lightColor,
+            float lightIntensity)
+            {
+                json e;
+                e["uuid"] = uuid;
+                e["name"] = name;
+                e["parent"] = parent_uuid;
+
+                e["transform"] = {
+                    {"t", json::array({t.x, t.y, t.z})},
+                    {"r", json::array({r.w, r.x, r.y, r.z})}, // [w,x,y,z]
+                    {"s", json::array({s.x, s.y, s.z})}
+                };
+
+                if (addMeshRenderer)
+                {
+                    e["meshRenderer"] = {
+                        {"mesh", 0ull},        // AssetID.value，0 表示无（走默认/primitive）
+                        {"material", 0ull},
+                        {"primitive", primitive},
+                        {"tint", json::array({tint.x, tint.y, tint.z, tint.w})}
+                    };
+                }
+
+                if (addCamera)
+                {
+                    e["camera"] = {
+                        {"primary", cameraPrimary},
+                        {"fovY", cameraFovY},
+                        {"near", cameraNear},
+                        {"far",  cameraFar}
+                    };
+                }
+
+                if (addDirLight)
+                {
+                    e["dirLight"] = {
+                        {"color", json::array({lightColor.x, lightColor.y, lightColor.z})},
+                        {"intensity", lightIntensity}
+                    };
+                }
+
+                root["entities"].push_back(std::move(e));
+            };
+
+        // =========================================================
+        // DemoA：5x5 网格 + 默认相机 + 默认方向光
+        // =========================================================
+        {
+            json root = makeRoot();
+
+            const uint64_t rootId = 1000;
+
+            // Root_A（不渲染）
+            pushEntity(root,
+                rootId,
+                "Root_A",
+                0,
+                glm::vec3{ 0.0f, 0.0f, 0.0f },
+                glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f },
+                glm::vec3{ 1.0f, 1.0f, 1.0f },
+                /*addMeshRenderer=*/false,
+                /*primitive=*/0,
+                glm::vec4{ 1.0f },
+                /*addCamera=*/false,
+                /*cameraPrimary=*/false,
+                45.0f, 0.1f, 500.0f,
+                /*addDirLight=*/false,
+                glm::vec3{ 1.0f, 1.0f, 1.0f },
+                1.0f);
+
+            // Camera_A（Primary）
+            {
+                const uint64_t camId = 1100;
+                const glm::vec3 t{ 0.0f, 12.0f, 12.0f };
+                const glm::quat r = MathUtil::quatFromEulerRadians({ glm::radians(-45.0f), 0.0f, 0.0f });
+                const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
+
+                pushEntity(root,
+                    camId,
+                    "Camera_A",
+                    0,
+                    t, r, s,
+                    /*addMeshRenderer=*/false,
+                    0,
+                    glm::vec4{ 1.0f },
+                    /*addCamera=*/true,
+                    /*cameraPrimary=*/true,
+                    45.0f, 0.1f, 500.0f,
+                    /*addDirLight=*/false,
+                    glm::vec3{ 1.0f, 1.0f, 1.0f },
+                    1.0f);
+            }
+
+            // Sun_A（Directional Light）
+            {
+                const uint64_t sunId = 1101;
+                const glm::vec3 t{ 0.0f, 0.0f, 0.0f };
+                const glm::quat r = MathUtil::quatFromEulerRadians({ glm::radians(-70.5f), glm::radians(-123.7f), 0.0f });
+                const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
+
+                pushEntity(root,
+                    sunId,
+                    "Sun_A",
+                    0,
+                    t, r, s,
+                    /*addMeshRenderer=*/false,
+                    0,
+                    glm::vec4{ 1.0f },
+                    /*addCamera=*/false,
+                    false,
+                    45.0f, 0.1f, 500.0f,
+                    /*addDirLight=*/true,
+                    glm::vec3{ 1.0f, 1.0f, 1.0f },
+                    1.0f);
+            }
+
+            // 5x5 Cubes（渲染）
+            const int gridX = 5;
+            const int gridZ = 5;
+            const float spacing = 2.0f;
+            const float startX = -0.5f * (gridX - 1) * spacing;
+            const float startZ = -0.5f * (gridZ - 1) * spacing;
+
+            uint64_t uid = rootId + 1;
+            for (int z = 0; z < gridZ; ++z)
+            {
+                for (int x = 0; x < gridX; ++x)
+                {
+                    const glm::vec3 t{ startX + x * spacing, 0.0f, startZ + z * spacing };
+                    const glm::quat r{ 1.0f, 0.0f, 0.0f, 0.0f };
+                    const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
+                    const glm::vec4 tint{ 0.85f, 0.90f, 1.0f, 1.0f };
+
+                    pushEntity(root,
+                        uid++,
+                        "A_Cube_" + std::to_string(z) + "_" + std::to_string(x),
+                        rootId,
+                        t, r, s,
+                        /*addMeshRenderer=*/true,
+                        /*primitive=*/0,
+                        tint,
+                        /*addCamera=*/false,
+                        false,
+                        45.0f, 0.1f, 500.0f,
+                        /*addDirLight=*/false,
+                        glm::vec3{ 1.0f, 1.0f, 1.0f },
+                        1.0f);
+                }
+            }
+
+            (void)write(aPath, root);
+        }
+
+        // =========================================================
+        // DemoB：斜坡队列 + 两级层级 + 默认相机 + 默认方向光
+        // =========================================================
+        {
+            json root = makeRoot();
+
+            const uint64_t rootId = 2000;
+            const uint64_t groupId = 2001;
+
+            // Root_B（不渲染）
+            pushEntity(root,
+                rootId,
+                "Root_B",
+                0,
+                glm::vec3{ 0.0f, 0.0f, 0.0f },
+                glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f },
+                glm::vec3{ 1.0f, 1.0f, 1.0f },
+                /*addMeshRenderer=*/false,
+                0,
+                glm::vec4{ 1.0f },
+                /*addCamera=*/false,
+                false,
+                45.0f, 0.1f, 500.0f,
+                /*addDirLight=*/false,
+                glm::vec3{ 1.0f, 1.0f, 1.0f },
+                1.0f);
+
+            // Group_B（不渲染）
+            pushEntity(root,
+                groupId,
+                "Group_B",
+                rootId,
+                glm::vec3{ 0.0f, 0.0f, 0.0f },
+                glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f },
+                glm::vec3{ 1.0f, 1.0f, 1.0f },
+                /*addMeshRenderer=*/false,
+                0,
+                glm::vec4{ 1.0f },
+                /*addCamera=*/false,
+                false,
+                45.0f, 0.1f, 500.0f,
+                /*addDirLight=*/false,
+                glm::vec3{ 1.0f, 1.0f, 1.0f },
+                1.0f);
+
+            // Camera_B（Primary）
+            {
+                const uint64_t camId = 2100;
+                const glm::vec3 t{ 0.0f, 10.0f, 16.0f };
+                const glm::quat r = MathUtil::quatFromEulerRadians({ glm::radians(-35.0f), glm::radians(20.0f), 0.0f });
+                const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
+
+                pushEntity(root,
+                    camId,
+                    "Camera_B",
+                    0,
+                    t, r, s,
+                    /*addMeshRenderer=*/false,
+                    0,
+                    glm::vec4{ 1.0f },
+                    /*addCamera=*/true,
+                    /*cameraPrimary=*/true,
+                    45.0f, 0.1f, 500.0f,
+                    /*addDirLight=*/false,
+                    glm::vec3{ 1.0f, 1.0f, 1.0f },
+                    1.0f);
+            }
+
+            // Sun_B（Directional Light）
+            {
+                const uint64_t sunId = 2101;
+                const glm::vec3 t{ 0.0f, 0.0f, 0.0f };
+                const glm::quat r = MathUtil::quatFromEulerRadians({ glm::radians(-60.0f), glm::radians(-30.0f), 0.0f });
+                const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
+
+                pushEntity(root,
+                    sunId,
+                    "Sun_B",
+                    0,
+                    t, r, s,
+                    /*addMeshRenderer=*/false,
+                    0,
+                    glm::vec4{ 1.0f },
+                    /*addCamera=*/false,
+                    false,
+                    45.0f, 0.1f, 500.0f,
+                    /*addDirLight=*/true,
+                    glm::vec3{ 1.0f, 1.0f, 1.0f },
+                    1.0f);
+            }
+
+            // Blocks（渲染，挂在 Group_B 下）
+            uint64_t uid = 2002;
+            for (int i = 0; i < 12; ++i)
+            {
+                const glm::vec3 t{ -8.0f + i * 1.5f, 0.2f * i, -2.0f + i * 0.6f };
+                const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
+
+                const float yaw = glm::radians(8.0f * static_cast<float>(i));
+                const glm::quat r = MathUtil::quatFromEulerRadians({ 0.0f, yaw, 0.0f });
+
+                const glm::vec4 tint{ 1.0f, 0.90f, 0.75f, 1.0f };
+
+                pushEntity(root,
+                    uid++,
+                    "B_Block_" + std::to_string(i),
+                    groupId,
+                    t, r, s,
+                    /*addMeshRenderer=*/true,
+                    /*primitive=*/0,
+                    tint,
+                    /*addCamera=*/false,
+                    false,
+                    45.0f, 0.1f, 500.0f,
+                    /*addDirLight=*/false,
+                    glm::vec3{ 1.0f, 1.0f, 1.0f },
+                    1.0f);
+            }
+
+            (void)write(bPath, root);
+        }
+    }
+
+   
     void HybridEngine::initialize()
     {
         LogSystem::initialize();
@@ -111,6 +438,8 @@ namespace Hybrid
         }
 
         Hybrid::ProjectService::Set(pctx);
+        EnsureDemoScenes(pctx.assets);
+
 
         HBD_CORE_INFO("Project loaded: {}", fs::absolute(hyprojPath).string());
         HBD_CORE_INFO("Project Root   : {}", pctx.root.string());
@@ -192,65 +521,49 @@ namespace Hybrid
             const float startX = -0.5f * (gridX - 1) * spacing;
             const float startZ = -0.5f * (gridZ - 1) * spacing;
 
-            // for (int z = 0; z < gridZ; ++z)
-            // {
-            //     for (int x = 0; x < gridX; ++x)
-            //     {
-            //         std::string name = "Cube_" + std::to_string(z) + "_" + std::to_string(x);
-            //         auto cube = scene->createEntity(name);
-
-            //         auto &mr = cube.AddComponent<Hybrid::MeshRendererComponent>();
-            //         if (m_RuntimeResourceSystem)
-            //         {
-            //             mr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
-            //         }
-            //         mr.Primitive = 0;
-
-            //         auto &tr = cube.GetComponent<Hybrid::TransformComponent>();
-            //         tr.Position = {startX + x * spacing, 0.0f, startZ + z * spacing};
-            //         tr.Rotation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
-            //         tr.Scale = {1.0f, 1.0f, 1.0f};
-            //     }
-            // }
-
-            if (m_RuntimeResourceSystem && m_RuntimeResourceSystem->getRegistry())
+            for (int z = 0; z < gridZ; ++z)
             {
-                const AssetMetadata *mesh_meta;
-                // mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/icosphere.obj");
-                // if (mesh_meta)
-                // {
-                //     auto rock = scene->createEntity("ICO");
-                //     auto &mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
-                //     mr.Mesh = mesh_meta->id; // 关键：绑定导入出来的 Mesh 资产
-                //     mr.Primitive = 0;
-
-                //     auto &tr = rock.GetComponent<Hybrid::TransformComponent>();
-                //     tr.Position = {0.0f, 4.0f, 0.0f};
-                //     tr.Scale = {1.0f, 1.0f, 1.0f};
-                // }
-                // else
-                // {
-                //     HBD_CORE_WARN("icosphere.obj meta not found in registry");
-                // }
-
-                mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/tree.obj");
-                if (mesh_meta)
+                for (int x = 0; x < gridX; ++x)
                 {
-                    auto rock = scene->createEntity("Tree");
-                    auto &mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
-                    mr.Mesh = mesh_meta->id;
+                    std::string name = "Cube_" + std::to_string(z) + "_" + std::to_string(x);
+                    auto cube = scene->createEntity(name);
+
+                    auto& mr = cube.AddComponent<Hybrid::MeshRendererComponent>();
                     mr.Primitive = 0;
 
-                    auto &tr = rock.GetComponent<Hybrid::TransformComponent>();
-                    tr.Position = {2.0f, 4.0f, 0.0f};
-                    tr.Scale = {1.0f, 1.0f, 1.0f};
-                }
-                else
-                {
-                    HBD_CORE_WARN("tree.obj meta not found in registry");
+                    auto& tr = cube.GetComponent<Hybrid::TransformComponent>();
+                    tr.Position = { startX + x * spacing, 0.0f, startZ + z * spacing };
+                    tr.Rotation = glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f };
+                    tr.Scale = { 1.0f, 1.0f, 1.0f };
                 }
             }
+
+            if (m_RuntimeResourceSystem && m_RuntimeResourceSystem->getRegistry())
+{
+            const auto* mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/rock-a.obj");
+            if (mesh_meta)
+            {
+                auto rock = scene->createEntity("ROCK-A");
+                auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
+                mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
+                mr.Primitive = 0;
+
+                auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
+                tr.Position = {0.0f, 0.0f, 0.0f};
+                tr.Scale = {1.0f, 1.0f, 1.0f};
+            }
+            else
+            {
+                HBD_CORE_WARN("rock-a.obj meta not found in registry");
+            }
+}
         }
+
+        // 绑定到系统
+        m_SceneManager.setActiveScene(scene);
+        m_RenderSystem.setScene(scene);
+        m_FrameContext.scene = scene;
+        m_FrameContext.window_handle = window;
 
         int fbw = 0, fbh = 0;
         glfwGetFramebufferSize(window, &fbw, &fbh);

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -9,12 +9,13 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "runtime/modules/asset/asset_type.h"
+#include "uuid.h"
 
 namespace Hybrid
 {
     struct IDComponent
     {
-        uint64_t ID = 0;
+        UUID ID{};
     };
 
     struct TagComponent
