@@ -18,6 +18,8 @@
 #include "runtime/modules/render/runtime/render_system.h"
 #include "runtime/modules/scene/scene_manager.h"
 #include "runtime/modules/window/window_system.h"
+#include "runtime/modules/scene/scene_serializer.h"
+#include "runtime/modules/scene/scene.h"
 
 namespace Hybrid
 {
@@ -51,6 +53,45 @@ namespace Hybrid
             m_services.editor_resources->bootstrapImportOnce();
         }
         m_initialized = true;
+
+        auto& ctx = m_editor_ui.context();
+        ctx.open_scene = [this](const std::string& scene_vpath)
+            {
+                if (!m_services.scene || !m_services.render || !m_services.resources)
+                    return;
+
+                auto vfs = m_services.resources->getVFS();
+                if (!vfs)
+                {
+                    HBD_CORE_WARN("EditorLayer: open_scene failed, VFS is null");
+                    return;
+                }
+
+                auto native = vfs->resolve(scene_vpath);
+                if (!native)
+                {
+                    HBD_CORE_WARN("EditorLayer: open_scene resolve failed: {}", scene_vpath);
+                    return;
+                }
+
+                auto new_scene = std::make_shared<Scene>();
+                if (!SceneSerializer::DeserializeFromFile(*new_scene, *native))
+                {
+                    HBD_CORE_WARN("EditorLayer: open_scene deserialize failed: {}", native->string());
+                    return;
+                }
+
+                // 切换场景（这是关键）
+                m_services.scene->setActiveScene(new_scene);
+                m_services.render->setScene(new_scene);
+
+                // 同步 EditorContext
+                m_editor_ui.setActiveScene(new_scene.get());
+                m_editor_ui.context().active_scene = new_scene.get();
+                m_editor_ui.context().selected = entt::null;
+
+                HBD_CORE_INFO("EditorLayer: opened scene {}", scene_vpath);
+            };
     }
 
     void EditorLayer::onDetach()
@@ -58,11 +99,18 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
+        // 先断开所有 EditorContext 回调，避免 shutdown 期间触发 use-after-free
+        auto& ctx = m_editor_ui.context();
+        ctx.notify_asset_source_event = {};
+        ctx.open_scene = {};                
+
+        // 还可以顺便把选择清空，避免其他地方读到野值
+        ctx.selected = entt::null;
+        ctx.active_scene = nullptr;
+
         if (m_services.editor_ext)
-        {
             m_services.editor_ext->has_editor_camera = false;
-        }
-        m_editor_ui.context().notify_asset_source_event = {};
+
         m_editor_ui.shutdown();
         m_initialized = false;
     }

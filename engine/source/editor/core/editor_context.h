@@ -36,6 +36,7 @@ namespace Hybrid
         bool viewport_image_hovered = false;
 
         std::function<void(const AssetSourceEvent&)> notify_asset_source_event;
+        std::function<void(const std::string& scene_vpath)> open_scene;
         bool pan_tool = false;
     };
 } // namespace Hybrid

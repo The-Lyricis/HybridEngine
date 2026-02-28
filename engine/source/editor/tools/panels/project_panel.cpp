@@ -1,4 +1,4 @@
-﻿#include "project_panel.h"
+#include "project_panel.h"
 
 #include "editor/core/editor_context.h"
 
@@ -470,6 +470,18 @@ namespace Hybrid
                 m_currentDir = e.physical;
                 gatherEntries(m_currentDir);
                 m_selectedRelStr.clear();
+            }
+
+            if (!e.is_dir && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+            {
+                if (e.rel.extension() == ".scene")
+                {
+                    const auto vpath = relToAssetVPath(e.rel);
+                    if (ctx.open_scene)
+                        ctx.open_scene(vpath);
+                    else
+                        HBD_CORE_WARN("ProjectPanel: ctx.open_scene not bound, cannot open {}", vpath);
+                }
             }
 
             if (ImGui::BeginPopupContextItem())
