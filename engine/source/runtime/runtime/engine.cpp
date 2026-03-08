@@ -521,6 +521,25 @@ namespace Hybrid
             const float startX = -0.5f * (gridX - 1) * spacing;
             const float startZ = -0.5f * (gridZ - 1) * spacing;
 
+                        if (m_RuntimeResourceSystem && m_RuntimeResourceSystem->getRegistry())
+{
+            const auto* mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/rock-a.obj");
+            if (mesh_meta)
+            {
+                auto rock = scene->createEntity("ROCK-A");
+                auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
+                mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
+                mr.Primitive = 0;
+
+                auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
+                tr.Position = {0.0f, 0.0f, 0.0f};
+                tr.Scale = {1.0f, 1.0f, 1.0f};
+            }
+            else
+            {
+                HBD_CORE_WARN("rock-a.obj meta not found in registry");
+            }
+
             for (int z = 0; z < gridZ; ++z)
             {
                 for (int x = 0; x < gridX; ++x)
@@ -539,24 +558,7 @@ namespace Hybrid
                 }
             }
 
-            if (m_RuntimeResourceSystem && m_RuntimeResourceSystem->getRegistry())
-{
-            const auto* mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/rock-a.obj");
-            if (mesh_meta)
-            {
-                auto rock = scene->createEntity("ROCK-A");
-                auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
-                mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
-                mr.Primitive = 0;
 
-                auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
-                tr.Position = {0.0f, 0.0f, 0.0f};
-                tr.Scale = {1.0f, 1.0f, 1.0f};
-            }
-            else
-            {
-                HBD_CORE_WARN("rock-a.obj meta not found in registry");
-            }
 }
         }
 
