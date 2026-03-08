@@ -16,12 +16,19 @@
 #include "runtime/modules/scene/scene.h"
 #include "runtime/modules/scene/scene_manager.h"
 #include "runtime/modules/window/window_system.h"
+#include "runtime/modules/physics/physics_system.h"
 
 namespace Hybrid
 {
     // Runtime application host. Editor extends behavior via layers/services.
     class HybridEngine
     {
+        enum class SceneRunState
+        {
+            Edit = 0,
+            Play
+        };
+
     public:
         void initialize(); // Create window, graphics context, scene and runtime systems.
         void run();        // Main loop: poll -> begin-frame -> update -> render -> UI -> end-frame -> present.
@@ -41,13 +48,35 @@ namespace Hybrid
         EditorRenderExt& getEditorRenderExt() { return m_EditorRenderExt; }
         bool consumePickResult(uint32_t& out_entity_id); // Pop one pending picking result.
 
+        bool isEditMode() const { return m_SceneRunState == SceneRunState::Edit; }
+        bool isPlayMode() const { return m_SceneRunState == SceneRunState::Play; }
+
+        std::shared_ptr<Scene> getEditorScene() const { return m_EditorScene; }
+        std::shared_ptr<Scene> getRuntimeScene() const { return m_RuntimeScene; }
+
+        std::shared_ptr<Scene> getActiveGameScene() const
+        {
+            if (m_SceneRunState == SceneRunState::Play && m_RuntimeScene)
+                return m_RuntimeScene;
+            return m_EditorScene;
+        }
+        void enterPlayMode();
+        void exitPlayMode();
+
     private:
         float calculateDeltaTime();
+        void updateEditMode(float dt);
+        void updatePlayMode(float dt);
+        std::shared_ptr<Scene> cloneScene(const std::shared_ptr<Scene>& source);
 
     private:
         bool m_Running = true;    // Main loop running state.
         bool m_Minimized = false; // Window minimized gate.
-        bool m_IsPlayMode = false;
+
+        SceneRunState m_SceneRunState = SceneRunState::Edit;
+
+        std::shared_ptr<Scene> m_EditorScene;
+        std::shared_ptr<Scene> m_RuntimeScene;
 
         std::shared_ptr<WindowSystem> m_Window;        // Native window wrapper.
         std::unique_ptr<GraphicsContext> m_GraphicsContext; // Graphics backend context.
@@ -55,7 +84,8 @@ namespace Hybrid
 
         InputLayer* m_InputLayer = nullptr;                    // Input aggregation layer.
         std::shared_ptr<RuntimeResourceSystem> m_RuntimeResourceSystem; // Runtime asset stack.
-        RenderSystem m_RenderSystem;                           // Rendering front-end.
+        RenderSystem m_RenderSystem; // Rendering front-end.
+        PhysicsSystem m_PhysicsSystem;
         SceneManager m_SceneManager;                           // Active scene manager.
         FrameContext m_FrameContext{};                         // Per-frame runtime render payload.
         RenderFlags m_RenderFlags = RenderFlags::Forward;      // Enabled render passes this frame.

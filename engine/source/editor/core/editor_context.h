@@ -38,5 +38,9 @@ namespace Hybrid
         std::function<void(const AssetSourceEvent&)> notify_asset_source_event;
         std::function<void(const std::string& scene_vpath)> open_scene;
         bool pan_tool = false;
+
+        std::function<void()> enter_play_mode;
+        std::function<void()> exit_play_mode;
+        std::function<bool()> is_play_mode;
     };
 } // namespace Hybrid

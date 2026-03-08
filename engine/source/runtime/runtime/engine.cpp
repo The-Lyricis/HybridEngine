@@ -492,7 +492,8 @@ namespace Hybrid
         m_RenderSystem.initialize(window);
 
         // ===== Scene =====
-        auto scene = std::make_shared<Scene>();
+        m_EditorScene = std::make_shared<Scene>();
+        auto scene = m_EditorScene;
         m_SceneManager.setActiveScene(scene);
         m_RenderSystem.setScene(scene);
         m_FrameContext.scene = scene;
@@ -540,6 +541,22 @@ namespace Hybrid
                 HBD_CORE_WARN("rock-a.obj meta not found in registry");
             }
 
+            //物理测试物体
+            auto fallingCube = scene->createEntity("FallingCube");
+
+            auto& mr = fallingCube.AddComponent<Hybrid::MeshRendererComponent>();
+            mr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
+            mr.Primitive = 0;
+
+            auto& tr = fallingCube.GetComponent<Hybrid::TransformComponent>();
+            tr.Position = { 0.0f, 5.0f, 0.0f };
+            tr.Scale = { 1.0f, 1.0f, 1.0f };
+
+            auto& rb = fallingCube.AddComponent<Hybrid::RigidbodyComponent>();
+            rb.Mass = 1.0f;
+            rb.UseGravity = true;
+            rb.IsKinematic = false;
+
             for (int z = 0; z < gridZ; ++z)
             {
                 for (int x = 0; x < gridX; ++x)
@@ -574,6 +591,9 @@ namespace Hybrid
         m_FrameContext.viewport_size.y = static_cast<float>(std::max(1, fbh));
 
         m_LastTime = static_cast<float>(glfwGetTime());
+
+        //物理系统初始化
+        m_PhysicsSystem.initialize();
     }
 
     void HybridEngine::run()
@@ -603,14 +623,18 @@ namespace Hybrid
                 layer->onUpdate(dt);
             }
 
-            if (auto scene = m_SceneManager.getActiveScene())
+            if (isPlayMode())
             {
-                scene->onUpdate(dt);
+                updatePlayMode(dt);
+            }
+            else
+            {
+                updateEditMode(dt);
             }
 
             m_FrameContext.dt = dt;
             m_FrameContext.input = &m_InputLayer->getState();
-            m_FrameContext.scene = m_SceneManager.getActiveScene();
+            m_FrameContext.scene = getActiveGameScene();
 
             glm::vec2 viewport_size = m_FrameContext.viewport_size;
             if (viewport_size.x <= 0.0f || viewport_size.y <= 0.0f)
@@ -709,6 +733,7 @@ namespace Hybrid
 
     void HybridEngine::shutdown()
     {
+        m_PhysicsSystem.shutdown();
         m_LayerStack.clear();
         m_InputLayer = nullptr;
 
@@ -726,5 +751,156 @@ namespace Hybrid
         const float dt = time - m_LastTime;
         m_LastTime = time;
         return dt;
+    }
+
+    void HybridEngine::updateEditMode(float dt)
+    {
+        if (m_EditorScene)
+        {
+            m_EditorScene->onUpdate(dt);
+        }
+    }
+
+    void HybridEngine::updatePlayMode(float dt)
+    {
+        if (!m_RuntimeScene)
+            return;
+
+        m_PhysicsSystem.tick(dt, *m_RuntimeScene);
+        m_RuntimeScene->onUpdate(dt);
+    }
+
+    void HybridEngine::enterPlayMode()
+    {
+        if (isPlayMode())
+        {
+            HBD_CORE_WARN("Already in Play mode.");
+            return;
+        }
+
+        if (!m_EditorScene)
+        {
+            HBD_CORE_WARN("Cannot enter Play mode: editor scene is null.");
+            return;
+        }
+
+        m_RuntimeScene = cloneScene(m_EditorScene);
+        if (!m_RuntimeScene)
+        {
+            HBD_CORE_ERROR("Failed to clone editor scene for Play mode.");
+            return;
+        }
+
+        m_SceneRunState = SceneRunState::Play;
+        HBD_CORE_INFO("Entered Play mode.");
+    }
+
+    void HybridEngine::exitPlayMode()
+    {
+        if (isEditMode())
+        {
+            HBD_CORE_WARN("Already in Edit mode.");
+            return;
+        }
+
+        m_RuntimeScene.reset();
+        m_SceneRunState = SceneRunState::Edit;
+        HBD_CORE_INFO("Exited Play mode.");
+    }
+
+    std::shared_ptr<Scene> HybridEngine::cloneScene(const std::shared_ptr<Scene>& source)
+    {
+        if (!source)
+            return nullptr;
+
+        auto dst = std::make_shared<Scene>();
+
+        auto& srcReg = source->getRegistry();
+        auto& dstReg = dst->getRegistry();
+
+        std::unordered_map<entt::entity, entt::entity> entityMap;
+
+        // 1) Create entities with UUID + Tag
+        auto srcView = srcReg.view<IDComponent, TagComponent, TransformComponent>();
+        for (auto srcEntity : srcView)
+        {
+            const auto& srcID = srcView.get<IDComponent>(srcEntity);
+            const auto& srcTag = srcView.get<TagComponent>(srcEntity);
+
+            Entity dstEntity = dst->createEntityWithUUID(srcID.ID, srcTag.Tag);
+            entityMap[srcEntity] = dstEntity.GetHandle();
+        }
+
+        // 2) Copy basic transform TRS
+        for (const auto& [srcEntity, dstEntity] : entityMap)
+        {
+            const auto& srcTc = srcReg.get<TransformComponent>(srcEntity);
+            auto& dstTc = dstReg.get<TransformComponent>(dstEntity);
+
+            dstTc.Position = srcTc.Position;
+            dstTc.Rotation = srcTc.Rotation;
+            dstTc.Scale = srcTc.Scale;
+
+            dstTc.LocalMatrix = glm::mat4(1.0f);
+            dstTc.WorldMatrix = glm::mat4(1.0f);
+
+            dstTc.DirtyLocal = true;
+            dstTc.DirtyWorld = true;
+
+            dstTc.Parent = entt::null;
+            dstTc.FirstChild = entt::null;
+            dstTc.NextSibling = entt::null;
+            dstTc.PrevSibling = entt::null;
+        }
+
+        // 3) Copy optional components
+        for (const auto& [srcEntity, dstEntity] : entityMap)
+        {
+            if (srcReg.all_of<CameraComponent>(srcEntity))
+                dstReg.emplace_or_replace<CameraComponent>(dstEntity, srcReg.get<CameraComponent>(srcEntity));
+
+            if (srcReg.all_of<MeshRendererComponent>(srcEntity))
+                dstReg.emplace_or_replace<MeshRendererComponent>(dstEntity, srcReg.get<MeshRendererComponent>(srcEntity));
+
+            if (srcReg.all_of<DirectionalLightComponent>(srcEntity))
+                dstReg.emplace_or_replace<DirectionalLightComponent>(dstEntity, srcReg.get<DirectionalLightComponent>(srcEntity));
+
+            if (srcReg.all_of<PointLightComponent>(srcEntity))
+                dstReg.emplace_or_replace<PointLightComponent>(dstEntity, srcReg.get<PointLightComponent>(srcEntity));
+
+            if (srcReg.all_of<RigidbodyComponent>(srcEntity))
+                dstReg.emplace_or_replace<RigidbodyComponent>(dstEntity, srcReg.get<RigidbodyComponent>(srcEntity));
+        }
+
+        // 4) Remap transform hierarchy
+        for (const auto& [srcEntity, dstEntity] : entityMap)
+        {
+            const auto& srcTc = srcReg.get<TransformComponent>(srcEntity);
+            auto& dstTc = dstReg.get<TransformComponent>(dstEntity);
+
+            auto remapEntity = [&](entt::entity e) -> entt::entity
+                {
+                    if (e == entt::null)
+                        return entt::null;
+
+                    auto it = entityMap.find(e);
+                    if (it == entityMap.end())
+                        return entt::null;
+
+                    return it->second;
+                };
+
+            dstTc.Parent = remapEntity(srcTc.Parent);
+            dstTc.FirstChild = remapEntity(srcTc.FirstChild);
+            dstTc.NextSibling = remapEntity(srcTc.NextSibling);
+            dstTc.PrevSibling = remapEntity(srcTc.PrevSibling);
+
+            dstTc.DirtyWorld = true;
+        }
+
+        // 5) Rebuild matrices
+        dst->onUpdate(0.0f);
+
+        return dst;
     }
 } // namespace Hybrid

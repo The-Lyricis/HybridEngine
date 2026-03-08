@@ -208,6 +208,30 @@ namespace Hybrid
             ImGui::EndMenu();
         }
 
+        const bool is_playing = m_ctx && m_ctx->is_play_mode ? m_ctx->is_play_mode() : false;
+
+        ImGui::Separator();
+
+        if (!is_playing)
+        {
+            if (ImGui::Button("Play"))
+            {
+                if (m_ctx && m_ctx->enter_play_mode)
+                    m_ctx->enter_play_mode();
+            }
+        }
+        else
+        {
+            if (ImGui::Button("Stop"))
+            {
+                if (m_ctx && m_ctx->exit_play_mode)
+                    m_ctx->exit_play_mode();
+            }
+        }
+
+        ImGui::SameLine();
+        ImGui::TextUnformatted(is_playing ? "Mode: Play" : "Mode: Edit");
+
         ImGui::EndMenuBar();
     }
 

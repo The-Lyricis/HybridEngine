@@ -1,4 +1,4 @@
-﻿#include "editor_app.h"
+#include "editor_app.h"
 
 #include <memory>
 #include <utility>
@@ -41,7 +41,24 @@ namespace Hybrid
         services.consume_pick_result = [&engine](uint32_t& id) { return engine.consumePickResult(id); };
 
         engine.pushOverlay(new ImGuiLayer(engine.getWindowSystem().getNativeWindow()));
-        engine.pushLayer(new EditorLayer(std::move(services)));
+        auto* editor_layer = new EditorLayer(std::move(services));
+
+        EditorModeCallbacks mode_callbacks;
+        mode_callbacks.enter_play_mode = [&engine]()
+            {
+                engine.enterPlayMode();
+            };
+        mode_callbacks.exit_play_mode = [&engine]()
+            {
+                engine.exitPlayMode();
+            };
+        mode_callbacks.is_play_mode = [&engine]() -> bool
+            {
+                return engine.isPlayMode();
+            };
+        editor_layer->setModeCallbacks(std::move(mode_callbacks));
+
+        engine.pushLayer(editor_layer);
 
         engine.run();
         engine.shutdown();

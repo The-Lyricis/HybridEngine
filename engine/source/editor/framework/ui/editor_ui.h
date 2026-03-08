@@ -5,6 +5,8 @@
 
 #include <imgui.h>
 
+#include <functional>
+
 struct GLFWwindow;
 
 namespace Hybrid

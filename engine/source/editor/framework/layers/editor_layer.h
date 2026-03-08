@@ -1,6 +1,7 @@
-﻿#pragma once
+#pragma once
 
 #include <filesystem>
+#include <functional>
 
 #include "editor/framework/camera/editor_camera.h"
 #include "editor/framework/ui/editor_ui.h"
@@ -10,6 +11,12 @@
 
 namespace Hybrid
 {
+    struct EditorModeCallbacks
+    {
+        std::function<void()> enter_play_mode;
+        std::function<void()> exit_play_mode;
+        std::function<bool()> is_play_mode;
+    };
     // Editor orchestration layer: UI draw + bridge from EditorContext to render inputs.
     class EditorLayer final : public Layer
     {
@@ -20,6 +27,8 @@ namespace Hybrid
         void onDetach() override;          // Release editor UI resources.
         void onUpdate(float dt) override;  // Sync viewport state, camera input and render ext.
         void onImGuiRender() override;     // Draw panels and viewport.
+
+        void setModeCallbacks(EditorModeCallbacks callbacks);
 
     private:
         void updateFrameContext();         // Push current editor state into FrameContext/Flags/Ext.
@@ -35,6 +44,7 @@ namespace Hybrid
         PollingFileWatcher m_file_watcher; // Editor-side polling watcher for Assets/.
         std::filesystem::path m_assets_root;
         bool m_initialized = false;        // Guard against partial startup/shutdown.
+        EditorModeCallbacks m_mode_callbacks{};
     };
 } // namespace Hybrid
 

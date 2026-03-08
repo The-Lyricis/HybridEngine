@@ -34,6 +34,7 @@ namespace Hybrid
         }
 
         m_editor_ui.initialize(m_services.window->getNativeWindow());
+      
         bindAssetChangeCallback();
 
         if (m_services.resources && m_services.resources->getRegistry())
@@ -55,6 +56,22 @@ namespace Hybrid
         m_initialized = true;
 
         auto& ctx = m_editor_ui.context();
+        ctx.enter_play_mode = [this]()
+            {
+                if (m_mode_callbacks.enter_play_mode)
+                    m_mode_callbacks.enter_play_mode();
+            };
+
+        ctx.exit_play_mode = [this]()
+            {
+                if (m_mode_callbacks.exit_play_mode)
+                    m_mode_callbacks.exit_play_mode();
+            };
+
+        ctx.is_play_mode = [this]() -> bool
+            {
+                return m_mode_callbacks.is_play_mode ? m_mode_callbacks.is_play_mode() : false;
+            };
         ctx.open_scene = [this](const std::string& scene_vpath)
             {
                 if (!m_services.scene || !m_services.render || !m_services.resources)
@@ -92,6 +109,7 @@ namespace Hybrid
 
                 HBD_CORE_INFO("EditorLayer: opened scene {}", scene_vpath);
             };
+        
     }
 
     void EditorLayer::onDetach()
@@ -102,7 +120,11 @@ namespace Hybrid
         // 先断开所有 EditorContext 回调，避免 shutdown 期间触发 use-after-free
         auto& ctx = m_editor_ui.context();
         ctx.notify_asset_source_event = {};
-        ctx.open_scene = {};                
+        ctx.open_scene = {};
+
+        ctx.enter_play_mode = {};
+        ctx.exit_play_mode = {};
+        ctx.is_play_mode = {};
 
         // 还可以顺便把选择清空，避免其他地方读到野值
         ctx.selected = entt::null;
@@ -329,5 +351,10 @@ namespace Hybrid
 
         out_vpath = std::string("asset:") + rel_str;
         return true;
+    }
+
+    void EditorLayer::setModeCallbacks(EditorModeCallbacks callbacks)
+    {
+        m_mode_callbacks = std::move(callbacks);
     }
 } // namespace Hybrid
