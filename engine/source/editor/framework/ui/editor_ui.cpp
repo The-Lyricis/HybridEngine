@@ -200,41 +200,26 @@ namespace Hybrid
 
         if (request_save_as_shortcut)
         {
-            if (m_ctx && m_ctx->save_scene_as)
-                m_ctx->save_scene_as("");
+            if (m_ctx && m_ctx->request_save_scene_as)
+                m_ctx->request_save_scene_as();
         }
         else if (request_save_shortcut && m_ctx)
         {
-            if (m_ctx->current_scene_vpath.empty())
-            {
-                if (m_ctx->save_scene_as)
-                    m_ctx->save_scene_as("");
-            }
-            else if (m_ctx->save_scene)
-            {
-                m_ctx->save_scene();
-            }
+            if (m_ctx->request_save_scene)
+                m_ctx->request_save_scene();
         }
 
         if (ImGui::BeginMenu("File"))
         {
             if (!is_playing)
             {
-                const bool can_save = m_ctx && static_cast<bool>(m_ctx->save_scene);
+                const bool can_save = m_ctx && static_cast<bool>(m_ctx->request_save_scene);
                 if (ImGui::MenuItem("Save", "Ctrl+S", false, can_save))
-                {
-                    if (m_ctx->current_scene_vpath.empty())
-                    {
-                        if (m_ctx->save_scene_as)
-                            m_ctx->save_scene_as("");
-                    }
-                    else
-                        m_ctx->save_scene();
-                }
+                    m_ctx->request_save_scene();
 
-                const bool can_save_as = m_ctx && static_cast<bool>(m_ctx->save_scene_as);
+                const bool can_save_as = m_ctx && static_cast<bool>(m_ctx->request_save_scene_as);
                 if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, can_save_as))
-                    m_ctx->save_scene_as("");
+                    m_ctx->request_save_scene_as();
 
                 ImGui::Separator();
             }
@@ -311,8 +296,12 @@ namespace Hybrid
         if (m_ctx)
         {
             std::string scene_label = "Scene: ";
-            scene_label += m_ctx->current_scene_vpath.empty() ? "Untitled" : m_ctx->current_scene_vpath;
-            if (m_ctx->scene_dirty)
+            if (m_ctx->active_document)
+                scene_label += m_ctx->active_document->isSaved() ? m_ctx->active_document->vpath : m_ctx->active_document->display_name;
+            else
+                scene_label += "Untitled";
+
+            if (m_ctx->active_document && m_ctx->active_document->dirty)
                 scene_label += " *";
 
             ImGui::SameLine();
@@ -320,8 +309,11 @@ namespace Hybrid
             ImGui::SameLine();
             ImGui::TextUnformatted(scene_label.c_str());
 
-            if (!m_ctx->current_scene_native_path.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-                ImGui::SetTooltip("%s", m_ctx->current_scene_native_path.c_str());
+            if (m_ctx->active_document && !m_ctx->active_document->native_path.empty() &&
+                ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+            {
+                ImGui::SetTooltip("%s", m_ctx->active_document->native_path.string().c_str());
+            }
 
             if (!m_ctx->status_message.empty())
             {

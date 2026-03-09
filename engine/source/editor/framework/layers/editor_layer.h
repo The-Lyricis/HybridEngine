@@ -7,16 +7,11 @@
 #include "editor/framework/ui/editor_ui.h"
 #include "editor/core/engine_services.h"
 #include "editor/services/asset/file_watcher.h"
+#include "editor/services/scene/editor_scene_io_service.h"
 #include "runtime/core/event/layer.h"
 
 namespace Hybrid
 {
-    struct OpenSceneFlags
-    {
-        bool remember_last_opened = true;
-        bool clear_selection = true;
-    };
-
     struct EditorModeCallbacks
     {
         std::function<void()> enter_play_mode;
@@ -37,15 +32,7 @@ namespace Hybrid
         void setModeCallbacks(EditorModeCallbacks callbacks);
 
     private:
-        bool openSceneByVPath(const std::string& scene_vpath, OpenSceneFlags flags = {});
-        bool saveActiveScene();
-        bool saveActiveSceneAs(const std::string& scene_vpath);
-        void restoreStartupScene();
-        bool tryOpenProjectDefaultScene();
-        bool tryOpenScannedScene();
-        void createUntitledScene(const char* reason);
-        void saveLastOpenedScene(const std::string& scene_vpath) const;
-        std::string loadLastOpenedScene() const;
+        void syncContextDocumentState();
         void updateFrameContext();         // Push current editor state into FrameContext/Flags/Ext.
         void updateEditorCamera(float dt);
         void bindAssetChangeCallback();
@@ -57,6 +44,7 @@ namespace Hybrid
         EditorUI m_editor_ui;              // Panel/UI owner.
         EditorCamera m_editor_camera;      // Editor-only viewport camera.
         PollingFileWatcher m_file_watcher; // Editor-side polling watcher for Assets/.
+        EditorSceneIOService m_scene_io;
         std::filesystem::path m_assets_root;
         bool m_initialized = false;        // Guard against partial startup/shutdown.
         EditorModeCallbacks m_mode_callbacks{};

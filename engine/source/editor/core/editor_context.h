@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <string>
 
 #include <entt/entt.hpp>
@@ -8,18 +9,18 @@
 #include <imgui.h>
 
 #include "editor/core/editor_types.h"
-#include "runtime/modules/scene/scene.h"
+#include "editor/core/scene_document.h"
 
 namespace Hybrid
 {
+    class Scene;
+
     struct EditorContext
     {
         Scene* active_scene = nullptr;
+        std::shared_ptr<SceneDocument> active_document;
 
         entt::entity selected = entt::null;
-        std::string current_scene_vpath;
-        std::string current_scene_native_path;
-        bool scene_dirty = false;
         std::string status_message;
 
         bool scene_viewport_hovered = false;
@@ -47,8 +48,8 @@ namespace Hybrid
 
         std::function<void(const AssetSourceEvent&)> notify_asset_source_event;
         std::function<void(const std::string& scene_vpath)> open_scene;
-        std::function<bool()> save_scene;
-        std::function<bool(const std::string& scene_vpath)> save_scene_as;
+        std::function<bool()> request_save_scene;
+        std::function<bool()> request_save_scene_as;
         bool pan_tool = false;
         bool suppress_tool_shortcuts = false;
 
@@ -56,35 +57,22 @@ namespace Hybrid
         std::function<void()> exit_play_mode;
         std::function<bool()> is_play_mode;
 
-        void setSceneDocument(std::string scene_vpath, std::string scene_native_path)
+        void setActiveDocument(std::shared_ptr<SceneDocument> document)
         {
-            current_scene_vpath = std::move(scene_vpath);
-            current_scene_native_path = std::move(scene_native_path);
-            scene_dirty = false;
-            if (active_scene)
-            {
-                active_scene->setCurrentSceneVPath(current_scene_vpath);
-                active_scene->setDirty(false);
-            }
+            active_document = std::move(document);
+            active_scene = active_document ? active_document->scene.get() : nullptr;
         }
 
-        void clearSceneDocument()
+        void clearActiveDocument()
         {
-            current_scene_vpath.clear();
-            current_scene_native_path.clear();
-            scene_dirty = false;
-            if (active_scene)
-            {
-                active_scene->setCurrentSceneVPath("");
-                active_scene->setDirty(false);
-            }
+            active_document.reset();
+            active_scene = nullptr;
         }
 
         void markSceneDirty()
         {
-            scene_dirty = true;
-            if (active_scene)
-                active_scene->setDirty(true);
+            if (active_document)
+                active_document->dirty = true;
         }
 
         void setStatusMessage(std::string message)

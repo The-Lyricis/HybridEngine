@@ -10,7 +10,6 @@ Thumbs.db
 .vscode/
 .idea/
 .vs/
-UserSettings/
 
 # Visual Studio 2022 user/cache files
 *.suo

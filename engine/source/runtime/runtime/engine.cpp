@@ -164,8 +164,6 @@ namespace Hybrid
         // ===== Scene =====
         auto scene = std::make_shared<Scene>();
         scene->setName("Untitled");
-        scene->setCurrentSceneVPath("");
-        scene->setDirty(true);
         m_EditorScene = scene;
         m_SceneManager.setActiveScene(scene);
         m_RenderSystem.setScene(scene);
@@ -519,8 +517,6 @@ namespace Hybrid
 
         auto dst = std::make_shared<Scene>();
         dst->setName(source->getName());
-        dst->setCurrentSceneVPath(source->getCurrentSceneVPath());
-        dst->setDirty(source->isDirty());
 
         auto& srcReg = source->getRegistry();
         auto& dstReg = dst->getRegistry();

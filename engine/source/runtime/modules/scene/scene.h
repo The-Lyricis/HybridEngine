@@ -48,10 +48,6 @@ namespace Hybrid
         // 给 Entity 和外部系统访问
         entt::registry& getRegistry() { return m_Registry; }
         const entt::registry& getRegistry() const { return m_Registry; }
-        void setDirty(bool dirty) { m_Dirty = dirty; }
-        bool isDirty() const { return m_Dirty; }
-        void setCurrentSceneVPath(std::string vpath) { m_CurrentSceneVPath = std::move(vpath); }
-        const std::string& getCurrentSceneVPath() const { return m_CurrentSceneVPath; }
         void setName(std::string name) { m_Name = std::move(name); }
         const std::string& getName() const { return m_Name; }
 
@@ -70,8 +66,6 @@ namespace Hybrid
 
         // UUID -> entt::entity（用于加载、引用定位）
         std::unordered_map<uint64_t, entt::entity> m_EntityMap;
-        std::string m_CurrentSceneVPath;
         std::string m_Name = "Untitled";
-        bool m_Dirty = false;
     };
 } // namespace Hybrid
