@@ -137,7 +137,10 @@ namespace Hybrid
                         }
 
                         if (ok)
+                        {
                             ctx.selected = dropped;
+                            ctx.markSceneDirty();
+                        }
                     }
                 }
             }
@@ -178,7 +181,10 @@ namespace Hybrid
             {
                 Entity child{dropped, &registry, ctx.active_scene};
                 if (ctx.active_scene->Detach(child, true))
+                {
                     ctx.selected = dropped;
+                    ctx.markSceneDirty();
+                }
             }
             ImGui::EndDragDropTarget();
         }

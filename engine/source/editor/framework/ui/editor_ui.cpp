@@ -1,5 +1,7 @@
 #include "editor_ui.h"
 
+#include <string>
+
 #include <ImGuizmo.h>
 #include <imgui_internal.h>
 
@@ -35,7 +37,8 @@ namespace Hybrid
         m_HierarchyPanel = std::make_unique<HierarchyPanel>();
         m_InspectorPanel = std::make_unique<InspectorPanel>();
         m_ProjectPanel = std::make_unique<ProjectPanel>();
-        m_ViewportPanel = std::make_unique<ViewportPanel>();
+        m_SceneViewportPanel = std::make_unique<ViewportPanel>(ViewportPanelMode::Scene);
+        m_GameViewportPanel = std::make_unique<ViewportPanel>(ViewportPanelMode::Game);
 
         m_initialized = true;
     }
@@ -45,7 +48,8 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
-        m_ViewportPanel.reset();
+        m_GameViewportPanel.reset();
+        m_SceneViewportPanel.reset();
         m_ProjectPanel.reset();
         m_InspectorPanel.reset();
         m_HierarchyPanel.reset();
@@ -68,11 +72,22 @@ namespace Hybrid
 
         drawDockSpaceRoot();
 
-        if (!m_DefaultLayoutBuilt || m_RequestResetLayout)
+        ImGuiDockNode* dock_node = (m_DockSpaceID != 0) ? ImGui::DockBuilderGetNode(m_DockSpaceID) : nullptr;
+        const bool has_saved_layout =
+            dock_node &&
+            (dock_node->ChildNodes[0] != nullptr ||
+             dock_node->ChildNodes[1] != nullptr ||
+             dock_node->Windows.Size > 0);
+
+        if (m_RequestResetLayout || (!m_DefaultLayoutBuilt && !has_saved_layout))
         {
             buildDefaultLayout();
             m_DefaultLayoutBuilt = true;
             m_RequestResetLayout = false;
+        }
+        else if (!m_DefaultLayoutBuilt)
+        {
+            m_DefaultLayoutBuilt = true;
         }
 
         if (m_HierarchyPanel)
@@ -83,32 +98,52 @@ namespace Hybrid
             m_ProjectPanel->onImGuiRender(*m_ctx);
     }
 
-    void EditorUI::drawViewport(uint32_t colorTexID)
+    void EditorUI::drawViewports(uint32_t sceneColorTexID, uint32_t gameColorTexID)
     {
-        if (!m_initialized || !m_ctx || !m_ViewportPanel)
+        if (!m_initialized || !m_ctx)
             return;
 
-        if (!m_ViewportPanel->isOpen())
-            return;
+        if (m_SceneViewportPanel && m_SceneViewportPanel->isOpen())
+        {
+            m_SceneViewportPanel->setTexture(sceneColorTexID);
+            m_SceneViewportPanel->onImGuiRender(*m_ctx);
+        }
 
-        m_ViewportPanel->setTexture(colorTexID);
-        m_ViewportPanel->onImGuiRender(*m_ctx);
+        if (m_GameViewportPanel && m_GameViewportPanel->isOpen())
+        {
+            m_GameViewportPanel->setTexture(gameColorTexID);
+            m_GameViewportPanel->onImGuiRender(*m_ctx);
+        }
     }
 
     void EditorUI::updateViewportState()
     {
-        if (!m_initialized || !m_ctx || !m_ViewportPanel)
+        if (!m_initialized || !m_ctx)
             return;
 
-        if (!m_ViewportPanel->isOpen())
+        if (!m_SceneViewportPanel || !m_SceneViewportPanel->isOpen())
         {
-            m_ctx->viewport_hovered = false;
-            m_ctx->viewport_image_hovered = false;
-            m_ctx->viewport_focused = false;
-            return;
+            m_ctx->scene_viewport_hovered = false;
+            m_ctx->scene_viewport_image_hovered = false;
+            m_ctx->scene_viewport_focused = false;
+            m_ctx->scene_viewport_size = {0.0f, 0.0f};
+        }
+        else
+        {
+            m_SceneViewportPanel->updateViewportState(*m_ctx);
         }
 
-        m_ViewportPanel->updateViewportState(*m_ctx);
+        if (!m_GameViewportPanel || !m_GameViewportPanel->isOpen())
+        {
+            m_ctx->game_viewport_hovered = false;
+            m_ctx->game_viewport_image_hovered = false;
+            m_ctx->game_viewport_focused = false;
+            m_ctx->game_viewport_size = {0.0f, 0.0f};
+        }
+        else
+        {
+            m_GameViewportPanel->updateViewportState(*m_ctx);
+        }
     }
 
     void EditorUI::setActiveScene(Scene* scene)
@@ -116,13 +151,6 @@ namespace Hybrid
         if (!m_ctx)
             return;
         m_ctx->active_scene = scene;
-    }
-
-    void EditorUI::setViewportTexture(uint32_t colorTexID)
-    {
-        if (!m_ViewportPanel)
-            return;
-        m_ViewportPanel->setTexture(colorTexID);
     }
 
     EditorContext& EditorUI::context()
@@ -165,8 +193,52 @@ namespace Hybrid
         if (!ImGui::BeginMenuBar())
             return;
 
+        const bool is_playing = m_ctx && m_ctx->is_play_mode ? m_ctx->is_play_mode() : false;
+        const bool request_save_shortcut =
+            !is_playing && m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false);
+        const bool request_save_as_shortcut = request_save_shortcut && ImGui::GetIO().KeyShift;
+
+        if (request_save_as_shortcut)
+        {
+            if (m_ctx && m_ctx->save_scene_as)
+                m_ctx->save_scene_as("");
+        }
+        else if (request_save_shortcut && m_ctx)
+        {
+            if (m_ctx->current_scene_vpath.empty())
+            {
+                if (m_ctx->save_scene_as)
+                    m_ctx->save_scene_as("");
+            }
+            else if (m_ctx->save_scene)
+            {
+                m_ctx->save_scene();
+            }
+        }
+
         if (ImGui::BeginMenu("File"))
         {
+            if (!is_playing)
+            {
+                const bool can_save = m_ctx && static_cast<bool>(m_ctx->save_scene);
+                if (ImGui::MenuItem("Save", "Ctrl+S", false, can_save))
+                {
+                    if (m_ctx->current_scene_vpath.empty())
+                    {
+                        if (m_ctx->save_scene_as)
+                            m_ctx->save_scene_as("");
+                    }
+                    else
+                        m_ctx->save_scene();
+                }
+
+                const bool can_save_as = m_ctx && static_cast<bool>(m_ctx->save_scene_as);
+                if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, can_save_as))
+                    m_ctx->save_scene_as("");
+
+                ImGui::Separator();
+            }
+
             ImGui::MenuItem("Exit");
             ImGui::EndMenu();
         }
@@ -191,11 +263,17 @@ namespace Hybrid
                 if (ImGui::MenuItem("Project", nullptr, &open))
                     m_ProjectPanel->setOpen(open);
             }
-            if (m_ViewportPanel)
+            if (m_SceneViewportPanel)
             {
-                bool open = m_ViewportPanel->isOpen();
-                if (ImGui::MenuItem("Viewport", nullptr, &open))
-                    m_ViewportPanel->setOpen(open);
+                bool open = m_SceneViewportPanel->isOpen();
+                if (ImGui::MenuItem("Scene", nullptr, &open))
+                    m_SceneViewportPanel->setOpen(open);
+            }
+            if (m_GameViewportPanel)
+            {
+                bool open = m_GameViewportPanel->isOpen();
+                if (ImGui::MenuItem("Game", nullptr, &open))
+                    m_GameViewportPanel->setOpen(open);
             }
 
             ImGui::Separator();
@@ -207,8 +285,6 @@ namespace Hybrid
 
             ImGui::EndMenu();
         }
-
-        const bool is_playing = m_ctx && m_ctx->is_play_mode ? m_ctx->is_play_mode() : false;
 
         ImGui::Separator();
 
@@ -232,6 +308,30 @@ namespace Hybrid
         ImGui::SameLine();
         ImGui::TextUnformatted(is_playing ? "Mode: Play" : "Mode: Edit");
 
+        if (m_ctx)
+        {
+            std::string scene_label = "Scene: ";
+            scene_label += m_ctx->current_scene_vpath.empty() ? "Untitled" : m_ctx->current_scene_vpath;
+            if (m_ctx->scene_dirty)
+                scene_label += " *";
+
+            ImGui::SameLine();
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::SameLine();
+            ImGui::TextUnformatted(scene_label.c_str());
+
+            if (!m_ctx->current_scene_native_path.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+                ImGui::SetTooltip("%s", m_ctx->current_scene_native_path.c_str());
+
+            if (!m_ctx->status_message.empty())
+            {
+                ImGui::SameLine();
+                ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+                ImGui::SameLine();
+                ImGui::TextDisabled("%s", m_ctx->status_message.c_str());
+            }
+        }
+
         ImGui::EndMenuBar();
     }
 
@@ -254,7 +354,8 @@ namespace Hybrid
         ImGui::DockBuilderDockWindow("Hierarchy", dock_left);
         ImGui::DockBuilderDockWindow("Inspector", dock_right);
         ImGui::DockBuilderDockWindow("Project", dock_bottom);
-        ImGui::DockBuilderDockWindow("Viewport", dock_center);
+        ImGui::DockBuilderDockWindow("Scene", dock_center);
+        ImGui::DockBuilderDockWindow("Game", dock_center);
 
         ImGui::DockBuilderFinish(m_DockSpaceID);
     }

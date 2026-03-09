@@ -108,6 +108,7 @@ namespace Hybrid
         spec.width = (uint32_t)std::max(1, w);
         spec.height = (uint32_t)std::max(1, h);
         m_SceneFB = Framebuffer::Create(spec);
+        m_GameFB = Framebuffer::Create(spec);
 
         m_Initialized = true;
 
@@ -444,19 +445,19 @@ void main() {
         m_MeshShader = Shader::Create(vs, fs);
     }
 
-    void RenderSystem::ensureFramebufferSize(uint32_t w, uint32_t h)
+    void RenderSystem::ensureFramebufferSize(std::shared_ptr<Framebuffer>& framebuffer, uint32_t w, uint32_t h)
     {
         w = std::max(1u, w);
         h = std::max(1u, h);
 
-        if (!m_SceneFB)
+        if (!framebuffer)
         {
             FramebufferSpec spec{w, h};
-            m_SceneFB = Framebuffer::Create(spec);
+            framebuffer = Framebuffer::Create(spec);
         }
         else
         {
-            m_SceneFB->resize(w, h);
+            framebuffer->resize(w, h);
         }
     }
 
@@ -465,17 +466,24 @@ void main() {
         return m_SceneFB ? m_SceneFB->getColorAttachmentRendererID() : 0;
     }
 
+    uint32_t RenderSystem::getGameColorTexture() const
+    {
+        return m_GameFB ? m_GameFB->getColorAttachmentRendererID() : 0;
+    }
+
     void RenderSystem::onWindowResize(uint32_t width, uint32_t height)
     {
         if (!m_Initialized)
             return;
-        ensureFramebufferSize(width, height);
+        ensureFramebufferSize(m_SceneFB, width, height);
+        ensureFramebufferSize(m_GameFB, width, height);
     }
 
     
     RenderSystem::RenderPacket RenderSystem::buildRenderPacket(const FrameContext& frame_context,
                                                                RenderFlags flags,
-                                                               const EditorRenderExt* editor_ext)
+                                                               const EditorRenderExt* editor_ext,
+                                                               bool cache_editor_camera_state)
     {
         RenderPacket pkt;
 
@@ -528,9 +536,11 @@ void main() {
         pkt.frame.cameraPos = cameraPos;
         pkt.frame.time = frame_context.dt;
 
-        // Cache split view/proj for editor gizmo rendering.
-        m_LastView = viewM;
-        m_LastProj = projM;
+        if (cache_editor_camera_state)
+        {
+            m_LastView = viewM;
+            m_LastProj = projM;
+        }
 
         // C) collect lights
         pkt.lights.dir.intensity = 0.0f;
@@ -594,14 +604,17 @@ void main() {
         return pkt;
     }
 
-    void RenderSystem::executePasses(const RenderPacket& packet, RenderFlags flags, void* glfwWindowHandle)
+    void RenderSystem::executePasses(const RenderPacket& packet,
+                                     RenderFlags flags,
+                                     void* glfwWindowHandle,
+                                     const std::shared_ptr<Framebuffer>& framebuffer)
     {
         const bool needs_forward = HasFlag(flags, RenderFlags::Forward) ||
                                    HasFlag(flags, RenderFlags::PickingID) ||
                                    HasFlag(flags, RenderFlags::SelectionOutline);
         if (needs_forward)
         {
-            executeForwardPass(packet, glfwWindowHandle);
+            executeForwardPass(packet, glfwWindowHandle, framebuffer);
         }
 
         if (HasFlag(flags, RenderFlags::PickingID))
@@ -620,13 +633,17 @@ void main() {
             executeDebugNormalsPass(packet, glfwWindowHandle);
     }
 
-    void RenderSystem::executeForwardPass(const RenderPacket &packet, void *glfwWindowHandle)
+    void RenderSystem::executeForwardPass(const RenderPacket &packet,
+                                          void *glfwWindowHandle,
+                                          const std::shared_ptr<Framebuffer>& framebuffer)
     {
         const bool assetPathReady = (m_AssetManager != nullptr) && (m_MeshShader != nullptr);
+        if (!framebuffer)
+            return;
 
         // 1) begin pass
-        m_SceneFB->bind();
-        RenderCommand::setViewport(0, 0, m_SceneFB->getWidth(), m_SceneFB->getHeight());
+        framebuffer->bind();
+        RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
         Renderer::beginFrame({0.1f, 0.1f, 0.12f, 1.0f});
         // Clear color to black and EntityID to 0 for picking/outline.
         uint32_t zero = 0;
@@ -737,7 +754,7 @@ void main() {
 
         // 5) end pass
         Renderer::endFrame();
-        m_SceneFB->unbind();
+        framebuffer->unbind();
 
         GLFWwindow *window = static_cast<GLFWwindow *>(glfwWindowHandle);
         int display_w = 0, display_h = 0;
@@ -808,16 +825,62 @@ void main() {
         if (!m_Initialized)
             initialize(window_handle);
 
-        if (frame_context.viewport_size.x <= 0.0f || frame_context.viewport_size.y <= 0.0f)
-            return;
-
-        ensureFramebufferSize((uint32_t)frame_context.viewport_size.x, (uint32_t)frame_context.viewport_size.y);
-
         if (flags == RenderFlags::None)
             return;
 
-        auto packet = buildRenderPacket(frame_context, flags, editor_ext);
-        executePasses(packet, flags, window_handle);
+        if (editor_ext && (editor_ext->render_scene_view || editor_ext->render_game_view))
+        {
+            bool rendered_any = false;
+
+            if (editor_ext->render_scene_view &&
+                editor_ext->scene_viewport_size.x > 0.0f &&
+                editor_ext->scene_viewport_size.y > 0.0f)
+            {
+                FrameContext scene_frame = frame_context;
+                scene_frame.viewport_size = editor_ext->scene_viewport_size;
+                ensureFramebufferSize(m_SceneFB,
+                                      static_cast<uint32_t>(scene_frame.viewport_size.x),
+                                      static_cast<uint32_t>(scene_frame.viewport_size.y));
+
+                EditorRenderExt scene_ext = *editor_ext;
+                scene_ext.use_game_camera = false;
+                auto scene_packet = buildRenderPacket(scene_frame, flags, &scene_ext, true);
+                executePasses(scene_packet, flags, window_handle, m_SceneFB);
+                rendered_any = true;
+            }
+
+            if (editor_ext->render_game_view &&
+                editor_ext->game_viewport_size.x > 0.0f &&
+                editor_ext->game_viewport_size.y > 0.0f)
+            {
+                FrameContext game_frame = frame_context;
+                game_frame.viewport_size = editor_ext->game_viewport_size;
+                ensureFramebufferSize(m_GameFB,
+                                      static_cast<uint32_t>(game_frame.viewport_size.x),
+                                      static_cast<uint32_t>(game_frame.viewport_size.y));
+
+                EditorRenderExt game_ext = *editor_ext;
+                game_ext.use_game_camera = true;
+                game_ext.has_editor_camera = false;
+                const RenderFlags game_flags = RenderFlags::Forward;
+                auto game_packet = buildRenderPacket(game_frame, game_flags, &game_ext, false);
+                executePasses(game_packet, game_flags, window_handle, m_GameFB);
+                rendered_any = true;
+            }
+
+            if (rendered_any)
+                return;
+        }
+
+        if (frame_context.viewport_size.x <= 0.0f || frame_context.viewport_size.y <= 0.0f)
+            return;
+
+        ensureFramebufferSize(m_SceneFB,
+                              static_cast<uint32_t>(frame_context.viewport_size.x),
+                              static_cast<uint32_t>(frame_context.viewport_size.y));
+
+        auto packet = buildRenderPacket(frame_context, flags, editor_ext, true);
+        executePasses(packet, flags, window_handle, m_SceneFB);
     }
     uint32_t RenderSystem::readEntityID(int x, int y) const
     {

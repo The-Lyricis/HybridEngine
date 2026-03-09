@@ -11,6 +11,12 @@
 
 namespace Hybrid
 {
+    struct OpenSceneFlags
+    {
+        bool remember_last_opened = true;
+        bool clear_selection = true;
+    };
+
     struct EditorModeCallbacks
     {
         std::function<void()> enter_play_mode;
@@ -31,6 +37,15 @@ namespace Hybrid
         void setModeCallbacks(EditorModeCallbacks callbacks);
 
     private:
+        bool openSceneByVPath(const std::string& scene_vpath, OpenSceneFlags flags = {});
+        bool saveActiveScene();
+        bool saveActiveSceneAs(const std::string& scene_vpath);
+        void restoreStartupScene();
+        bool tryOpenProjectDefaultScene();
+        bool tryOpenScannedScene();
+        void createUntitledScene(const char* reason);
+        void saveLastOpenedScene(const std::string& scene_vpath) const;
+        std::string loadLastOpenedScene() const;
         void updateFrameContext();         // Push current editor state into FrameContext/Flags/Ext.
         void updateEditorCamera(float dt);
         void bindAssetChangeCallback();

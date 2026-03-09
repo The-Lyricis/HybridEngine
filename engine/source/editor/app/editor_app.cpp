@@ -39,6 +39,10 @@ namespace Hybrid
         services.render_flags = &engine.getRenderFlags();
         services.editor_ext = &engine.getEditorRenderExt();
         services.consume_pick_result = [&engine](uint32_t& id) { return engine.consumePickResult(id); };
+        services.set_editor_scene = [&engine](std::shared_ptr<Scene> scene) -> bool
+            {
+                return engine.setEditorScene(std::move(scene));
+            };
 
         engine.pushOverlay(new ImGuiLayer(engine.getWindowSystem().getNativeWindow()));
         auto* editor_layer = new EditorLayer(std::move(services));

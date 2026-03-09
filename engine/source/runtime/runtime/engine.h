@@ -53,6 +53,7 @@ namespace Hybrid
 
         std::shared_ptr<Scene> getEditorScene() const { return m_EditorScene; }
         std::shared_ptr<Scene> getRuntimeScene() const { return m_RuntimeScene; }
+        bool setEditorScene(std::shared_ptr<Scene> scene);
 
         std::shared_ptr<Scene> getActiveGameScene() const
         {

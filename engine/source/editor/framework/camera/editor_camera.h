@@ -56,7 +56,7 @@ namespace Hybrid {
         float m_YawDeg = -90.0f;
         float m_PitchDeg = 0.0f;
 
-        float m_MoveSpeed = 2.5f;
+        float m_MoveSpeed = 5.0f;
         float m_MinMoveSpeed = 0.2f;
         float m_MaxMoveSpeed = 200.0f;
 

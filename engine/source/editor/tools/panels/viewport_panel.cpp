@@ -22,6 +22,39 @@
 
 namespace Hybrid
 {
+    namespace
+    {
+        bool& viewportHovered(EditorContext& ctx, ViewportPanelMode mode)
+        {
+            return mode == ViewportPanelMode::Scene ? ctx.scene_viewport_hovered : ctx.game_viewport_hovered;
+        }
+
+        bool& viewportFocused(EditorContext& ctx, ViewportPanelMode mode)
+        {
+            return mode == ViewportPanelMode::Scene ? ctx.scene_viewport_focused : ctx.game_viewport_focused;
+        }
+
+        bool& viewportImageHovered(EditorContext& ctx, ViewportPanelMode mode)
+        {
+            return mode == ViewportPanelMode::Scene ? ctx.scene_viewport_image_hovered : ctx.game_viewport_image_hovered;
+        }
+
+        ImVec2& viewportSize(EditorContext& ctx, ViewportPanelMode mode)
+        {
+            return mode == ViewportPanelMode::Scene ? ctx.scene_viewport_size : ctx.game_viewport_size;
+        }
+
+        ImVec2& viewportMin(EditorContext& ctx, ViewportPanelMode mode)
+        {
+            return mode == ViewportPanelMode::Scene ? ctx.scene_viewport_min : ctx.game_viewport_min;
+        }
+
+        ImVec2& viewportMax(EditorContext& ctx, ViewportPanelMode mode)
+        {
+            return mode == ViewportPanelMode::Scene ? ctx.scene_viewport_max : ctx.game_viewport_max;
+        }
+    } // namespace
+
     // -----------------------------
     // OpenGL texture loader (RGBA8)
     // -----------------------------
@@ -101,15 +134,18 @@ namespace Hybrid
     }
 
     // Returns whether this frame interacted with the toolbar (used to block picking).
-    static bool DrawUnityToolBarPNG(const ImVec2& canvasMin)
+    static bool DrawUnityToolBarPNG(const EditorContext& ctx, const ImVec2& canvasMin)
     {
         bool interacted = false;
 
         // Unity-style shortcuts: Q / W / E / R
-        if (ImGui::IsKeyPressed(ImGuiKey_Q)) { s_Tool = ToolMode::Hand;   interacted = true; }
-        if (ImGui::IsKeyPressed(ImGuiKey_W)) { s_Tool = ToolMode::Move;   interacted = true; }
-        if (ImGui::IsKeyPressed(ImGuiKey_E)) { s_Tool = ToolMode::Rotate; interacted = true; }
-        if (ImGui::IsKeyPressed(ImGuiKey_R)) { s_Tool = ToolMode::Scale;  interacted = true; }
+        if (!ctx.suppress_tool_shortcuts)
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_Q)) { s_Tool = ToolMode::Hand;   interacted = true; }
+            if (ImGui::IsKeyPressed(ImGuiKey_W)) { s_Tool = ToolMode::Move;   interacted = true; }
+            if (ImGui::IsKeyPressed(ImGuiKey_E)) { s_Tool = ToolMode::Rotate; interacted = true; }
+            if (ImGui::IsKeyPressed(ImGuiKey_R)) { s_Tool = ToolMode::Scale;  interacted = true; }
+        }
 
         ImGui::SetNextWindowPos(ImVec2(canvasMin.x + 8.0f, canvasMin.y + 8.0f));
         ImGui::SetNextWindowBgAlpha(0.55f);
@@ -183,30 +219,30 @@ namespace Hybrid
     {
         if (!m_open)
         {
-            ctx.viewport_image_hovered = false;
-            ctx.viewport_hovered = false;
-            ctx.viewport_focused = false;
+            viewportImageHovered(ctx, m_mode) = false;
+            viewportHovered(ctx, m_mode) = false;
+            viewportFocused(ctx, m_mode) = false;
             return;
         }
 
         const bool has_canvas_rect =
-            (ctx.viewport_max.x > ctx.viewport_min.x) &&
-            (ctx.viewport_max.y > ctx.viewport_min.y);
+            (viewportMax(ctx, m_mode).x > viewportMin(ctx, m_mode).x) &&
+            (viewportMax(ctx, m_mode).y > viewportMin(ctx, m_mode).y);
         const bool hovered = has_canvas_rect &&
-            ImGui::IsMouseHoveringRect(ctx.viewport_min, ctx.viewport_max, false);
-        ctx.viewport_image_hovered = hovered;
-        ctx.viewport_hovered = hovered;
+            ImGui::IsMouseHoveringRect(viewportMin(ctx, m_mode), viewportMax(ctx, m_mode), false);
+        viewportImageHovered(ctx, m_mode) = hovered;
+        viewportHovered(ctx, m_mode) = hovered;
 
         if (hovered &&
             (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
              ImGui::IsMouseClicked(ImGuiMouseButton_Middle) ||
              ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
         {
-            ctx.viewport_focused = true;
+            viewportFocused(ctx, m_mode) = true;
         }
         else if (!hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            ctx.viewport_focused = false;
+            viewportFocused(ctx, m_mode) = false;
         }
     }
 
@@ -215,7 +251,9 @@ namespace Hybrid
         if (!m_open) return;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
-        ImGui::Begin("Viewport", &m_open);
+        ImGui::Begin(getName(), &m_open);
+
+        const bool is_scene_view = (m_mode == ViewportPanelMode::Scene);
 
         // Lazy-load toolbar icons once.
         if (!g_ToolIcons.loaded)
@@ -230,19 +268,6 @@ namespace Hybrid
             g_ToolIcons.loaded = (g_ToolIcons.hand && g_ToolIcons.move && g_ToolIcons.rotate && g_ToolIcons.scale);
         }
 
-        // Camera mode controls.
-        {
-            ImGui::SetCursorPosX(5.0f);
-            ImGui::TextUnformatted("Camera:");
-            ImGui::SameLine();
-            ImGui::TextUnformatted(ctx.use_game_camera ? "Game" : "Editor");
-            ImGui::SameLine();
-            if (ImGui::Button(ctx.use_game_camera ? "Switch to Editor Camera" : "Switch to Game Camera"))
-                ctx.use_game_camera = !ctx.use_game_camera;
-
-            ImGui::Separator();
-        }
-
         // Viewport canvas region.
         ImVec2 canvasMin = ImGui::GetCursorScreenPos();
         ImVec2 canvasSize = ImGui::GetContentRegionAvail();
@@ -254,16 +279,16 @@ namespace Hybrid
         dl->AddImage((ImTextureID)(intptr_t)m_colorTextureID, canvasMin, canvasMax, { 0, 1 }, { 1, 0 });
 
         // Viewport canvas region.
-        ctx.viewport_image_hovered = ImGui::IsMouseHoveringRect(canvasMin, canvasMax, false);
-        ctx.viewport_hovered = ctx.viewport_image_hovered;
-        ctx.viewport_focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        viewportImageHovered(ctx, m_mode) = ImGui::IsMouseHoveringRect(canvasMin, canvasMax, false);
+        viewportHovered(ctx, m_mode) = viewportImageHovered(ctx, m_mode);
+        viewportFocused(ctx, m_mode) = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
-        ctx.viewport_size = canvasSize;
-        ctx.viewport_min = canvasMin;
-        ctx.viewport_max = canvasMax;
+        viewportSize(ctx, m_mode) = canvasSize;
+        viewportMin(ctx, m_mode) = canvasMin;
+        viewportMax(ctx, m_mode) = canvasMax;
 
-        // Game camera mode: disable gizmo and picking requests.
-        if (ctx.use_game_camera)
+        // Game viewport is display-only for now.
+        if (!is_scene_view)
         {
             ctx.gizmo_using = false;
             ctx.request_pick = false;
@@ -273,7 +298,7 @@ namespace Hybrid
         }
 
         // Unity-style toolbar (PNG icons).
-        const bool toolbarInteracted = DrawUnityToolBarPNG(canvasMin);
+        const bool toolbarInteracted = DrawUnityToolBarPNG(ctx, canvasMin);
 
         // Hand mode flag consumed by runtime camera control path.
         ctx.pan_tool = (s_Tool == ToolMode::Hand);
@@ -350,13 +375,14 @@ namespace Hybrid
 
                         tr.DirtyLocal = true;
                         ctx.active_scene->MarkDirtyRecursive(Entity(ctx.selected, &reg, ctx.active_scene));
+                        ctx.markSceneDirty();
                     }
                 }
             }
         }
 
         // Picking: ignore clicks when toolbar/gizmo is interacting.
-        if (ctx.viewport_image_hovered &&
+        if (ctx.scene_viewport_image_hovered &&
             ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
             !toolbarInteracted &&
             !ctx.gizmo_using &&

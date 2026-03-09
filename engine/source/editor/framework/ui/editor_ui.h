@@ -29,11 +29,10 @@ namespace Hybrid
         void shutdown();
 
         void drawPanels();
-        void drawViewport(uint32_t colorTexID);
+        void drawViewports(uint32_t sceneColorTexID, uint32_t gameColorTexID);
         void updateViewportState();
 
         void setActiveScene(Scene* scene);
-        void setViewportTexture(uint32_t colorTexID);
         EditorContext& context();
 
     private:
@@ -53,6 +52,7 @@ namespace Hybrid
         std::unique_ptr<HierarchyPanel> m_HierarchyPanel;
         std::unique_ptr<InspectorPanel> m_InspectorPanel;
         std::unique_ptr<ProjectPanel> m_ProjectPanel;
-        std::unique_ptr<ViewportPanel> m_ViewportPanel;
+        std::unique_ptr<ViewportPanel> m_SceneViewportPanel;
+        std::unique_ptr<ViewportPanel> m_GameViewportPanel;
     };
 } // namespace Hybrid

@@ -53,6 +53,10 @@ target_compile_options(${TARGET_NAME} PRIVATE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>
 
 target_link_libraries(${TARGET_NAME} PRIVATE HybridRuntime tinyobjloader)
 
+if(WIN32)
+    target_link_libraries(${TARGET_NAME} PRIVATE Ole32 Shell32)
+endif()
+
 # 关键更新：include 根目录改为 editor 目录本身（包含 panels 子目录）
 target_include_directories(${TARGET_NAME} PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

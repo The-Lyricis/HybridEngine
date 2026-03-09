@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 namespace Hybrid
@@ -11,6 +12,10 @@ namespace Hybrid
     struct EditorRenderExt
     {
         bool viewport_active = true;       // Whether editor viewport currently accepts input.
+        bool render_scene_view = false;
+        bool render_game_view = false;
+        glm::vec2 scene_viewport_size = glm::vec2(0.0f);
+        glm::vec2 game_viewport_size = glm::vec2(0.0f);
         bool pan_tool = false;
         bool use_game_camera = true;       // True: use scene primary camera, false: editor camera.
         uint32_t selected_entity_id = 0;   // Selection used by outline/highlight passes.
