@@ -13,6 +13,8 @@
 #include "runtime/modules/project/project_loader.h"
 #include "runtime/modules/project/project_context.h"
 #include "runtime/modules/scene/scene_serializer.h"
+#include "runtime/modules/physics/components/rigidbody_component.h"
+#include "runtime/modules/physics/components/collider_component.h"
 
 namespace Hybrid
 {
@@ -557,21 +559,46 @@ namespace Hybrid
                 HBD_CORE_WARN("rock-a.obj meta not found in registry");
             }
 
-            //物理测试物体
+            // 物理测试物体 1：动态下落方块
             auto fallingCube = scene->createEntity("FallingCube");
 
-            auto& mr = fallingCube.AddComponent<Hybrid::MeshRendererComponent>();
-            mr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
-            mr.Primitive = 0;
+            auto& fallingMr = fallingCube.AddComponent<Hybrid::MeshRendererComponent>();
+            fallingMr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
+            fallingMr.Primitive = 0;
 
-            auto& tr = fallingCube.GetComponent<Hybrid::TransformComponent>();
-            tr.Position = { 0.0f, 5.0f, 0.0f };
-            tr.Scale = { 1.0f, 1.0f, 1.0f };
+            auto& fallingTr = fallingCube.GetComponent<Hybrid::TransformComponent>();
+            fallingTr.Position = { 0.0f, 5.0f, 0.0f };
+            fallingTr.Scale = { 1.0f, 1.0f, 1.0f };
 
-            auto& rb = fallingCube.AddComponent<Hybrid::RigidbodyComponent>();
-            rb.Mass = 1.0f;
-            rb.UseGravity = true;
-            rb.IsKinematic = false;
+            auto& fallingRb = fallingCube.AddComponent<Hybrid::RigidbodyComponent>();
+            fallingRb.Mass = 1.0f;
+            fallingRb.UseGravity = true;
+            fallingRb.IsKinematic = false;
+
+            auto& fallingCol = fallingCube.AddComponent<Hybrid::ColliderComponent>();
+            fallingCol.Type = Hybrid::ColliderType::Box;
+            fallingCol.Enabled = true;
+            fallingCol.IsTrigger = false;
+            fallingCol.Center = { 0.0f, 0.0f, 0.0f };
+            fallingCol.Box.HalfExtents = { 0.5f, 0.5f, 0.5f };
+
+            // 物理测试物体 2：静态地面方块
+            auto groundBox = scene->createEntity("GroundBox");
+
+            auto& groundMr = groundBox.AddComponent<Hybrid::MeshRendererComponent>();
+            groundMr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
+            groundMr.Primitive = 0;
+
+            auto& groundTr = groundBox.GetComponent<Hybrid::TransformComponent>();
+            groundTr.Position = { 0.0f, -1.0f, 0.0f };
+            groundTr.Scale = { 8.0f, 1.0f, 8.0f };
+
+            auto& groundCol = groundBox.AddComponent<Hybrid::ColliderComponent>();
+            groundCol.Type = Hybrid::ColliderType::Box;
+            groundCol.Enabled = true;
+            groundCol.IsTrigger = false;
+            groundCol.Center = { 0.0f, 0.0f, 0.0f };
+            groundCol.Box.HalfExtents = { 0.5f, 0.5f, 0.5f };
 
             for (int z = 0; z < gridZ; ++z)
             {
