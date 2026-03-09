@@ -73,3 +73,17 @@
 
 ## 相关变更记录
 - 2026-02-13：`SurfaceIO` 移动至 `runtime/function/window`；修复 GLFW/GLAD 重复包含错误；为主要渲染类添加职责注释。
+
+## Fixed Bugs
+
+### 1. VAO / EBO state pollution during index-buffer creation
+- Symptom: when multiple mesh types existed in the same frame, one mesh could render with corrupted topology that looked like bad indices.
+- Root cause: `GL_ELEMENT_ARRAY_BUFFER` binding is VAO state. A binding-style `GLIndexBuffer` constructor could overwrite another VAO's EBO while the wrong VAO was bound.
+- Fix: `GLIndexBuffer` now uses DSA (`glCreateBuffers` + `glNamedBufferData`) so buffer creation does not depend on the currently bound VAO or target binding state.
+- Result: index-buffer creation is side-effect free, and EBO ownership is established only in `VertexArray::setIndexBuffer(...)`.
+
+### 2. Material GPU cache not refreshed after asset reimport
+- Symptom: after `.mat` or texture reimport, rendered materials could keep using stale parameters or stale texture bindings until restart.
+- Root cause: `RenderSystem::getOrCreateMaterialGPU(...)` returned cached `MaterialGPU` objects without refreshing CPU material data and texture handles.
+- Fix: cache hits now refresh `MaterialData` plus all bound texture resources before reuse.
+- Result: reimported material and texture changes become visible without restarting the renderer.

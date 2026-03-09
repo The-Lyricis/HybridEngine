@@ -13,11 +13,13 @@
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
+#include <nlohmann/json.hpp>
 #include <tiny_obj_loader.h>
 
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/asset/mesh.h"
 #include "runtime/modules/asset/mesh_cooked_format.h"
+#include "texture_importer.h"
 
 namespace Hybrid
 {
@@ -61,7 +63,10 @@ namespace Hybrid
             Mesh mesh{};
             std::vector<int> submesh_material_indices;
             std::vector<std::string> material_names;
+            std::vector<tinyobj::material_t> materials;
         };
+
+        using json = nlohmann::json;
 
         std::string toLower(std::string value)
         {
@@ -91,6 +96,16 @@ namespace Hybrid
             return true;
         }
 
+        bool hasParentTraversal(const std::filesystem::path& p)
+        {
+            for (const auto& part : p)
+            {
+                if (part == "..")
+                    return true;
+            }
+            return false;
+        }
+
         std::string buildDefaultCookedPath(const std::string& source_path)
         {
             std::string alias, rel;
@@ -100,6 +115,21 @@ namespace Hybrid
             std::filesystem::path p(rel);
             p.replace_extension(".hmesh");
             return std::string("cache:Cooked/") + p.generic_string();
+        }
+
+        std::string makeSimpleHash(const std::filesystem::path& file)
+        {
+            std::error_code ec;
+
+            auto size = std::filesystem::file_size(file, ec);
+            if (ec)
+                size = 0;
+
+            ec.clear();
+            auto last_write_time = std::filesystem::last_write_time(file, ec);
+            const auto ticks = ec ? 0LL : static_cast<long long>(last_write_time.time_since_epoch().count());
+
+            return std::to_string(static_cast<unsigned long long>(size)) + "_" + std::to_string(ticks);
         }
 
         std::string sanitizeToken(const std::string& input)
@@ -143,6 +173,38 @@ namespace Hybrid
             // Keep material metas in the same directory as the source OBJ.
             std::filesystem::path sub_rel = obj_path.parent_path() / file_name;
             return std::string("asset:") + sub_rel.generic_string();
+        }
+
+        std::string buildReferencedAssetPath(const std::string& source_rel_path, const std::string& ref_path)
+        {
+            if (ref_path.empty())
+                return {};
+
+            std::string normalized = ref_path;
+            std::replace(normalized.begin(), normalized.end(), '\\', '/');
+
+            std::filesystem::path ref_fs_path(normalized);
+            if (ref_fs_path.is_absolute())
+                return {};
+
+            std::filesystem::path combined = std::filesystem::path(source_rel_path).parent_path() / ref_fs_path;
+            combined = combined.lexically_normal();
+            if (combined.empty() || hasParentTraversal(combined))
+                return {};
+
+            return std::string("asset:") + combined.generic_string();
+        }
+
+        void appendUniqueAssets(std::vector<AssetMetadata>& dst,
+                                const std::vector<AssetMetadata>& src,
+                                std::unordered_set<uint64_t>& seen_ids)
+        {
+            for (const auto& meta : src)
+            {
+                if (!seen_ids.insert(meta.id.value).second)
+                    continue;
+                dst.push_back(meta);
+            }
         }
 
         bool readPosition(const tinyobj::attrib_t& attrib, int index, glm::vec3& out_position)
@@ -278,6 +340,7 @@ namespace Hybrid
             out_build.material_names.reserve(materials.size());
             for (const auto& material : materials)
                 out_build.material_names.push_back(material.name);
+            out_build.materials = materials;
 
             std::vector<MeshVertex> vertices;
             std::vector<uint32_t> all_indices;
@@ -498,9 +561,12 @@ namespace Hybrid
 
         // Inline material sub-assets generation for OBJ/MTL.
         std::unordered_map<int, AssetID> material_index_to_id;
-        std::vector<AssetMetadata> material_metas;
+        std::vector<AssetMetadata> generated_assets;
+        std::unordered_set<uint64_t> generated_asset_ids;
         std::unordered_set<int> used_material_indices;
         used_material_indices.reserve(obj_build.submesh_material_indices.size());
+        std::unordered_map<std::string, AssetID> imported_texture_ids;
+        TextureImporter texture_importer;
 
         for (int material_index : obj_build.submesh_material_indices)
         {
@@ -517,7 +583,8 @@ namespace Hybrid
         for (int material_index : sorted_material_indices)
         {
             const bool valid_index =
-                material_index >= 0 && material_index < static_cast<int>(obj_build.material_names.size());
+                material_index >= 0 && material_index < static_cast<int>(obj_build.material_names.size()) &&
+                material_index < static_cast<int>(obj_build.materials.size());
             if (!valid_index)
             {
                 HBD_CORE_WARN("MeshImporter: skip invalid OBJ material index {} for {}",
@@ -527,6 +594,7 @@ namespace Hybrid
             }
 
             const std::string& material_name_raw = obj_build.material_names[material_index];
+            const tinyobj::material_t& src_material = obj_build.materials[material_index];
             const std::string material_name = material_name_raw.empty()
                                                   ? ("material_" + std::to_string(material_index))
                                                   : material_name_raw;
@@ -540,14 +608,145 @@ namespace Hybrid
             else
                 material_meta.id = registry.generateUniqueID();
 
+            auto importTextureRef = [&](const std::string& ref_path) -> AssetID {
+                const std::string texture_source_path = buildReferencedAssetPath(src_rel, ref_path);
+                if (texture_source_path.empty())
+                    return AssetID{};
+
+                if (auto imported = imported_texture_ids.find(texture_source_path); imported != imported_texture_ids.end())
+                    return imported->second;
+
+                const auto* existing_texture = registry.findByPath(texture_source_path);
+                if (existing_texture && existing_texture->type == AssetType::Texture2D)
+                {
+                    imported_texture_ids[texture_source_path] = existing_texture->id;
+                    return existing_texture->id;
+                }
+
+                if (!vfs.exists(texture_source_path))
+                {
+                    HBD_CORE_WARN("MeshImporter: referenced texture missing {}", texture_source_path);
+                    return AssetID{};
+                }
+
+                auto texture_native = vfs.resolve(texture_source_path);
+                if (!texture_native)
+                {
+                    HBD_CORE_WARN("MeshImporter: cannot resolve referenced texture {}", texture_source_path);
+                    return AssetID{};
+                }
+
+                ImportRequest texture_request{};
+                texture_request.source_path = texture_source_path;
+                texture_request.hash = makeSimpleHash(*texture_native);
+                texture_request.preferred_type = AssetType::Texture2D;
+
+                ImportResult texture_result = texture_importer.importAsset(texture_request, registry, vfs);
+                if (!texture_result.success)
+                {
+                    HBD_CORE_WARN("MeshImporter: texture import failed for {} ({})",
+                                  texture_source_path,
+                                  texture_result.message);
+                    return AssetID{};
+                }
+
+                imported_texture_ids[texture_source_path] = texture_result.primary_id;
+                appendUniqueAssets(generated_assets, texture_result.assets, generated_asset_ids);
+                return texture_result.primary_id;
+            };
+
+            const std::string albedo_map_path = buildReferencedAssetPath(src_rel, src_material.diffuse_texname);
+            const std::string normal_ref = !src_material.normal_texname.empty() ? src_material.normal_texname
+                                                                                : src_material.bump_texname;
+            const std::string normal_map_path = buildReferencedAssetPath(src_rel, normal_ref);
+            const std::string ao_map_path = buildReferencedAssetPath(src_rel, src_material.ambient_texname);
+            const std::string emissive_map_path = buildReferencedAssetPath(src_rel, src_material.emissive_texname);
+
+            const AssetID albedo_map_id = importTextureRef(src_material.diffuse_texname);
+            const AssetID normal_map_id = importTextureRef(normal_ref);
+            const AssetID ao_map_id = importTextureRef(src_material.ambient_texname);
+            const AssetID emissive_map_id = importTextureRef(src_material.emissive_texname);
+
+            json material_doc;
+            material_doc["version"] = 1;
+            material_doc["type"] = "Material";
+            material_doc["name"] = material_name;
+            material_doc["albedo_color"] = {
+                static_cast<float>(src_material.diffuse[0]),
+                static_cast<float>(src_material.diffuse[1]),
+                static_cast<float>(src_material.diffuse[2]),
+                static_cast<float>(src_material.dissolve)};
+            material_doc["metallic"] = static_cast<float>(src_material.metallic);
+            material_doc["roughness"] = (src_material.roughness > 0.0f) ? static_cast<float>(src_material.roughness)
+                                                                        : 1.0f;
+            material_doc["ao"] = 1.0f;
+            material_doc["emissive"] = static_cast<float>(std::max({src_material.emission[0],
+                                                                    src_material.emission[1],
+                                                                    src_material.emission[2]}));
+            if (albedo_map_id.value != 0)
+                material_doc["albedo_map_id"] = std::to_string(albedo_map_id.value);
+            if (normal_map_id.value != 0)
+                material_doc["normal_map_id"] = std::to_string(normal_map_id.value);
+            if (ao_map_id.value != 0)
+                material_doc["ao_map_id"] = std::to_string(ao_map_id.value);
+            if (emissive_map_id.value != 0)
+                material_doc["emissive_map_id"] = std::to_string(emissive_map_id.value);
+            material_doc["albedo_map_path"] = albedo_map_path;
+            material_doc["normal_map_path"] = normal_map_path;
+            material_doc["metallic_roughness_map_path"] = "";
+            material_doc["ao_map_path"] = ao_map_path;
+            material_doc["emissive_map_path"] = emissive_map_path;
+
+            auto material_native = vfs.resolveForWrite(material_source_path);
+            if (!material_native)
+            {
+                out.message = "MeshImporter: cannot resolve material source path";
+                return out;
+            }
+
+            std::error_code material_ec;
+            std::filesystem::create_directories(material_native->parent_path(), material_ec);
+            if (material_ec)
+            {
+                out.message = "MeshImporter: create material directory failed";
+                return out;
+            }
+
+            {
+                std::ofstream material_ofs(*material_native, std::ios::binary | std::ios::trunc);
+                if (!material_ofs)
+                {
+                    out.message = "MeshImporter: open material file failed";
+                    return out;
+                }
+                const std::string material_json = material_doc.dump(2);
+                material_ofs.write(material_json.data(), static_cast<std::streamsize>(material_json.size()));
+                if (!material_ofs.good())
+                {
+                    out.message = "MeshImporter: write material file failed";
+                    return out;
+                }
+            }
+
             material_meta.type = AssetType::Material;
             material_meta.source_path = material_source_path;
             material_meta.cooked_path.clear();
             material_meta.hash = request.hash + "|mtl:" + std::to_string(material_index) + ":" + material_name;
             material_meta.is_valid = true;
+            material_meta.hard_deps.clear();
+            material_meta.soft_deps.clear();
+            if (albedo_map_id.value != 0)
+                material_meta.hard_deps.push_back(albedo_map_id);
+            if (normal_map_id.value != 0)
+                material_meta.hard_deps.push_back(normal_map_id);
+            if (ao_map_id.value != 0)
+                material_meta.hard_deps.push_back(ao_map_id);
+            if (emissive_map_id.value != 0)
+                material_meta.hard_deps.push_back(emissive_map_id);
 
             material_index_to_id[material_index] = material_meta.id;
-            material_metas.push_back(std::move(material_meta));
+            if (generated_asset_ids.insert(material_meta.id.value).second)
+                generated_assets.push_back(std::move(material_meta));
         }
 
         auto& submeshes = obj_build.mesh.submeshes();
@@ -625,8 +824,8 @@ namespace Hybrid
         out.success = true;
         out.primary_id = mesh_meta.id;
         out.assets.push_back(std::move(mesh_meta));
-        for (auto& material_meta : material_metas)
-            out.assets.push_back(std::move(material_meta));
+        for (auto& asset_meta : generated_assets)
+            out.assets.push_back(std::move(asset_meta));
 
         HBD_CORE_INFO("MeshImporter OBJ: generated {} material sub-assets for {}",
                       material_index_to_id.size(),

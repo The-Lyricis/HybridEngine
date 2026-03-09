@@ -533,8 +533,24 @@ namespace Hybrid
                 mr.Primitive = 0;
 
                 auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
-                tr.Position = {0.0f, 0.0f, 0.0f};
+                tr.Position = {0.0f, 4.0f, 0.0f};
                 tr.Scale = {1.0f, 1.0f, 1.0f};
+            }
+            else
+            {
+                HBD_CORE_WARN("rock-a.obj meta not found in registry");
+            }
+            mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/tree.obj");
+            if (mesh_meta)
+            {
+                auto rock = scene->createEntity("Tree");
+                auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
+                mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
+                mr.Primitive = 0;
+
+                auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
+                tr.Position = { 2.0f, 4.0f, 2.0f };
+                tr.Scale = { 1.0f, 1.0f, 1.0f };
             }
             else
             {

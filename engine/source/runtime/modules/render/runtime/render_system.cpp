@@ -232,8 +232,6 @@ void main() {
     {
         if (!mat)
             return nullptr;
-        if (auto it = m_MatCache.find(id); it != m_MatCache.end())
-            return &it->second;
 
         if (!m_DefaultAlbedoTex)
             m_DefaultAlbedoTex = createSolidTexture(255, 255, 255, 255);
@@ -246,9 +244,6 @@ void main() {
         if (!m_DefaultEmissiveTex)
             m_DefaultEmissiveTex = createSolidTexture(0, 0, 0, 255); // black
 
-        MaterialGPU mgpu;
-        mgpu.data = mat->getData();
-
         auto texOrDefault = [&](AssetID tid, const TexturePtr &fallback) -> TexturePtr
         {
             if (!m_AssetManager)
@@ -259,11 +254,23 @@ void main() {
             return t ? t : fallback;
         };
 
-        mgpu.albedo = texOrDefault(mgpu.data.albedo_map, m_DefaultAlbedoTex);
-        mgpu.normal = texOrDefault(mgpu.data.normal_map, m_DefaultNormalTex);
-        mgpu.mr = texOrDefault(mgpu.data.metallic_roughness_map, m_DefaultMRTex);
-        mgpu.ao = texOrDefault(mgpu.data.ao_map, m_DefaultAOTex);
-        mgpu.emissive = texOrDefault(mgpu.data.emissive_map, m_DefaultEmissiveTex);
+        auto refreshMaterialGPU = [&](MaterialGPU& mgpu) {
+            mgpu.data = mat->getData();
+            mgpu.albedo = texOrDefault(mgpu.data.albedo_map, m_DefaultAlbedoTex);
+            mgpu.normal = texOrDefault(mgpu.data.normal_map, m_DefaultNormalTex);
+            mgpu.mr = texOrDefault(mgpu.data.metallic_roughness_map, m_DefaultMRTex);
+            mgpu.ao = texOrDefault(mgpu.data.ao_map, m_DefaultAOTex);
+            mgpu.emissive = texOrDefault(mgpu.data.emissive_map, m_DefaultEmissiveTex);
+        };
+
+        if (auto it = m_MatCache.find(id); it != m_MatCache.end())
+        {
+            refreshMaterialGPU(it->second);
+            return &it->second;
+        }
+
+        MaterialGPU mgpu;
+        refreshMaterialGPU(mgpu);
 
         auto [it, inserted] = m_MatCache.emplace(id, std::move(mgpu));
         return &it->second;

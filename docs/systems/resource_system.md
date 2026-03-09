@@ -53,3 +53,23 @@ loadAsync<Texture>(id):
 - 注册 Loader：ResourceSystem 内已默认注册 `GLTexture2DLoader`。
 - 设置默认：`AssetManager::setDefault<T>(ptr)`，回退通过 type_index 匹配。
 - VFS 解析：若相对部分以 `/` 或 `\` 开头会被剥离；alias 未找到返回 nullopt。
+
+## Fixed Bugs
+
+### 1. OBJ material sub-assets were incomplete
+- Symptom: OBJ import could generate `.mat.meta` entries but miss the actual `.mat` source file, or fail to carry texture references through the material asset.
+- Root cause: `MeshImporter` created material metadata but did not fully write material JSON and texture dependency data as part of the OBJ/MTL import path.
+- Fix: OBJ import now writes real `.mat` files, imports referenced texture assets, and records material `hard_deps` for those textures.
+- Result: the runtime material loader receives complete `.mat` data and the mesh -> material -> texture dependency chain is preserved.
+
+### 2. Runtime asset cache kept stale materials and textures after reimport
+- Symptom: editor reimport completed, but runtime still used old `Material` or `Texture` instances from `AssetManager` cache.
+- Root cause: editor import flow updated metadata and cooked/source files, but did not explicitly unload already cached runtime assets for the same ids.
+- Fix: after each successful import, `EditorResourceSystem` now unloads every asset id returned by the import result from `AssetManager`.
+- Result: subsequent loads fetch fresh material and texture content instead of stale cached objects.
+
+### 3. Texture upload orientation mismatch with OBJ UV convention
+- Symptom: texture data, UVs, and material ids were all correct, but sampling `texture(u_AlbedoMap, vUV)` still produced black or obviously wrong regions.
+- Root cause: decoded PNG/HTEX pixel data was uploaded to OpenGL without vertical flipping, while the OBJ UV convention in this pipeline expected the opposite row origin.
+- Fix: `GLTexture2DLoader` now vertically flips RGBA rows before `glTexImage2D` upload.
+- Result: imported meshes sample the intended atlas regions with their original OBJ UVs.

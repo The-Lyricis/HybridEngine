@@ -431,6 +431,12 @@ namespace Hybrid
             return false;
         }
 
+        if (auto manager = m_runtime->getManager())
+        {
+            for (const auto& meta : result.assets)
+                manager->unload(meta.id);
+        }
+
         const char* op = (change == AssetSourceChangeType::Added) ? "imported(new)" : "reimported(modified)";
         HBD_CORE_INFO("EditorResourceSystem: {} {}", op, source_vpath);
         return true;

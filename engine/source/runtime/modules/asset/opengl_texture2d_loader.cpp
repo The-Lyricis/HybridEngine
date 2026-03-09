@@ -2,6 +2,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include <cstring>
+#include <vector>
+
 #include "runtime/core/base/macro.h"
 #include "runtime/core/log/log_system.h"
 #include "runtime/modules/render/backend/opengl/opengl_texture.h"
@@ -25,6 +28,15 @@ namespace Hybrid
             if (!pixels || w <= 0 || h <= 0)
                 return nullptr;
 
+            std::vector<uint8_t> flipped(static_cast<size_t>(w) * static_cast<size_t>(h) * 4u);
+            const size_t row_bytes = static_cast<size_t>(w) * 4u;
+            for (int y = 0; y < h; ++y)
+            {
+                const uint8_t* src_row = pixels + static_cast<size_t>(y) * row_bytes;
+                uint8_t* dst_row = flipped.data() + static_cast<size_t>(h - 1 - y) * row_bytes;
+                std::memcpy(dst_row, src_row, row_bytes);
+            }
+
             GLuint tex = 0;
             glGenTextures(1, &tex);
             glBindTexture(GL_TEXTURE_2D, tex);
@@ -38,7 +50,7 @@ namespace Hybrid
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, flipped.data());
             glGenerateMipmap(GL_TEXTURE_2D);
 
             glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
