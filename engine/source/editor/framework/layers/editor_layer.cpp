@@ -61,12 +61,26 @@ namespace Hybrid
                     return;
 
                 if (m_mode_callbacks.enter_play_mode_from_scene)
-                    (void)m_mode_callbacks.enter_play_mode_from_scene(document->scene);
+                {
+                    if (m_mode_callbacks.enter_play_mode_from_scene(document->scene))
+                    {
+                        auto& local_ctx = m_editor_ui.context();
+                        local_ctx.selected = entt::null;
+                        local_ctx.request_pick = false;
+                        syncContextDocumentState();
+                    }
+                }
             };
         ctx.exit_play_mode = [this]()
             {
                 if (m_mode_callbacks.exit_play_mode)
+                {
                     m_mode_callbacks.exit_play_mode();
+                    auto& local_ctx = m_editor_ui.context();
+                    local_ctx.selected = entt::null;
+                    local_ctx.request_pick = false;
+                    syncContextDocumentState();
+                }
             };
         ctx.toggle_pause_mode = [this]()
             {
@@ -148,6 +162,19 @@ namespace Hybrid
 
         auto& ctx = m_editor_ui.context();
         ctx.setActiveDocument(m_scene_io.getActiveDocument());
+        if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode() &&
+            m_services.scene && m_services.scene->hasActiveScene())
+        {
+            ctx.active_scene = m_services.scene->getActiveScene().get();
+        }
+
+        if (ctx.active_scene && ctx.selected != entt::null)
+        {
+            auto& reg = ctx.active_scene->getRegistry();
+            if (!reg.valid(ctx.selected))
+                ctx.selected = entt::null;
+        }
+
         ctx.setStatusMessage(m_scene_io.getStatusMessage());
         m_editor_ui.setActiveScene(ctx.active_scene);
     }

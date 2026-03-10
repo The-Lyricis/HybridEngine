@@ -285,6 +285,9 @@ namespace Hybrid
         if (!scene)
             return false;
 
+        if (isPlayMode())
+            exitPlayMode();
+
         m_HasPendingPickResult = false;
         m_LastPickResult = kInvalidEntityID;
         m_EditorRenderExt.request_pick = false;
@@ -437,6 +440,9 @@ namespace Hybrid
 
     void HybridEngine::shutdown()
     {
+        if (isPlayMode())
+            exitPlayMode();
+
         m_PhysicsSystem.shutdown();
         m_LayerStack.clear();
         m_InputLayer = nullptr;
@@ -505,6 +511,9 @@ namespace Hybrid
 
         m_SceneRunState = SceneRunState::Play;
         m_PlayPaused = false;
+        m_SceneManager.setActiveScene(m_RuntimeScene);
+        m_RenderSystem.setScene(m_RuntimeScene);
+        m_FrameContext.scene = m_RuntimeScene;
         HBD_CORE_INFO("Entered Play mode.");
         return true;
     }
@@ -520,6 +529,9 @@ namespace Hybrid
         m_RuntimeScene.reset();
         m_SceneRunState = SceneRunState::Edit;
         m_PlayPaused = false;
+        m_SceneManager.setActiveScene(m_EditorScene);
+        m_RenderSystem.setScene(m_EditorScene);
+        m_FrameContext.scene = m_EditorScene;
         HBD_CORE_INFO("Exited Play mode.");
     }
 

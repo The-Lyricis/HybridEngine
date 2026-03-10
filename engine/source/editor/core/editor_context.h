@@ -78,6 +78,8 @@ namespace Hybrid
 
         void markSceneDirty()
         {
+            if (is_play_mode && is_play_mode())
+                return;
             if (active_document)
                 active_document->dirty = true;
         }
