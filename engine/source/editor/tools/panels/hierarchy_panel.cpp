@@ -375,26 +375,13 @@ namespace Hybrid
         if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered())
             ctx.selected = entt::null;
 
-        auto transformView = registry.view<TransformComponent>();
-        std::vector<entt::entity> roots;
-        roots.reserve(transformView.size());
-
-        for (entt::entity entity : transformView)
-        {
-            const auto& tc = transformView.get<TransformComponent>(entity);
-            if (tc.Parent == entt::null || !hasTransform(registry, tc.Parent))
-                roots.push_back(entity);
-        }
-
-        std::sort(roots.begin(), roots.end(), [](entt::entity a, entt::entity b) {
-            return entt::to_integral(a) < entt::to_integral(b);
-        });
+        const auto roots = ctx.active_scene->getRootEntities();
 
         std::unordered_set<uint32_t> visited;
-        visited.reserve(static_cast<size_t>(transformView.size() + 8));
+        visited.reserve(static_cast<size_t>(registry.view<TransformComponent>().size() + 8));
 
-        for (entt::entity root : roots)
-            drawEntityNode(ctx, registry, root, visited);
+        for (const Entity& root : roots)
+            drawEntityNode(ctx, registry, root.GetHandle(), visited);
 
         drawRootDropTarget(ctx, registry);
         drawWindowContextMenuIfRequested(ctx);

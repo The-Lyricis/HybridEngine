@@ -298,20 +298,6 @@ namespace Hybrid
             }
         }
 
-        static std::vector<entt::entity> collectRoots(const Scene& scene)
-        {
-            std::vector<entt::entity> roots;
-            auto& reg = const_cast<entt::registry&>(scene.getRegistry());
-
-            auto view = reg.view<TransformComponent>();
-            for (auto e : view)
-            {
-                const auto& tc = view.get<TransformComponent>(e);
-                if (tc.Parent == entt::null)
-                    roots.push_back(e);
-            }
-            return roots;
-        }
     } // namespace
 
     bool SceneSerializer::SerializeToFile(const Scene& scene, const std::filesystem::path& path, const AssetRegistry* registry)
@@ -323,8 +309,8 @@ namespace Hybrid
         root["meta"] = { {"version", 2} };   // 升级版本：v2 支持更多组件
         root["entities"] = json::array();
 
-        for (auto r : collectRoots(scene))
-            writeEntityDFS(scene, r, root["entities"], registry);
+        for (const Entity& root_entity : scene.getRootEntities())
+            writeEntityDFS(scene, root_entity.GetHandle(), root["entities"], registry);
 
         std::ofstream ofs(path, std::ios::out | std::ios::trunc);
         if (!ofs.is_open())
@@ -381,12 +367,6 @@ namespace Hybrid
                 // 缓存标记让系统重算矩阵
                 tc.DirtyLocal = true;
                 tc.DirtyWorld = true;
-
-                // 运行时层级链接在 Phase B 建立
-                tc.Parent = entt::null;
-                tc.FirstChild = entt::null;
-                tc.NextSibling = entt::null;
-                tc.PrevSibling = entt::null;
             }
 
             // v2：读取组件；v1：这些字段不存在会被忽略

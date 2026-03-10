@@ -184,6 +184,7 @@ namespace Hybrid
         entity.AddComponent<TransformComponent>();
 
         onEntityCreated(entity);
+        attachToParentLinks(handle, entt::null);
         return entity;
     }
 
@@ -256,6 +257,10 @@ namespace Hybrid
             if (pt.FirstChild == child)
                 pt.FirstChild = ct.NextSibling;
         }
+        else if (m_FirstRoot == child)
+        {
+            m_FirstRoot = ct.NextSibling;
+        }
 
         // 修复兄弟链
         if (hasTransform(m_Registry, ct.PrevSibling))
@@ -280,7 +285,22 @@ namespace Hybrid
         ct.NextSibling = entt::null;
 
         if (!hasTransform(m_Registry, parent))
+        {
+            if (m_FirstRoot == entt::null)
+            {
+                m_FirstRoot = child;
+                return;
+            }
+
+            const entt::entity last_root = getLastRoot();
+            if (hasTransform(m_Registry, last_root))
+            {
+                auto& last_root_tc = m_Registry.get<TransformComponent>(last_root);
+                last_root_tc.NextSibling = child;
+                ct.PrevSibling = last_root;
+            }
             return;
+        }
 
         auto& pt = m_Registry.get<TransformComponent>(parent);
         ct.NextSibling = pt.FirstChild;
@@ -288,6 +308,18 @@ namespace Hybrid
             m_Registry.get<TransformComponent>(pt.FirstChild).PrevSibling = child;
 
         pt.FirstChild = child;
+    }
+
+    entt::entity Scene::getLastRoot() const
+    {
+        entt::entity root = m_FirstRoot;
+        entt::entity last = entt::null;
+        while (hasTransform(m_Registry, root))
+        {
+            last = root;
+            root = m_Registry.get<TransformComponent>(root).NextSibling;
+        }
+        return last;
     }
 
     // -------------------------
@@ -405,16 +437,10 @@ namespace Hybrid
     std::vector<Entity> Scene::getRootEntities() const
     {
         std::vector<Entity> roots;
-        auto view = m_Registry.view<TransformComponent>();
-        roots.reserve(view.size());
-
-        for (auto e : view)
+        for (entt::entity root = m_FirstRoot; hasTransform(m_Registry, root);)
         {
-            const auto& tc = view.get<TransformComponent>(e);
-            if (tc.Parent == entt::null)
-            {
-                roots.emplace_back(e, const_cast<entt::registry*>(&m_Registry), const_cast<Scene*>(this));
-            }
+            roots.emplace_back(root, const_cast<entt::registry*>(&m_Registry), const_cast<Scene*>(this));
+            root = m_Registry.get<TransformComponent>(root).NextSibling;
         }
         return roots;
     }
@@ -428,25 +454,9 @@ namespace Hybrid
         auto& dstReg = dst->getRegistry();
 
         std::unordered_map<entt::entity, entt::entity> entityMap;
-        std::vector<entt::entity> roots;
-        {
-            auto rootView = srcReg.view<const TransformComponent>();
-            for (auto srcEntity : rootView)
-            {
-                const auto& tc = rootView.get<const TransformComponent>(srcEntity);
-                if (tc.Parent == entt::null)
-                    roots.push_back(srcEntity);
-            }
-        }
-
-        std::sort(roots.begin(), roots.end(), [](entt::entity a, entt::entity b)
-        {
-            return entt::to_integral(a) < entt::to_integral(b);
-        });
-
         std::vector<entt::entity> orderedEntities;
         auto& mutableSrcReg = const_cast<entt::registry&>(srcReg);
-        for (entt::entity root : roots)
+        for (entt::entity root = m_FirstRoot; hasTransform(srcReg, root); root = srcReg.get<TransformComponent>(root).NextSibling)
             collectHierarchyOrder(mutableSrcReg, root, orderedEntities);
 
         for (auto srcEntity : orderedEntities)
@@ -518,6 +528,7 @@ namespace Hybrid
             dstTc.DirtyWorld = true;
         }
 
+        dst->m_FirstRoot = remapEntity(m_FirstRoot);
         dst->onUpdate(0.0f);
         return dst;
     }
@@ -533,16 +544,17 @@ namespace Hybrid
             if (tc.Parent != entt::null && !hasTransform(m_Registry, tc.Parent))
             {
                 detachFromParentLinks(e);
+                attachToParentLinks(e, entt::null);
                 tc.DirtyWorld = true;
             }
         }
 
         // 2) 从根更新
-        for (auto e : view)
+        for (entt::entity root = m_FirstRoot; hasTransform(m_Registry, root);)
         {
-            const auto& tc = view.get<TransformComponent>(e);
-            if (tc.Parent == entt::null)
-                updateNodeRecursive(m_Registry, e, glm::mat4(1.0f), false);
+            const entt::entity next = m_Registry.get<TransformComponent>(root).NextSibling;
+            updateNodeRecursive(m_Registry, root, glm::mat4(1.0f), false);
+            root = next;
         }
     }
     

@@ -55,6 +55,7 @@ namespace Hybrid
 
     private:
         void updateTransformHierarchy();
+        entt::entity getLastRoot() const;
 
         void onEntityCreated(Entity e);
         void onEntityDestroyed(entt::entity h);
@@ -65,6 +66,7 @@ namespace Hybrid
 
     private:
         entt::registry m_Registry;
+        entt::entity m_FirstRoot{ entt::null };
 
         // UUID -> entt::entity（用于加载、引用定位）
         std::unordered_map<uint64_t, entt::entity> m_EntityMap;
