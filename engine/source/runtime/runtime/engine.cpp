@@ -285,6 +285,11 @@ namespace Hybrid
         if (!scene)
             return false;
 
+        m_HasPendingPickResult = false;
+        m_LastPickResult = kInvalidEntityID;
+        m_EditorRenderExt.request_pick = false;
+        m_EditorRenderExt.selected_entity_id = kInvalidEntityID;
+
         m_EditorScene = std::move(scene);
         m_SceneManager.setActiveScene(m_EditorScene);
         m_RenderSystem.setScene(m_EditorScene);

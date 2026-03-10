@@ -96,7 +96,7 @@ namespace Hybrid
         RenderFlags m_RenderFlags = RenderFlags::Forward;      // Enabled render passes this frame.
         EditorRenderExt m_EditorRenderExt{};                   // Optional editor-side render extension.
         bool m_HasPendingPickResult = false;                   // Whether a pick readback is ready.
-        uint32_t m_LastPickResult = 0;                         // Last entity id read from ID buffer.
+        uint32_t m_LastPickResult = kInvalidEntityID;          // Last entity id read from ID buffer.
 
         float m_LastTime = 0.0f; // Previous frame timestamp.
     };

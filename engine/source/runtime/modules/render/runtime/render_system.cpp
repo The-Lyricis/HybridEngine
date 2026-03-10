@@ -34,6 +34,30 @@ namespace Hybrid
 
     namespace
     {
+        uint32_t encodeEntityID(uint32_t entity_id)
+        {
+            return entity_id + 1u;
+        }
+
+        uint32_t decodeEntityID(uint32_t encoded_id)
+        {
+            return (encoded_id == 0) ? kInvalidEntityID : (encoded_id - 1u);
+        }
+
+        void setSceneFramebufferDrawBuffers(bool write_entity_id)
+        {
+            if (write_entity_id)
+            {
+                constexpr GLenum buffers[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+                glDrawBuffers(2, buffers);
+            }
+            else
+            {
+                constexpr GLenum buffer = GL_COLOR_ATTACHMENT0;
+                glDrawBuffers(1, &buffer);
+            }
+        }
+
         static glm::vec3 lightDirectionFromTransform(const Hybrid::TransformComponent &tr)
         {
             const glm::vec3 dir = glm::vec3(tr.WorldMatrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
@@ -264,10 +288,10 @@ in vec2 vUV;
 in vec4 vTangent;
 
 layout(location=0) out vec4 FragColor;
-layout(location=1) out int EntityID;
+layout(location=1) out uint EntityID;
 
-uniform int u_EntityID;
-uniform int  u_Selected;
+uniform uint u_EntityID;
+uniform int u_Selected;
 
 uniform vec3 u_CameraPos;
 uniform DirLight u_DirLight;
@@ -439,7 +463,7 @@ void main()
         std::shared_ptr<Scene> scene = frame_context.scene ? frame_context.scene : m_Scene;
 
         bool use_game_camera = true;
-        uint32_t selected_entity_id = 0;
+        uint32_t selected_entity_id = kInvalidEntityID;
         if (editor_ext)
         {
             use_game_camera = editor_ext->use_game_camera;
@@ -546,7 +570,7 @@ void main()
                 item.model = tr.WorldMatrix;
                 item.tint = mr.Tint;
                 item.entityID = (uint32_t)entt::to_integral(e);
-                item.selected = (selected_entity_id != 0 && item.entityID == selected_entity_id);
+                item.selected = (selected_entity_id != kInvalidEntityID && item.entityID == selected_entity_id);
                 pkt.items.push_back(item);
             }
         }
@@ -592,6 +616,7 @@ void main()
 
         // 1) begin pass
         framebuffer->bind();
+        setSceneFramebufferDrawBuffers(true);
         RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
         Renderer::beginFrame({0.1f, 0.1f, 0.12f, 1.0f});
         // Clear color to black and EntityID to 0 for picking/outline.
@@ -670,7 +695,7 @@ void main()
 
                     m_MeshShader->setMat4("u_Model", item.model);
                     m_MeshShader->setVec4("u_TintColor", item.tint);
-                    m_MeshShader->setInt("u_EntityID", item.entityID);
+                    m_MeshShader->setUInt("u_EntityID", encodeEntityID(item.entityID));
                     m_MeshShader->setInt("u_Selected", item.selected ? 1 : 0);
                     useMat->bind(*m_MeshShader);
 
@@ -734,6 +759,7 @@ void main()
         auto view = registry.view<TransformComponent, ColliderComponent>();
 
         framebuffer->bind();
+        setSceneFramebufferDrawBuffers(false);
         RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
 
         glEnable(GL_DEPTH_TEST);
@@ -774,6 +800,7 @@ void main()
 
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         glEnable(GL_CULL_FACE);
+        setSceneFramebufferDrawBuffers(true);
 
         framebuffer->unbind();
     }
@@ -891,18 +918,24 @@ void main()
     }
     uint32_t RenderSystem::readEntityID(int x, int y) const
     {
-        if (!m_SceneFB) return 0;
+        if (!m_SceneFB)
+            return 0;
+        if (x < 0 || y < 0)
+            return 0;
+        if (x >= static_cast<int>(m_SceneFB->getWidth()) ||
+            y >= static_cast<int>(m_SceneFB->getHeight()))
+            return 0;
 
         m_SceneFB->bind();
 
         // 璇?COLOR1
         glReadBuffer(GL_COLOR_ATTACHMENT1);
 
-        uint32_t id = 0;
-        glReadPixels(x, y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT, &id);
+        uint32_t encoded_id = 0;
+        glReadPixels(x, y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT, &encoded_id);
 
         m_SceneFB->unbind();
-        return id;
+        return decodeEntityID(encoded_id);
     }
 
 }

@@ -90,4 +90,9 @@ namespace Hybrid {
         glUniform1i(loc, v);
     }
 
+    void GLShader::setUInt(const std::string& name, uint32_t v) {
+        GLint loc = glGetUniformLocation(m_RendererID, name.c_str());
+        glUniform1ui(loc, v);
+    }
+
 } // namespace Hybrid

@@ -301,7 +301,6 @@ namespace Hybrid
         if (!is_scene_view)
         {
             ctx.gizmo_using = false;
-            ctx.request_pick = false;
             ImGui::End();
             ImGui::PopStyleVar();
             return;

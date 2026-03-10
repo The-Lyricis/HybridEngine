@@ -20,6 +20,7 @@ namespace Hybrid {
         virtual void setFloat(const std::string& name, float v) = 0;
         virtual void setVec3(const std::string& name, const glm::vec3& v) = 0;
         virtual void setInt(const std::string& name, int v) = 0;
+        virtual void setUInt(const std::string& name, uint32_t v) = 0;
 
         static std::shared_ptr<Shader> Create(const std::string& vsSource, const std::string& fsSource);
     };

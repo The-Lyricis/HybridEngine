@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -8,6 +9,8 @@
 
 namespace Hybrid
 {
+    inline constexpr uint32_t kInvalidEntityID = std::numeric_limits<uint32_t>::max();
+
     // Optional editor-only extension passed to render pipeline.
     struct EditorRenderExt
     {
@@ -18,7 +21,7 @@ namespace Hybrid
         glm::vec2 game_viewport_size = glm::vec2(0.0f);
         bool pan_tool = false;
         bool use_game_camera = true;       // True: use scene primary camera, false: editor camera.
-        uint32_t selected_entity_id = 0;   // Selection used by outline/highlight passes.
+        uint32_t selected_entity_id = kInvalidEntityID; // Selection used by outline/highlight passes.
 
         bool request_pick = false;         // Request one ID-buffer readback this frame.
         bool show_collider_debug = false;

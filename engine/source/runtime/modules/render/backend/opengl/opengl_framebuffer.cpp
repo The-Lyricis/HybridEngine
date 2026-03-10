@@ -11,14 +11,16 @@ namespace Hybrid {
 
     GLFramebuffer::~GLFramebuffer() {
         if (m_DepthStencilRBO) glDeleteRenderbuffers(1, &m_DepthStencilRBO);
-        if (m_ColorAttachments) glDeleteTextures(1, &m_ColorAttachments[0]);
+        glDeleteTextures(2, m_ColorAttachments);
         if (m_FBO) glDeleteFramebuffers(1, &m_FBO);
     }
 
     void GLFramebuffer::invalidate() {
         // delete old resources
         if (m_DepthStencilRBO) { glDeleteRenderbuffers(1, &m_DepthStencilRBO); m_DepthStencilRBO = 0; }
-        if (m_ColorAttachments) { glDeleteTextures(1, &m_ColorAttachments[0]); m_ColorAttachments[0] = 0; }
+        glDeleteTextures(2, m_ColorAttachments);
+        m_ColorAttachments[0] = 0;
+        m_ColorAttachments[1] = 0;
         if (m_FBO) { glDeleteFramebuffers(1, &m_FBO); m_FBO = 0; }
 
         glGenFramebuffers(1, &m_FBO);

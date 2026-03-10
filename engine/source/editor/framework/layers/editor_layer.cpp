@@ -15,6 +15,7 @@
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/render_flags.h"
 #include "runtime/modules/render/runtime/render_system.h"
+#include "runtime/modules/scene/scene.h"
 #include "runtime/modules/scene/scene_manager.h"
 #include "runtime/modules/window/window_system.h"
 
@@ -157,6 +158,10 @@ namespace Hybrid
         if (document == m_active_scene_view_document)
             return;
 
+        auto& ctx = m_editor_ui.context();
+        ctx.selected = entt::null;
+        ctx.request_pick = false;
+
         if (m_active_scene_view_document)
             (void)m_scene_io.saveSceneViewState(*m_active_scene_view_document, m_editor_camera.dumpState());
 
@@ -189,7 +194,16 @@ namespace Hybrid
             if (m_services.consume_pick_result(picked))
             {
                 auto& ctx = m_editor_ui.context();
-                ctx.selected = (picked == 0) ? entt::null : static_cast<entt::entity>(picked);
+                if (picked == kInvalidEntityID || !ctx.active_scene)
+                {
+                    ctx.selected = entt::null;
+                }
+                else
+                {
+                    const entt::entity entity = static_cast<entt::entity>(picked);
+                    auto& reg = ctx.active_scene->getRegistry();
+                    ctx.selected = reg.valid(entity) ? entity : entt::null;
+                }
             }
         }
 
@@ -228,7 +242,7 @@ namespace Hybrid
         editor_ext->scene_viewport_size = {ctx.scene_viewport_size.x, ctx.scene_viewport_size.y};
         editor_ext->game_viewport_size = {ctx.game_viewport_size.x, ctx.game_viewport_size.y};
         editor_ext->selected_entity_id =
-            (ctx.selected == entt::null) ? 0u : static_cast<uint32_t>(entt::to_integral(ctx.selected));
+            (ctx.selected == entt::null) ? kInvalidEntityID : static_cast<uint32_t>(entt::to_integral(ctx.selected));
         editor_ext->pan_tool = ctx.pan_tool;
 
         if (editor_ext->render_scene_view)
@@ -244,7 +258,7 @@ namespace Hybrid
         }
 
         *render_flags = RenderFlags::Forward | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmos;
-        if (editor_ext->selected_entity_id != 0)
+        if (editor_ext->selected_entity_id != kInvalidEntityID)
             *render_flags |= RenderFlags::SelectionOutline;
 
         if (ctx.request_pick)
