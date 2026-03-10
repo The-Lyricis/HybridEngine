@@ -8,10 +8,11 @@
 #include <stb_image.h>
 
 #include "editor/core/editor_context.h"
+#include "editor/tools/panels/game_view_panel.h"
 #include "editor/tools/panels/hierarchy_panel.h"
 #include "editor/tools/panels/inspector_panel.h"
 #include "editor/tools/panels/project_panel.h"
-#include "editor/tools/panels/viewport_panel.h"
+#include "editor/tools/panels/scene_view_panel.h"
 #include "runtime/core/base/macro.h"
 
 namespace Hybrid
@@ -114,8 +115,8 @@ namespace Hybrid
         m_HierarchyPanel = std::make_unique<HierarchyPanel>();
         m_InspectorPanel = std::make_unique<InspectorPanel>();
         m_ProjectPanel = std::make_unique<ProjectPanel>();
-        m_SceneViewportPanel = std::make_unique<ViewportPanel>(ViewportPanelMode::Scene);
-        m_GameViewportPanel = std::make_unique<ViewportPanel>(ViewportPanelMode::Game);
+        m_SceneViewportPanel = std::make_unique<SceneViewPanel>();
+        m_GameViewportPanel = std::make_unique<GameViewPanel>();
 
         m_initialized = true;
     }

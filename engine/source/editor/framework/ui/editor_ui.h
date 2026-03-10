@@ -17,7 +17,8 @@ namespace Hybrid
     class HierarchyPanel;
     class InspectorPanel;
     class ProjectPanel;
-    class ViewportPanel;
+    class SceneViewPanel;
+    class GameViewPanel;
 
     class EditorUI
     {
@@ -53,7 +54,7 @@ namespace Hybrid
         std::unique_ptr<HierarchyPanel> m_HierarchyPanel;
         std::unique_ptr<InspectorPanel> m_InspectorPanel;
         std::unique_ptr<ProjectPanel> m_ProjectPanel;
-        std::unique_ptr<ViewportPanel> m_SceneViewportPanel;
-        std::unique_ptr<ViewportPanel> m_GameViewportPanel;
+        std::unique_ptr<SceneViewPanel> m_SceneViewportPanel;
+        std::unique_ptr<GameViewPanel> m_GameViewportPanel;
     };
 } // namespace Hybrid
