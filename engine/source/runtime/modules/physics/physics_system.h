@@ -25,7 +25,6 @@ namespace Hybrid
         void solveCollisions(Scene& scene);
 
         AABB buildAABB(const TransformComponent& transform, const ColliderComponent& collider) const;
-        CollisionHit intersectAABB(const AABB& a, const AABB& b) const;
 
     private:
         bool m_Initialized = false;

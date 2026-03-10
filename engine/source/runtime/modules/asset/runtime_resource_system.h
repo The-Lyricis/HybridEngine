@@ -26,6 +26,7 @@ namespace Hybrid
         std::shared_ptr<AssetRegistry> getRegistry() const { return m_registry; }
         std::shared_ptr<AssetManager> getManager() const { return m_manager; }
         AssetID getBuiltinMeshID(BuiltinMesh mesh) const;
+        void invalidateAsset(AssetID id) const;
 
     private:
         void registerDefaultLoaders(); // Register runtime loaders (texture/mesh/material).

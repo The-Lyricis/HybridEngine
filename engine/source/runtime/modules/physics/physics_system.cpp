@@ -85,45 +85,6 @@ namespace Hybrid
         return aabb;
     }
 
-    CollisionHit PhysicsSystem::intersectAABB(const AABB& a, const AABB& b) const
-    {
-        CollisionHit hit{};
-
-        const float overlapX = std::min(a.Max.x, b.Max.x) - std::max(a.Min.x, b.Min.x);
-        if (overlapX <= 0.0f)
-            return hit;
-
-        const float overlapY = std::min(a.Max.y, b.Max.y) - std::max(a.Min.y, b.Min.y);
-        if (overlapY <= 0.0f)
-            return hit;
-
-        const float overlapZ = std::min(a.Max.z, b.Max.z) - std::max(a.Min.z, b.Min.z);
-        if (overlapZ <= 0.0f)
-            return hit;
-
-        hit.Hit = true;
-
-        const glm::vec3 centerA = 0.5f * (a.Min + a.Max);
-        const glm::vec3 centerB = 0.5f * (b.Min + b.Max);
-        const glm::vec3 delta = centerB - centerA;
-
-        hit.Penetration = overlapX;
-        hit.Normal = glm::vec3((delta.x >= 0.0f) ? 1.0f : -1.0f, 0.0f, 0.0f);
-
-        if (overlapY < hit.Penetration)
-        {
-            hit.Penetration = overlapY;
-            hit.Normal = glm::vec3(0.0f, (delta.y >= 0.0f) ? 1.0f : -1.0f, 0.0f);
-        }
-
-        if (overlapZ < hit.Penetration)
-        {
-            hit.Penetration = overlapZ;
-            hit.Normal = glm::vec3(0.0f, 0.0f, (delta.z >= 0.0f) ? 1.0f : -1.0f);
-        }
-
-        return hit;
-    }
     void PhysicsSystem::solveCollisions(Scene& scene)
     {
         auto& registry = scene.getRegistry();
@@ -159,7 +120,7 @@ namespace Hybrid
                     continue;
 
                 const AABB staticAABB = buildAABB(staticTransform, staticCollider);
-                const CollisionHit hit = intersectAABB(dynamicAABB, staticAABB);
+                const CollisionHit hit = Hybrid::IntersectAABB(dynamicAABB, staticAABB);
 
                 if (!hit.Hit)
                     continue;

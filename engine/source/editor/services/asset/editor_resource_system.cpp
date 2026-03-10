@@ -71,6 +71,7 @@ namespace Hybrid
         registerDefaultImporters();
         m_event_queue.clear();
         m_pending_changes.clear();
+        m_assets_reloaded_callback = {};
         m_bootstrap_done = false;
         return true;
     }
@@ -93,6 +94,29 @@ namespace Hybrid
     // - We coalesce multiple events for the same asset within a short time window by merging their change types and updating the timestamp. This helps to reduce redundant imports during
     void EditorResourceSystem::enqueueSourceChanged(const std::string& source_vpath, AssetSourceChangeType change)
     {
+        enqueueRequest(source_vpath, change, false, false);
+    }
+
+    void EditorResourceSystem::enqueueManualReimport(const std::string& source_vpath)
+    {
+        enqueueRequest(source_vpath, AssetSourceChangeType::Modified, true, true);
+    }
+
+    void EditorResourceSystem::setAssetsReloadedCallback(AssetsReloadedCallback callback)
+    {
+        m_assets_reloaded_callback = std::move(callback);
+    }
+
+    void EditorResourceSystem::clearAssetsReloadedCallback()
+    {
+        m_assets_reloaded_callback = {};
+    }
+
+    void EditorResourceSystem::enqueueRequest(const std::string& source_vpath,
+                                              AssetSourceChangeType change,
+                                              bool force_reimport,
+                                              bool high_priority)
+    {
         if (!m_importManager)
             return;
 
@@ -113,13 +137,33 @@ namespace Hybrid
         auto it = m_pending_changes.find(normalized);
         if (it == m_pending_changes.end())
         {
-            m_pending_changes.emplace(normalized, PendingSourceChange{change, now});
-            m_event_queue.push_back(normalized);
+            PendingSourceChange pending{};
+            pending.type = change;
+            pending.force_reimport = force_reimport;
+            pending.last_event_time =
+                (high_priority && m_min_settle_ms > 0)
+                    ? (now - std::chrono::milliseconds(m_min_settle_ms))
+                    : now;
+            m_pending_changes.emplace(normalized, pending);
+            if (high_priority)
+                m_event_queue.push_front(normalized);
+            else
+                m_event_queue.push_back(normalized);
             return;
         }
 
         it->second.type = mergeChangeType(it->second.type, change);
-        it->second.last_event_time = now;
+        it->second.force_reimport = it->second.force_reimport || force_reimport;
+        it->second.last_event_time =
+            (high_priority && m_min_settle_ms > 0)
+                ? (now - std::chrono::milliseconds(m_min_settle_ms))
+                : now;
+
+        if (high_priority)
+        {
+            m_event_queue.erase(std::remove(m_event_queue.begin(), m_event_queue.end(), normalized), m_event_queue.end());
+            m_event_queue.push_front(normalized);
+        }
     }
 
     // Consume queued import tasks with optional frame time budget.
@@ -169,8 +213,9 @@ namespace Hybrid
             }
 
             const AssetSourceChangeType change = pending_it->second.type;
+            const bool force_reimport = pending_it->second.force_reimport;
             m_pending_changes.erase(pending_it);
-            (void)processOneEvent(path, change);
+            (void)processOneEvent(path, change, force_reimport);
             ++jobs;
         }
     }
@@ -375,21 +420,48 @@ namespace Hybrid
         m_importManager->registerImporter(std::make_shared<SceneImporter>());
     }
 
-    bool EditorResourceSystem::processOneEvent(const std::string& source_vpath, AssetSourceChangeType change)
+    void EditorResourceSystem::emitAssetsReloaded(AssetsReloadedEvent event) const
     {
+        if (!m_assets_reloaded_callback || event.assets.empty())
+            return;
+
+        m_assets_reloaded_callback(event);
+    }
+
+    bool EditorResourceSystem::processOneEvent(const std::string& source_vpath,
+                                               AssetSourceChangeType change,
+                                               bool force_reimport)
+    {
+        std::vector<AssetMetadata> changed_assets;
+        bool handled = false;
         switch (change)
         {
         case AssetSourceChangeType::Added:
         case AssetSourceChangeType::Modified:
-            return handleUpsert(source_vpath, change);
+            handled = handleUpsert(source_vpath, change, force_reimport, &changed_assets);
+            break;
         case AssetSourceChangeType::Removed:
-            return handleRemove(source_vpath);
+            handled = handleRemove(source_vpath, &changed_assets);
+            break;
         default:
             return false;
         }
+
+        if (handled && !changed_assets.empty())
+        {
+            emitAssetsReloaded(AssetsReloadedEvent{
+                change,
+                source_vpath,
+                std::move(changed_assets),
+            });
+        }
+        return handled;
     }
 
-    bool EditorResourceSystem::handleUpsert(const std::string& source_vpath, AssetSourceChangeType change)
+    bool EditorResourceSystem::handleUpsert(const std::string& source_vpath,
+                                            AssetSourceChangeType change,
+                                            bool force_reimport,
+                                            std::vector<AssetMetadata>* out_assets)
     {
         if (!m_runtime || !m_importManager)
             return false;
@@ -402,7 +474,7 @@ namespace Hybrid
         if (!vfs->exists(source_vpath))
         {
             // File disappeared before import starts.
-            return handleRemove(source_vpath);
+            return handleRemove(source_vpath, out_assets);
         }
 
         auto source_physical = vfs->resolve(source_vpath);
@@ -414,7 +486,7 @@ namespace Hybrid
         const bool cooked_exists =
             existing && !existing->cooked_path.empty() && vfs->exists(existing->cooked_path);
 
-        if (existing && existing->is_valid && existing->hash == new_hash && cooked_exists)
+        if (!force_reimport && existing && existing->is_valid && existing->hash == new_hash && cooked_exists)
         {
             return true;
         }
@@ -430,19 +502,15 @@ namespace Hybrid
             HBD_CORE_ERROR("EditorResourceSystem: import failed for {} ({})", source_vpath, result.message);
             return false;
         }
-
-        if (auto manager = m_runtime->getManager())
-        {
-            for (const auto& meta : result.assets)
-                manager->unload(meta.id);
-        }
+        if (out_assets)
+            *out_assets = result.assets;
 
         const char* op = (change == AssetSourceChangeType::Added) ? "imported(new)" : "reimported(modified)";
         HBD_CORE_INFO("EditorResourceSystem: {} {}", op, source_vpath);
         return true;
     }
 
-    bool EditorResourceSystem::handleRemove(const std::string& source_vpath)
+    bool EditorResourceSystem::handleRemove(const std::string& source_vpath, std::vector<AssetMetadata>* out_assets)
     {
         if (!m_runtime || !m_metaStore)
             return false;
@@ -454,6 +522,8 @@ namespace Hybrid
 
         const auto* existing = registry->findByPath(source_vpath);
         const std::filesystem::path assets_root = registry->getRoot();
+        if (existing && out_assets)
+            out_assets->push_back(*existing);
 
         bool removed_meta = false;
         if (!assets_root.empty())

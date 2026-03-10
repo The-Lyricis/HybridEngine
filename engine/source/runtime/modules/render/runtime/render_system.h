@@ -43,6 +43,7 @@ namespace Hybrid
         uint32_t getGameColorTexture() const;
         void onWindowResize(uint32_t width, uint32_t height);
         uint32_t readEntityID(int x, int y) const;
+        void invalidateAsset(AssetID id, AssetType type);
 
         // Per-frame render entry driven by context + feature flags.
         void renderFrame(const FrameContext& frame_context,
@@ -79,6 +80,8 @@ namespace Hybrid
         {
             glm::mat4 viewProj{1.0f};
             glm::vec3 cameraPos{0.0f};
+            glm::vec4 clearColor{0.1f, 0.1f, 0.12f, 1.0f};
+            bool useSkyboxClear = false;
             float time = 0.0f;
         };
 

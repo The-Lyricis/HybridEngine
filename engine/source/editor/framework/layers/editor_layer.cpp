@@ -1,7 +1,9 @@
 #include "editor_layer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <entt/entity/entity.hpp>
+#include <glm/glm.hpp>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -9,6 +11,7 @@
 #include "editor/core/editor_context.h"
 #include "editor/services/asset/editor_resource_system.h"
 #include "editor/services/import/import_types.h"
+#include "runtime/core/base/intersection.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/asset/asset_registry.h"
 #include "runtime/modules/asset/asset_type.h"
@@ -52,7 +55,11 @@ namespace Hybrid
         }
 
         if (m_services.editor_resources)
+        {
             m_services.editor_resources->bootstrapImportOnce();
+            m_services.editor_resources->setAssetsReloadedCallback(
+                [this](const AssetsReloadedEvent& event) { handleAssetsReloaded(event); });
+        }
 
         m_scene_io.initialize();
         m_initialized = true;
@@ -128,15 +135,15 @@ namespace Hybrid
             {
                 return findAssetByVPath(asset_vpath);
             };
-        ctx.instantiate_scene_asset = [this](AssetID asset_id) -> bool
+        ctx.instantiate_scene_asset = [this](AssetID asset_id, const ImVec2& drop_mouse_pos) -> bool
             {
-                const bool instantiated = instantiateSceneAsset(asset_id);
+                const bool instantiated = instantiateSceneAsset(asset_id, drop_mouse_pos);
                 syncContextDocumentState();
                 return instantiated;
             };
-        ctx.instantiate_scene_project_path = [this](const std::string& rel_path) -> bool
+        ctx.instantiate_scene_project_path = [this](const std::string& rel_path, const ImVec2& drop_mouse_pos) -> bool
             {
-                const bool instantiated = instantiateSceneProjectPath(rel_path);
+                const bool instantiated = instantiateSceneProjectPath(rel_path, drop_mouse_pos);
                 syncContextDocumentState();
                 return instantiated;
             };
@@ -179,6 +186,9 @@ namespace Hybrid
 
         if (m_services.editor_ext)
             m_services.editor_ext->has_editor_camera = false;
+
+        if (m_services.editor_resources)
+            m_services.editor_resources->clearAssetsReloadedCallback();
 
         m_scene_io.shutdown();
         m_editor_ui.shutdown();
@@ -335,31 +345,11 @@ namespace Hybrid
     bool EditorLayer::reimportAsset(const std::string& asset_vpath)
     {
         auto& ctx = m_editor_ui.context();
-        if (asset_vpath.empty() || !m_services.editor_resources || !m_services.resources)
+        if (asset_vpath.empty() || !m_services.editor_resources)
             return false;
 
-        ImportRequest request{};
-        request.source_path = asset_vpath;
-        request.force_reimport = true;
-
-        const ImportResult result = m_services.editor_resources->importAsset(request);
-        if (!result.success)
-        {
-            ctx.setStatusMessage(result.message.empty() ? "Reimport failed." : result.message);
-            return false;
-        }
-
-        auto manager = m_services.resources->getManager();
-        if (manager)
-        {
-            for (const auto& meta : result.assets)
-            {
-                if (meta.id.value != 0)
-                    manager->unload(meta.id);
-            }
-        }
-
-        ctx.setStatusMessage("Reimport completed.");
+        m_services.editor_resources->enqueueManualReimport(asset_vpath);
+        ctx.setStatusMessage("Reimport queued.");
         return true;
     }
 
@@ -378,7 +368,7 @@ namespace Hybrid
         return {};
     }
 
-    bool EditorLayer::instantiateSceneProjectPath(const std::string& rel_path)
+    bool EditorLayer::instantiateSceneProjectPath(const std::string& rel_path, const ImVec2& drop_mouse_pos)
     {
         if (rel_path.empty())
             return false;
@@ -407,15 +397,49 @@ namespace Hybrid
             asset_id = result.primary_id;
         }
 
-        return instantiateSceneAsset(asset_id);
+        return instantiateSceneAsset(asset_id, drop_mouse_pos);
     }
 
-    glm::vec3 EditorLayer::getSceneDropPosition() const
+    void EditorLayer::handleAssetsReloaded(const AssetsReloadedEvent& event)
     {
-        return m_editor_camera.getPosition() + m_editor_camera.getForwardDirection() * 6.0f;
+        if (m_services.resources)
+        {
+            for (const auto& meta : event.assets)
+                m_services.resources->invalidateAsset(meta.id);
+        }
+
+        if (m_services.render)
+        {
+            for (const auto& meta : event.assets)
+                m_services.render->invalidateAsset(meta.id, meta.type);
+        }
+
+        if (!event.assets.empty())
+            m_editor_ui.context().setStatusMessage("Assets reloaded.");
     }
 
-    bool EditorLayer::instantiateSceneAsset(AssetID asset_id)
+    bool EditorLayer::tryGetSceneDropPosition(const ImVec2& drop_mouse_pos, glm::vec3& out_position)
+    {
+        const auto& ctx = m_editor_ui.context();
+        const float viewport_width = ctx.scene_viewport_size.x;
+        const float viewport_height = ctx.scene_viewport_size.y;
+        if (viewport_width <= 1.0f || viewport_height <= 1.0f)
+            return false;
+
+        const float local_x = drop_mouse_pos.x - ctx.scene_viewport_min.x;
+        const float local_y = drop_mouse_pos.y - ctx.scene_viewport_min.y;
+        if (local_x < 0.0f || local_y < 0.0f || local_x > viewport_width || local_y > viewport_height)
+            return false;
+
+        const float ndc_x = (2.0f * local_x / viewport_width) - 1.0f;
+        const float ndc_y = 1.0f - (2.0f * local_y / viewport_height);
+
+        const glm::mat4 inv_view_proj = glm::inverse(m_editor_camera.getProjection() * m_editor_camera.getView());
+        const Ray ray = MakeRayFromInvViewProjection(inv_view_proj, ndc_x, ndc_y);
+        return IntersectPlaneY0(ray, out_position);
+    }
+
+    bool EditorLayer::instantiateSceneAsset(AssetID asset_id, const ImVec2& drop_mouse_pos)
     {
         auto& ctx = m_editor_ui.context();
         if (asset_id.value == 0 || !ctx.active_scene)
@@ -456,9 +480,16 @@ namespace Hybrid
         if (name.empty())
             name = "Mesh";
 
+        glm::vec3 drop_position{};
+        if (!tryGetSceneDropPosition(drop_mouse_pos, drop_position))
+        {
+            ctx.setStatusMessage("Cannot resolve drop position on ground plane.");
+            return false;
+        }
+
         Entity entity = ctx.active_scene->createRenderableEntity(name);
         auto& tr = entity.GetComponent<TransformComponent>();
-        tr.Position = getSceneDropPosition();
+        tr.Position = drop_position;
         tr.DirtyLocal = true;
         tr.DirtyWorld = true;
 

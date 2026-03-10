@@ -54,8 +54,8 @@ namespace Hybrid
         std::function<bool()> request_save_scene;
         std::function<bool()> request_save_scene_as;
         std::function<AssetID(const std::string& asset_vpath)> find_asset_by_vpath;
-        std::function<bool(AssetID)> instantiate_scene_asset;
-        std::function<bool(const std::string& rel_path)> instantiate_scene_project_path;
+        std::function<bool(AssetID, const ImVec2& drop_mouse_pos)> instantiate_scene_asset;
+        std::function<bool(const std::string& rel_path, const ImVec2& drop_mouse_pos)> instantiate_scene_project_path;
         std::function<AssetID(BuiltinMesh)> get_builtin_mesh_id;
         bool pan_tool = false;
         bool suppress_tool_shortcuts = false;

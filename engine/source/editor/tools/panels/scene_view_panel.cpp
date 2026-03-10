@@ -232,13 +232,14 @@ namespace Hybrid
 
         if (ImGui::BeginDragDropTargetCustom(ImRect(canvas_min, canvas_max), ImGui::GetID("##SceneViewAssetDropTarget")))
         {
+            const ImVec2 drop_mouse_pos = ImGui::GetMousePos();
             AssetID dropped_asset{};
             if (ctx.instantiate_scene_asset && EditorDragDrop::AcceptAsset(dropped_asset))
-                (void)ctx.instantiate_scene_asset(dropped_asset);
+                (void)ctx.instantiate_scene_asset(dropped_asset, drop_mouse_pos);
 
             std::string dropped_rel_path;
             if (ctx.instantiate_scene_project_path && EditorDragDrop::AcceptProjectPath(dropped_rel_path))
-                (void)ctx.instantiate_scene_project_path(dropped_rel_path);
+                (void)ctx.instantiate_scene_project_path(dropped_rel_path, drop_mouse_pos);
 
             ImGui::EndDragDropTarget();
         }

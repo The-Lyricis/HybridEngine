@@ -18,6 +18,12 @@ namespace Hybrid
 {
     namespace
     {
+        static const char* kCameraClearModeNames[] =
+        {
+            "Solid Color",
+            "Skybox"
+        };
+
         static const char* kColliderTypeNames[] =
         {
             "None",
@@ -160,6 +166,32 @@ namespace Hybrid
             return changed;
         }
 
+        bool DrawCameraComponent(EditorContext&, Entity, void* componentPtr)
+        {
+            if (componentPtr == nullptr)
+                return false;
+
+            auto* camera = static_cast<CameraComponent*>(componentPtr);
+            bool changed = false;
+
+            changed |= ImGui::Checkbox("Primary", &camera->Primary);
+            changed |= ImGui::SliderFloat("FovY", &camera->FovY, 1.0f, 179.0f);
+            changed |= ImGui::SliderFloat("Near", &camera->Near, 0.001f, 100.0f);
+            changed |= ImGui::SliderFloat("Far", &camera->Far, 1.0f, 10000.0f);
+
+            int clear_mode = static_cast<int>(camera->ClearMode);
+            if (ImGui::Combo("Clear Mode", &clear_mode, kCameraClearModeNames, IM_ARRAYSIZE(kCameraClearModeNames)))
+            {
+                camera->ClearMode = static_cast<CameraClearMode>(clear_mode);
+                changed = true;
+            }
+
+            if (camera->ClearMode == CameraClearMode::SolidColor)
+                changed |= ImGui::ColorEdit4("Clear Color", &camera->ClearColor.x);
+
+            return changed;
+        }
+
         bool DrawMeshRendererComponent(EditorContext&, Entity, void* componentPtr)
         {
             if (componentPtr == nullptr)
@@ -275,43 +307,7 @@ namespace Hybrid
             camera_desc.add = &AddComponent<CameraComponent>;
             camera_desc.get = &GetComponentPtr<CameraComponent>;
             camera_desc.remove = &RemoveComponent<CameraComponent>;
-            camera_desc.properties = {
-                PropertyDesc{
-                    "Primary",
-                    PropertyType::Bool,
-                    offsetof(CameraComponent, Primary)
-                },
-                PropertyDesc{
-                    "FovY",
-                    PropertyType::Float,
-                    offsetof(CameraComponent, FovY),
-                    0.1f,
-                    1.0f,
-                    179.0f,
-                    true,
-                    "Vertical field of view in degrees."
-                },
-                PropertyDesc{
-                    "Near",
-                    PropertyType::Float,
-                    offsetof(CameraComponent, Near),
-                    0.01f,
-                    0.001f,
-                    100.0f,
-                    true,
-                    "Near clip plane distance."
-                },
-                PropertyDesc{
-                    "Far",
-                    PropertyType::Float,
-                    offsetof(CameraComponent, Far),
-                    1.0f,
-                    1.0f,
-                    10000.0f,
-                    true,
-                    "Far clip plane distance."
-                }
-            };
+            camera_desc.draw_custom = &DrawCameraComponent;
             descriptors.push_back(camera_desc);
 
             ComponentDesc directional_light_desc;

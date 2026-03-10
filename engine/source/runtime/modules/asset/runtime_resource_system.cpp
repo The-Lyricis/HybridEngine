@@ -158,6 +158,13 @@ namespace Hybrid
         }
     }
 
+    void RuntimeResourceSystem::invalidateAsset(AssetID id) const
+    {
+        if (!m_manager || id.value == 0)
+            return;
+        m_manager->unload(id);
+    }
+
     void RuntimeResourceSystem::createBuiltinMesh(BuiltinMesh mesh)
     {
         if (!m_registry || !m_manager)

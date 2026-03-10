@@ -67,8 +67,13 @@ namespace Hybrid
             return dir / len;
         }
         // 鍖垮悕鍛藉悕绌洪棿閲屾柊澧烇細杈撳嚭 view/proj/camPos
-        static bool getSceneCameraMatrices(Hybrid::Scene& scene, float aspect,
-            glm::mat4& outView, glm::mat4& outProj, glm::vec3& outCamPos)
+        static bool getSceneCameraMatrices(Hybrid::Scene& scene,
+            float aspect,
+            glm::mat4& outView,
+            glm::mat4& outProj,
+            glm::vec3& outCamPos,
+            glm::vec4* outClearColor = nullptr,
+            bool* outUseSkyboxClear = nullptr)
         {
             auto& reg = scene.getRegistry();
             auto view = reg.view<Hybrid::TransformComponent, Hybrid::CameraComponent>();
@@ -89,6 +94,10 @@ namespace Hybrid
             outView = glm::inverse(tr.WorldMatrix);
 
             outCamPos = glm::vec3(tr.WorldMatrix[3]);
+            if (outClearColor)
+                *outClearColor = cam.ClearColor;
+            if (outUseSkyboxClear)
+                *outUseSkyboxClear = (cam.ClearMode == CameraClearMode::Skybox);
             return true;
         }
     }
@@ -450,6 +459,24 @@ void main()
         ensureFramebufferSize(m_GameFB, width, height);
     }
 
+    void RenderSystem::invalidateAsset(AssetID id, AssetType type)
+    {
+        if (id.value == 0)
+            return;
+
+        switch (type)
+        {
+        case AssetType::Mesh:
+            m_MeshCache.erase(id);
+            break;
+        case AssetType::Material:
+            m_MatCache.erase(id);
+            break;
+        default:
+            break;
+        }
+    }
+
     
     RenderSystem::RenderPacket RenderSystem::buildRenderPacket(const FrameContext& frame_context,
                                                                RenderFlags flags,
@@ -479,9 +506,19 @@ void main()
         const float aspect = (viewport_size.y > 0.0f) ? (viewport_size.x / viewport_size.y) : 1.0f;
         bool has_camera = false;
 
+        pkt.frame.clearColor = glm::vec4(0.1f, 0.1f, 0.12f, 1.0f);
+        pkt.frame.useSkyboxClear = false;
+
         if (use_game_camera && scene)
         {
-            has_camera = getSceneCameraMatrices(*scene, aspect, viewM, projM, cameraPos);
+            has_camera = getSceneCameraMatrices(
+                *scene,
+                aspect,
+                viewM,
+                projM,
+                cameraPos,
+                &pkt.frame.clearColor,
+                &pkt.frame.useSkyboxClear);
         }
         else if (!use_game_camera && editor_ext && editor_ext->has_editor_camera)
         {
@@ -618,7 +655,8 @@ void main()
         framebuffer->bind();
         setSceneFramebufferDrawBuffers(true);
         RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
-        Renderer::beginFrame({0.1f, 0.1f, 0.12f, 1.0f});
+        // Skybox clear mode currently falls back to solid clear until a dedicated skybox pass exists.
+        Renderer::beginFrame(packet.frame.clearColor);
         // Clear color to black and EntityID to 0 for picking/outline.
         uint32_t zero = 0;
         glClearBufferuiv(GL_COLOR, 1, &zero);
@@ -939,5 +977,3 @@ void main()
     }
 
 }
-
-

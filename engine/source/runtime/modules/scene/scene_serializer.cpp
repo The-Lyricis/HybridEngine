@@ -92,7 +92,9 @@ namespace Hybrid
                     {"primary", c.Primary},
                     {"fovY", c.FovY},
                     {"near", c.Near},
-                    {"far",  c.Far}
+                    {"far",  c.Far},
+                    {"clearMode", static_cast<int>(c.ClearMode)},
+                    {"clearColor", toJson(c.ClearColor)}
                 };
             }
 
@@ -178,6 +180,10 @@ namespace Hybrid
                 c.FovY = jc.value("fovY", 45.0f);
                 c.Near = jc.value("near", 0.1f);
                 c.Far = jc.value("far", 1000.0f);
+                c.ClearMode = static_cast<CameraClearMode>(
+                    jc.value("clearMode", static_cast<int>(CameraClearMode::SolidColor)));
+                if (jc.contains("clearColor") && jc["clearColor"].is_array() && jc["clearColor"].size() == 4)
+                    c.ClearColor = vec4From(jc["clearColor"]);
             }
 
             // MeshRenderer
