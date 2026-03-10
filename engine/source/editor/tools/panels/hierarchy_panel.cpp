@@ -335,9 +335,6 @@ namespace Hybrid
 
     void HierarchyPanel::drawRootDropTarget(EditorContext& ctx, entt::registry& registry)
     {
-        ImGui::Separator();
-        ImGui::TextDisabled("Drop entity here to detach to root");
-
         ImVec2 size{ImGui::GetContentRegionAvail().x, 28.0f};
         if (size.x < 1.0f)
             size.x = 1.0f;
