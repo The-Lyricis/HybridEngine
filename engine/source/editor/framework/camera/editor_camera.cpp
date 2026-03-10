@@ -113,6 +113,27 @@ namespace Hybrid {
         // TODO: hook this to editor selection once selection data is available.
     }
 
+    EditorCameraState EditorCamera::dumpState() const
+    {
+        EditorCameraState state{};
+        state.position = m_Position;
+        state.focal_point = m_FocalPoint;
+        state.distance = m_Distance;
+        state.yaw_deg = m_YawDeg;
+        state.pitch_deg = m_PitchDeg;
+        return state;
+    }
+
+    void EditorCamera::loadState(const EditorCameraState& state)
+    {
+        m_Position = state.position;
+        m_FocalPoint = state.focal_point;
+        m_Distance = std::clamp(state.distance, m_MinDistance, m_MaxDistance);
+        m_YawDeg = state.yaw_deg;
+        m_PitchDeg = std::clamp(state.pitch_deg, -89.0f, 89.0f);
+        recalcView();
+    }
+
     void EditorCamera::recalcView()
     {
         m_View = glm::lookAt(

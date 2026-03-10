@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <fstream>
+#include <sstream>
+#include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -11,6 +14,7 @@
 
 #include "editor/platform/windows/file_dialogs_win32.h"
 #include "editor/services/asset/editor_resource_system.h"
+#include "editor/services/state/editor_camera_state_serde.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/asset/runtime_resource_system.h"
 #include "runtime/modules/asset/scene_loader.h"
@@ -36,6 +40,12 @@ namespace Hybrid
         {
             const auto& project = ProjectService::Get();
             return project.settings / "ProjectSettings.json";
+        }
+
+        std::filesystem::path GetSceneStateDirectoryPath()
+        {
+            const auto& project = ProjectService::Get();
+            return project.root / "UserSettings" / "SceneState";
         }
 
         std::string trimCopy(std::string value)
@@ -90,6 +100,35 @@ namespace Hybrid
             out_vpath = std::string(kAssetPrefix) + rel_string;
             return true;
         }
+
+        uint64_t HashSceneKey(std::string_view text)
+        {
+            uint64_t value = 14695981039346656037ull;
+            for (unsigned char ch : text)
+            {
+                value ^= static_cast<uint64_t>(ch);
+                value *= 1099511628211ull;
+            }
+            return value;
+        }
+
+        std::string SanitizeSceneFileStem(std::string value)
+        {
+            for (char& ch : value)
+            {
+                const bool ok =
+                    (ch >= 'a' && ch <= 'z') ||
+                    (ch >= 'A' && ch <= 'Z') ||
+                    (ch >= '0' && ch <= '9') ||
+                    ch == '_' || ch == '-';
+                if (!ok)
+                    ch = '_';
+            }
+
+            if (value.empty())
+                value = "Scene";
+            return value;
+        }
     } // namespace
 
     EditorSceneIOService::EditorSceneIOService(EngineServices services)
@@ -101,6 +140,9 @@ namespace Hybrid
     {
         m_status_message.clear();
         m_active_document.reset();
+
+        std::error_code ec;
+        std::filesystem::create_directories(GetSceneStateDirectoryPath(), ec);
 
         if (m_services.resources && m_services.resources->getRegistry())
             m_assets_root = m_services.resources->getRegistry()->getRoot();
@@ -167,6 +209,11 @@ namespace Hybrid
         auto document = std::make_shared<SceneDocument>();
         document->scene = std::move(scene);
         document->dirty = false;
+        if (registry)
+        {
+            if (const auto* meta = registry->findByPath(scene_vpath))
+                document->scene_asset_id = meta->id;
+        }
         document->vpath = scene_vpath;
         document->native_path = *native;
         document->display_name = native->filename().string();
@@ -321,6 +368,11 @@ namespace Hybrid
         }
 
         m_active_document->dirty = false;
+        if (m_services.resources && m_services.resources->getRegistry())
+        {
+            if (const auto* meta = m_services.resources->getRegistry()->findByPath(normalized_vpath))
+                m_active_document->scene_asset_id = meta->id;
+        }
         m_active_document->vpath = normalized_vpath;
         m_active_document->native_path = *native;
         m_active_document->display_name = native->filename().string();
@@ -450,6 +502,95 @@ namespace Hybrid
 
         m_status_message = reason ? reason : "";
         return true;
+    }
+
+    std::string EditorSceneIOService::getSceneViewStateKey(const SceneDocument& document) const
+    {
+        if (document.scene_asset_id.value != 0)
+        {
+            char key_hex[17] = {};
+            std::snprintf(key_hex, sizeof(key_hex), "%016llX",
+                          static_cast<unsigned long long>(document.scene_asset_id.value));
+            return key_hex;
+        }
+
+        if (!document.vpath.empty())
+        {
+            char key_hex[20] = {};
+            std::snprintf(key_hex, sizeof(key_hex), "VP_%016llX",
+                          static_cast<unsigned long long>(HashSceneKey(document.vpath)));
+            return key_hex;
+        }
+        return {};
+    }
+
+    std::filesystem::path EditorSceneIOService::getSceneViewStatePath(const SceneDocument& document) const
+    {
+        const std::string key = getSceneViewStateKey(document);
+        if (key.empty())
+            return {};
+
+        std::string label = document.display_name.empty() ? std::string("Scene") : document.display_name;
+        label = SanitizeSceneFileStem(std::filesystem::path(label).stem().string());
+        return GetSceneStateDirectoryPath() / (key + "_" + label + ".json");
+    }
+
+    bool EditorSceneIOService::saveSceneViewState(const SceneDocument& document, const EditorCameraState& camera_state) const
+    {
+        const std::filesystem::path state_path = getSceneViewStatePath(document);
+        if (state_path.empty())
+            return false;
+
+        std::error_code ec;
+        std::filesystem::create_directories(state_path.parent_path(), ec);
+        if (ec)
+            return false;
+
+        json root = EditorCameraStateSerde::toJson(camera_state);
+        root["scene"] = document.vpath;
+        root["scene_asset_id"] = document.scene_asset_id.value;
+
+        const std::filesystem::path temp_path = state_path.string() + ".tmp";
+        std::ofstream ofs(temp_path, std::ios::trunc);
+        if (!ofs.is_open())
+            return false;
+
+        ofs << root.dump(2);
+        ofs.flush();
+        ofs.close();
+
+        ec.clear();
+        std::filesystem::rename(temp_path, state_path, ec);
+        if (ec)
+        {
+            ec.clear();
+            std::filesystem::remove(state_path, ec);
+            ec.clear();
+            std::filesystem::rename(temp_path, state_path, ec);
+            if (ec)
+                return false;
+        }
+
+        return true;
+    }
+
+    bool EditorSceneIOService::loadSceneViewState(const SceneDocument& document, EditorCameraState& out_camera_state) const
+    {
+        const std::filesystem::path state_path = getSceneViewStatePath(document);
+        std::ifstream ifs(state_path);
+        if (!ifs.is_open())
+            return false;
+
+        json root;
+        try
+        {
+            ifs >> root;
+        }
+        catch (const std::exception&)
+        {
+            return false;
+        }
+        return EditorCameraStateSerde::fromJson(root, out_camera_state);
     }
 
     void EditorSceneIOService::saveLastOpenedScene(const std::string& scene_vpath) const

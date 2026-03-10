@@ -3,6 +3,15 @@
 
 namespace Hybrid {
 
+    struct EditorCameraState
+    {
+        glm::vec3 position{ 0.0f, 0.0f, 3.0f };
+        glm::vec3 focal_point{ 0.0f, 0.0f, 0.0f };
+        float distance = 5.0f;
+        float yaw_deg = -90.0f;
+        float pitch_deg = 0.0f;
+    };
+
     // Editor camera used by the viewport. Supports fly and orbit style controls.
     class EditorCamera {
     public:
@@ -30,6 +39,8 @@ namespace Hybrid {
         const glm::mat4& getViewProj() const { return m_ViewProj; }
 
         glm::vec3 getPosition() const { return m_Position; }
+        EditorCameraState dumpState() const;
+        void loadState(const EditorCameraState& state);
 
     private:
         void recalcView();

@@ -115,6 +115,9 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
+        if (m_active_scene_view_document)
+            (void)m_scene_io.saveSceneViewState(*m_active_scene_view_document, m_editor_camera.dumpState());
+
         auto& ctx = m_editor_ui.context();
         ctx.notify_asset_source_event = {};
         ctx.open_scene = {};
@@ -134,15 +137,37 @@ namespace Hybrid
 
         m_scene_io.shutdown();
         m_editor_ui.shutdown();
+        m_active_scene_view_document.reset();
         m_initialized = false;
     }
 
     void EditorLayer::syncContextDocumentState()
     {
+        syncSceneViewState();
+
         auto& ctx = m_editor_ui.context();
         ctx.setActiveDocument(m_scene_io.getActiveDocument());
         ctx.setStatusMessage(m_scene_io.getStatusMessage());
         m_editor_ui.setActiveScene(ctx.active_scene);
+    }
+
+    void EditorLayer::syncSceneViewState()
+    {
+        const auto& document = m_scene_io.getActiveDocument();
+        if (document == m_active_scene_view_document)
+            return;
+
+        if (m_active_scene_view_document)
+            (void)m_scene_io.saveSceneViewState(*m_active_scene_view_document, m_editor_camera.dumpState());
+
+        if (document && document->isSaved())
+        {
+            EditorCameraState state = m_editor_camera.dumpState();
+            if (m_scene_io.loadSceneViewState(*document, state))
+                m_editor_camera.loadState(state);
+        }
+
+        m_active_scene_view_document = document;
     }
 
     void EditorLayer::onUpdate(float dt)

@@ -36,6 +36,7 @@ namespace Hybrid
 
     private:
         void syncContextDocumentState();
+        void syncSceneViewState();
         void updateFrameContext();         // Push current editor state into FrameContext/Flags/Ext.
         void updateEditorCamera(float dt);
         void bindAssetChangeCallback();
@@ -49,6 +50,7 @@ namespace Hybrid
         PollingFileWatcher m_file_watcher; // Editor-side polling watcher for Assets/.
         EditorSceneIOService m_scene_io;
         std::filesystem::path m_assets_root;
+        std::shared_ptr<SceneDocument> m_active_scene_view_document;
         bool m_initialized = false;        // Guard against partial startup/shutdown.
         EditorModeCallbacks m_mode_callbacks{};
     };

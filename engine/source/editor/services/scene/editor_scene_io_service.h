@@ -6,6 +6,7 @@
 
 #include "editor/core/engine_services.h"
 #include "editor/core/scene_document.h"
+#include "editor/framework/camera/editor_camera.h"
 
 namespace Hybrid
 {
@@ -31,6 +32,8 @@ namespace Hybrid
         bool requestSaveAs();
         bool restoreStartupScene();
         bool createUntitled(const char* reason = nullptr);
+        bool saveSceneViewState(const SceneDocument& document, const EditorCameraState& camera_state) const;
+        bool loadSceneViewState(const SceneDocument& document, EditorCameraState& out_camera_state) const;
 
     private:
         bool activateDocument(std::shared_ptr<SceneDocument> document);
@@ -42,6 +45,8 @@ namespace Hybrid
         void saveLastOpenedScene(const std::string& scene_vpath) const;
         std::string loadLastOpenedScene() const;
         bool toAssetVPath(const std::filesystem::path& physical_path, std::string& out_vpath) const;
+        std::filesystem::path getSceneViewStatePath(const SceneDocument& document) const;
+        std::string getSceneViewStateKey(const SceneDocument& document) const;
 
     private:
         EngineServices m_services{};
