@@ -1,6 +1,5 @@
 #include "editor_layer.h"
 
-#include <algorithm>
 #include <cmath>
 #include <entt/entity/entity.hpp>
 #include <glm/glm.hpp>
@@ -9,7 +8,6 @@
 #include <GLFW/glfw3.h>
 
 #include "editor/core/editor_context.h"
-#include "editor/services/asset/editor_resource_system.h"
 #include "editor/services/import/import_types.h"
 #include "runtime/core/base/intersection.h"
 #include "runtime/core/base/macro.h"
@@ -31,6 +29,7 @@ namespace Hybrid
     EditorLayer::EditorLayer(EngineServices services)
         : Layer("EditorLayer")
         , m_services(services)
+        , m_asset_hot_reload_controller(services)
         , m_scene_io(services)
     {
     }
@@ -45,26 +44,14 @@ namespace Hybrid
         }
 
         m_editor_ui.initialize(m_services.window->getNativeWindow());
-        bindAssetChangeCallback();
-
-        if (m_services.resources && m_services.resources->getRegistry())
-        {
-            m_assets_root = m_services.resources->getRegistry()->getRoot();
-            if (!m_assets_root.empty() && !m_file_watcher.initialize(m_assets_root, true))
-                HBD_CORE_WARN("EditorLayer: file watcher init failed at {}", m_assets_root.string());
-        }
-
-        if (m_services.editor_resources)
-        {
-            m_services.editor_resources->bootstrapImportOnce();
-            m_services.editor_resources->setAssetsReloadedCallback(
-                [this](const AssetsReloadedEvent& event) { handleAssetsReloaded(event); });
-        }
-
+        m_asset_hot_reload_controller.initialize([this](const std::string& message) {
+            m_editor_ui.context().setStatusMessage(message);
+        });
         m_scene_io.initialize();
         m_initialized = true;
 
         auto& ctx = m_editor_ui.context();
+        m_asset_hot_reload_controller.bindContext(ctx);
         ctx.enter_play_mode = [this]()
             {
                 const auto& document = m_scene_io.getActiveDocument();
@@ -115,7 +102,7 @@ namespace Hybrid
             };
         ctx.request_reimport_asset = [this](const std::string& asset_vpath) -> bool
             {
-                const bool ok = reimportAsset(asset_vpath);
+                const bool ok = m_asset_hot_reload_controller.requestReimport(asset_vpath);
                 syncContextDocumentState();
                 return ok;
             };
@@ -183,13 +170,12 @@ namespace Hybrid
         ctx.is_pause_mode = {};
         ctx.selected = entt::null;
         ctx.clearActiveDocument();
+        m_asset_hot_reload_controller.unbindContext(ctx);
 
         if (m_services.editor_ext)
             m_services.editor_ext->has_editor_camera = false;
 
-        if (m_services.editor_resources)
-            m_services.editor_resources->clearAssetsReloadedCallback();
-
+        m_asset_hot_reload_controller.shutdown();
         m_scene_io.shutdown();
         m_editor_ui.shutdown();
         m_active_scene_view_document.reset();
@@ -250,10 +236,7 @@ namespace Hybrid
         syncContextDocumentState();
         m_editor_ui.updateViewportState();
         updateEditorCamera(dt);
-        pollFileWatcher();
-
-        if (m_services.editor_resources)
-            m_services.editor_resources->processImportQueue(4, 2);
+        m_asset_hot_reload_controller.update(dt);
 
         if (m_services.consume_pick_result)
         {
@@ -342,17 +325,6 @@ namespace Hybrid
         }
     }
 
-    bool EditorLayer::reimportAsset(const std::string& asset_vpath)
-    {
-        auto& ctx = m_editor_ui.context();
-        if (asset_vpath.empty() || !m_services.editor_resources)
-            return false;
-
-        m_services.editor_resources->enqueueManualReimport(asset_vpath);
-        ctx.setStatusMessage("Reimport queued.");
-        return true;
-    }
-
     AssetID EditorLayer::findAssetByVPath(const std::string& asset_vpath) const
     {
         if (!m_services.resources)
@@ -398,24 +370,6 @@ namespace Hybrid
         }
 
         return instantiateSceneAsset(asset_id, drop_mouse_pos);
-    }
-
-    void EditorLayer::handleAssetsReloaded(const AssetsReloadedEvent& event)
-    {
-        if (m_services.resources)
-        {
-            for (const auto& meta : event.assets)
-                m_services.resources->invalidateAsset(meta.id);
-        }
-
-        if (m_services.render)
-        {
-            for (const auto& meta : event.assets)
-                m_services.render->invalidateAsset(meta.id, meta.type);
-        }
-
-        if (!event.assets.empty())
-            m_editor_ui.context().setStatusMessage("Assets reloaded.");
     }
 
     bool EditorLayer::tryGetSceneDropPosition(const ImVec2& drop_mouse_pos, glm::vec3& out_position)
@@ -558,76 +512,6 @@ namespace Hybrid
                                key_shift,
                                key_ctrl,
                                key_alt);
-    }
-
-    void EditorLayer::bindAssetChangeCallback()
-    {
-        if (!m_services.editor_resources)
-            return;
-
-        auto& ctx = m_editor_ui.context();
-        ctx.notify_asset_source_event = [this](const AssetSourceEvent& event) {
-            if (!m_services.editor_resources)
-                return;
-
-            switch (event.type)
-            {
-            case AssetSourceEventType::Added:
-                m_services.editor_resources->enqueueSourceChanged(event.path, AssetSourceChangeType::Added);
-                break;
-            case AssetSourceEventType::Modified:
-                m_services.editor_resources->enqueueSourceChanged(event.path, AssetSourceChangeType::Modified);
-                break;
-            case AssetSourceEventType::Removed:
-                m_services.editor_resources->enqueueSourceChanged(event.path, AssetSourceChangeType::Removed);
-                break;
-            case AssetSourceEventType::Moved:
-                (void)m_services.editor_resources->moveAsset(event.old_path, event.new_path);
-                break;
-            default:
-                break;
-            }
-        };
-    }
-
-    void EditorLayer::pollFileWatcher()
-    {
-        if (!m_services.editor_resources || !m_file_watcher.isInitialized())
-            return;
-
-        m_file_watcher.poll([this](const std::filesystem::path& physical_path, FileWatcherChangeType type) {
-            std::string source_vpath;
-            if (!toAssetVPath(physical_path, source_vpath))
-                return;
-
-            const AssetSourceChangeType change =
-                (type == FileWatcherChangeType::Removed)
-                    ? AssetSourceChangeType::Removed
-                    : (type == FileWatcherChangeType::Added ? AssetSourceChangeType::Added
-                                                            : AssetSourceChangeType::Modified);
-            m_services.editor_resources->enqueueSourceChanged(source_vpath, change);
-        });
-    }
-
-    bool EditorLayer::toAssetVPath(const std::filesystem::path& physical_path, std::string& out_vpath) const
-    {
-        out_vpath.clear();
-        if (m_assets_root.empty() || physical_path.empty())
-            return false;
-
-        std::error_code ec;
-        auto rel = std::filesystem::relative(physical_path, m_assets_root, ec);
-        if (ec || rel.empty())
-            return false;
-
-        std::string rel_str = rel.generic_string();
-        while (!rel_str.empty() && (rel_str.front() == '/' || rel_str.front() == '\\'))
-            rel_str.erase(rel_str.begin());
-        if (rel_str.empty())
-            return false;
-
-        out_vpath = std::string("asset:") + rel_str;
-        return true;
     }
 
     void EditorLayer::setModeCallbacks(EditorModeCallbacks callbacks)

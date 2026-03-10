@@ -5,10 +5,9 @@
 #include <memory>
 
 #include "editor/framework/camera/editor_camera.h"
+#include "editor/framework/controllers/editor_asset_hot_reload_controller.h"
 #include "editor/framework/ui/editor_ui.h"
 #include "editor/core/engine_services.h"
-#include "editor/services/asset/editor_resource_system.h"
-#include "editor/services/asset/file_watcher.h"
 #include "editor/services/scene/editor_scene_io_service.h"
 #include "runtime/core/event/layer.h"
 
@@ -40,23 +39,17 @@ namespace Hybrid
         void syncSceneViewState();
         void updateFrameContext();         // Push current editor state into FrameContext/Flags/Ext.
         void updateEditorCamera(float dt);
-        void handleAssetsReloaded(const AssetsReloadedEvent& event);
-        bool reimportAsset(const std::string& asset_vpath);
         AssetID findAssetByVPath(const std::string& asset_vpath) const;
         bool instantiateSceneAsset(AssetID asset_id, const ImVec2& drop_mouse_pos);
         bool instantiateSceneProjectPath(const std::string& rel_path, const ImVec2& drop_mouse_pos);
         bool tryGetSceneDropPosition(const ImVec2& drop_mouse_pos, glm::vec3& out_position);
-        void bindAssetChangeCallback();
-        void pollFileWatcher();
-        bool toAssetVPath(const std::filesystem::path& physical_path, std::string& out_vpath) const;
 
     private:
         EngineServices m_services{};       // Injected runtime/editor services.
         EditorUI m_editor_ui;              // Panel/UI owner.
         EditorCamera m_editor_camera;      // Editor-only viewport camera.
-        PollingFileWatcher m_file_watcher; // Editor-side polling watcher for Assets/.
+        EditorAssetHotReloadController m_asset_hot_reload_controller;
         EditorSceneIOService m_scene_io;
-        std::filesystem::path m_assets_root;
         std::shared_ptr<SceneDocument> m_active_scene_view_document;
         bool m_initialized = false;        // Guard against partial startup/shutdown.
         EditorModeCallbacks m_mode_callbacks{};
