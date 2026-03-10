@@ -29,11 +29,13 @@ namespace Hybrid
         };
 
         void ensureRootInit();
+        void drawCommonContextMenu(EditorContext& ctx, const Entry* target);
         void renderToolbar(EditorContext& ctx);
         void renderDirectoryTree(EditorContext& ctx);
         void renderContent(EditorContext& ctx);
         void renderRenamePopup(EditorContext& ctx);
         void openCreateFolderPopup();
+        void openCreateFolderPopup(std::filesystem::path target_dir);
 
         void gatherEntries(const std::filesystem::path& dir);
         bool isHiddenFile(const std::filesystem::path& p) const;
@@ -45,7 +47,9 @@ namespace Hybrid
                                         const std::filesystem::path& root,
                                         bool removed,
                                         std::vector<std::filesystem::path>* out_rel_files = nullptr) const;
+        bool openEntry(EditorContext& ctx, const Entry& e);
         bool createFolder(const std::string& folder_name);
+        bool duplicateEntry(EditorContext& ctx, const Entry& e);
         bool deleteEntry(EditorContext& ctx, const Entry& e);
         bool renameEntry(EditorContext& ctx, const std::filesystem::path& from, const std::filesystem::path& to);
 

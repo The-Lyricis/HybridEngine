@@ -38,6 +38,75 @@ namespace Hybrid
         m_rootInited = true;
     }
 
+    void ProjectPanel::drawCommonContextMenu(EditorContext& ctx, const Entry* target)
+    {
+        const bool has_target = (target != nullptr);
+        const bool is_dir = has_target && target->is_dir;
+        const bool can_open = has_target && (is_dir || target->rel.extension() == ".scene");
+        const bool can_copy_asset_path = has_target && !target->rel.empty();
+        const bool can_duplicate = has_target;
+        const bool can_new_folder_here = (!has_target || is_dir);
+        const bool can_rename = has_target;
+        const bool can_delete = has_target;
+
+        if (has_target)
+        {
+            ImGui::TextUnformatted(target->physical.filename().string().c_str());
+            ImGui::Separator();
+        }
+
+        if (ImGui::MenuItem("Open", nullptr, false, can_open))
+        {
+            if (openEntry(ctx, *target))
+                m_selectedRelStr.clear();
+        }
+
+        if (ImGui::MenuItem("Copy Asset Path", nullptr, false, can_copy_asset_path))
+        {
+            const auto vpath = relToAssetVPath(target->rel);
+            ImGui::SetClipboardText(vpath.c_str());
+        }
+
+        if (ImGui::MenuItem("Duplicate", nullptr, false, can_duplicate))
+        {
+            if (duplicateEntry(ctx, *target))
+                gatherEntries(m_currentDir);
+        }
+
+        if (ImGui::BeginMenu("Create"))
+        {
+            if (ImGui::MenuItem("Folder", nullptr, false, can_new_folder_here))
+                openCreateFolderPopup(has_target ? target->physical : m_currentDir);
+            ImGui::EndMenu();
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("Rename", nullptr, false, can_rename))
+        {
+            m_renameFrom = target->physical;
+            std::string old_name = target->physical.filename().string();
+            std::strncpy(m_renameInput, old_name.c_str(), sizeof(m_renameInput) - 1);
+            m_renameInput[sizeof(m_renameInput) - 1] = '\0';
+            m_openRenamePopup = true;
+        }
+
+        if (ImGui::MenuItem("Delete", nullptr, false, can_delete))
+        {
+            if (deleteEntry(ctx, *target))
+            {
+                gatherEntries(m_currentDir);
+                if (!target->rel.empty() && m_selectedRelStr == target->rel.generic_string())
+                    m_selectedRelStr.clear();
+            }
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("Refresh"))
+            gatherEntries(m_currentDir);
+    }
+
     bool ProjectPanel::isMetaFile(const std::filesystem::path& p) const
     {
         return p.extension() == ".meta";
@@ -131,9 +200,46 @@ namespace Hybrid
 
     void ProjectPanel::openCreateFolderPopup()
     {
+        openCreateFolderPopup(m_currentDir);
+    }
+
+    void ProjectPanel::openCreateFolderPopup(std::filesystem::path target_dir)
+    {
+        if (!target_dir.empty())
+            m_currentDir = std::move(target_dir);
+
         std::strncpy(m_newFolderName, "NewFolder", sizeof(m_newFolderName) - 1);
         m_newFolderName[sizeof(m_newFolderName) - 1] = '\0';
         m_openCreateFolderPopup = true;
+    }
+
+    bool ProjectPanel::openEntry(EditorContext& ctx, const Entry& e)
+    {
+        if (e.physical.empty() || !std::filesystem::exists(e.physical))
+            return false;
+
+        if (e.is_dir)
+        {
+            m_currentDir = e.physical;
+            gatherEntries(m_currentDir);
+            m_selectedRelStr.clear();
+            return true;
+        }
+
+        if (e.rel.extension() == ".scene")
+        {
+            const auto vpath = relToAssetVPath(e.rel);
+            if (!ctx.open_scene)
+            {
+                HBD_CORE_WARN("ProjectPanel: ctx.open_scene not bound, cannot open {}", vpath);
+                return false;
+            }
+
+            ctx.open_scene(vpath);
+            return true;
+        }
+
+        return false;
     }
 
     bool ProjectPanel::deleteEntry(EditorContext& ctx, const Entry& e)
@@ -157,6 +263,68 @@ namespace Hybrid
             return false;
 
         notifyAssetChange(ctx, rel, true);
+        return true;
+    }
+
+    bool ProjectPanel::duplicateEntry(EditorContext& ctx, const Entry& e)
+    {
+        if (e.physical.empty() || !std::filesystem::exists(e.physical))
+            return false;
+
+        const auto parent = e.physical.parent_path();
+        const auto stem = e.physical.stem().string();
+        const auto ext = e.physical.extension().string();
+
+        std::filesystem::path target;
+        std::error_code ec;
+        for (int index = 1; index <= 999; ++index)
+        {
+            std::string candidate_name;
+            if (e.is_dir)
+            {
+                candidate_name = (index == 1)
+                    ? (e.physical.filename().string() + " Copy")
+                    : (e.physical.filename().string() + " Copy " + std::to_string(index));
+            }
+            else
+            {
+                candidate_name = (index == 1)
+                    ? (stem + " Copy" + ext)
+                    : (stem + " Copy " + std::to_string(index) + ext);
+            }
+
+            target = parent / candidate_name;
+            if (!std::filesystem::exists(target, ec) && !ec)
+                break;
+            ec.clear();
+            target.clear();
+        }
+
+        if (target.empty())
+            return false;
+
+        if (e.is_dir)
+        {
+            std::filesystem::copy(e.physical,
+                                  target,
+                                  std::filesystem::copy_options::recursive,
+                                  ec);
+            if (ec)
+                return false;
+
+            notifyAssetChangeRecursive(ctx, target, false, nullptr);
+            return true;
+        }
+
+        std::filesystem::copy_file(e.physical, target, std::filesystem::copy_options::none, ec);
+        if (ec)
+            return false;
+
+        auto rel = std::filesystem::relative(target, m_assetsRoot, ec);
+        if (ec)
+            return false;
+
+        notifyAssetChange(ctx, rel, false);
         return true;
     }
 
@@ -377,6 +545,13 @@ namespace Hybrid
         std::function<void(const std::filesystem::path&)> drawNode;
         drawNode = [&](const std::filesystem::path& dir) {
             const auto name = (dir == m_assetsRoot) ? std::string("Assets") : dir.filename().string();
+            Entry entry{};
+            entry.physical = dir;
+            entry.is_dir = true;
+            std::error_code rel_ec;
+            entry.rel = std::filesystem::relative(dir, m_assetsRoot, rel_ec);
+            if (rel_ec)
+                entry.rel.clear();
 
             ImGuiTreeNodeFlags flags =
                 ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanFullWidth;
@@ -417,6 +592,17 @@ namespace Hybrid
                 m_currentDir = dir;
                 gatherEntries(m_currentDir);
                 m_selectedRelStr.clear();
+            }
+
+            const bool tree_double_clicked =
+                ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+            if (tree_double_clicked)
+                (void)openEntry(ctx, entry);
+
+            if (ImGui::BeginPopupContextItem())
+            {
+                drawCommonContextMenu(ctx, &entry);
+                ImGui::EndPopup();
             }
 
             if (opened)
@@ -462,7 +648,6 @@ namespace Hybrid
 
         ImGui::Separator();
 
-        std::filesystem::path pending_open_dir;
         bool request_refresh = false;
         bool request_clear_selection = false;
 
@@ -484,68 +669,18 @@ namespace Hybrid
 
             const bool double_clicked = ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
 
-            if (e.is_dir && double_clicked)
+            if (double_clicked && openEntry(ctx, e))
             {
-                pending_open_dir = e.physical;
+                request_refresh = e.is_dir;
                 request_clear_selection = true;
                 break;
             }
 
-            if (!e.is_dir && double_clicked)
-            {
-                if (e.rel.extension() == ".scene")
-                {
-                    const auto vpath = relToAssetVPath(e.rel);
-                    if (ctx.open_scene)
-                        ctx.open_scene(vpath);
-                    else
-                        HBD_CORE_WARN("ProjectPanel: ctx.open_scene not bound, cannot open {}", vpath);
-                }
-            }
-
             if (ImGui::BeginPopupContextItem())
             {
-                ImGui::TextUnformatted(name.c_str());
-                ImGui::Separator();
-
-                if (!e.is_dir && !e.rel.empty())
-                {
-                    const auto vpath = relToAssetVPath(e.rel);
-                    ImGui::Text("VPath: %s", vpath.c_str());
-                }
-
-                if (ImGui::MenuItem("Rename"))
-                {
-                    m_renameFrom = e.physical;
-                    std::string old_name = e.physical.filename().string();
-                    std::strncpy(m_renameInput, old_name.c_str(), sizeof(m_renameInput) - 1);
-                    m_renameInput[sizeof(m_renameInput) - 1] = '\0';
-                    m_openRenamePopup = true;
-                }
-
-                if (ImGui::MenuItem("Delete"))
-                {
-                    if (deleteEntry(ctx, e))
-                    {
-                        request_refresh = true;
-                        if (m_selectedRelStr == relStr)
-                            request_clear_selection = true;
-                    }
-                }
-
-                if (ImGui::MenuItem("Refresh"))
-                {
-                    request_refresh = true;
-                }
-
+                drawCommonContextMenu(ctx, &e);
                 ImGui::EndPopup();
             }
-        }
-
-        if (!pending_open_dir.empty())
-        {
-            m_currentDir = pending_open_dir;
-            request_refresh = true;
         }
 
         if (request_refresh)
@@ -558,13 +693,9 @@ namespace Hybrid
         renderRenamePopup(ctx);
     }
 
-    void ProjectPanel::drawWindowContextMenu(EditorContext&)
+    void ProjectPanel::drawWindowContextMenu(EditorContext& ctx)
     {
-        if (ImGui::MenuItem("New Folder"))
-            openCreateFolderPopup();
-
-        if (ImGui::MenuItem("Refresh"))
-            gatherEntries(m_currentDir);
+        drawCommonContextMenu(ctx, nullptr);
     }
 
     void ProjectPanel::renderRenamePopup(EditorContext& ctx)
