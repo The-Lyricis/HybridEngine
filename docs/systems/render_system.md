@@ -87,3 +87,32 @@
 - Root cause: `RenderSystem::getOrCreateMaterialGPU(...)` returned cached `MaterialGPU` objects without refreshing CPU material data and texture handles.
 - Fix: cache hits now refresh `MaterialData` plus all bound texture resources before reuse.
 - Result: reimported material and texture changes become visible without restarting the renderer.
+
+
+## 2026-03-10 Recent Architecture Update
+
+### RenderSystem pipeline
+- `renderFrame(...)` has been reduced to frame orchestration only.
+- The runtime flow is now split into:
+  - `buildRenderPacket(...)`: extract camera, lights and draw items from ECS/scene state
+  - `executePasses(...)`: dispatch enabled passes by `RenderFlags`
+  - `executeForwardPass(...)`: bind framebuffer / shader / material / mesh and submit draw calls
+- Mesh and material submission now go through asset-based GPU caches instead of the old hard-coded cube path.
+
+### Material and lighting path
+- Mesh shader now uses `tangent.w` as handedness, with `vec4 tangent` end-to-end.
+- Default MR texture is treated as a neutral multiplier, not an additive override.
+- Emissive is accumulated independently from albedo.
+- Directional light direction is derived from `TransformComponent` world rotation, not stored as a long-lived duplicate field.
+
+### Picking and editor integration
+- Entity ID output is now `uint`, matching the `GL_R32UI` attachment.
+- Picking uses encoded entity ids so that framebuffer background stays `0` while `entt` entity `0` remains selectable.
+- Gizmo/helper passes only write color output and do not overwrite the EntityID attachment.
+- Scene switches clear pending pick and selection state.
+- In Play mode, Scene-view editing targets the runtime scene; on Stop, the editor context switches back to the editor scene immediately.
+
+### Current risks still worth tracking
+- Frame/light uploads are still done through per-uniform updates; UBO migration is the next cleanup target.
+- Pass execution is separated, but prepare/sort is still relatively thin and can be expanded later.
+- Selection outline, shadowing and post-processing are still placeholders and should be built on top of the current pass split rather than folded back into `renderFrame(...)`.
