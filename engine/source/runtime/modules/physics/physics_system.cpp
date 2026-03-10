@@ -2,8 +2,8 @@
 #include "runtime/modules/scene/scene.h"
 #include <runtime/core/base/macro.h>
 #include "runtime/modules/scene/components.h"
-#include "runtime/modules/physics/components/collider_component.h"
-#include "runtime/modules/physics/components/rigidbody_component.h"
+#include "runtime/modules/scene/components/collider_component.h"
+#include "runtime/modules/scene/components/rigidbody_component.h"
 #include "runtime/modules/physics/collision/collision_types.h"
 
 namespace Hybrid

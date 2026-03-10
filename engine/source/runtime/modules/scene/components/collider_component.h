@@ -13,7 +13,7 @@ namespace Hybrid
 
     struct BoxColliderShape
     {
-        glm::vec3 HalfExtents{ 0.5f, 0.5f, 0.5f };
+        glm::vec3 HalfExtents{0.5f, 0.5f, 0.5f};
     };
 
     struct SphereColliderShape
@@ -28,9 +28,9 @@ namespace Hybrid
         bool IsTrigger = false;
         bool Enabled = true;
 
-        glm::vec3 Center{ 0.0f, 0.0f, 0.0f };
+        glm::vec3 Center{0.0f, 0.0f, 0.0f};
 
         BoxColliderShape Box;
         SphereColliderShape Sphere;
     };
-}
+} // namespace Hybrid

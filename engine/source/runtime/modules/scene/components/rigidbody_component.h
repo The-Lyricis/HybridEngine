@@ -1,18 +1,16 @@
 #pragma once
 
 #include <glm/vec3.hpp>
-#include <glm/glm.hpp>
-
 
 namespace Hybrid
 {
     struct RigidbodyComponent
     {
-        glm::vec3 Velocity{ 0.0f, 0.0f, 0.0f };
-        glm::vec3 Force{ 0.0f, 0.0f, 0.0f };
+        glm::vec3 Velocity{0.0f, 0.0f, 0.0f};
+        glm::vec3 Force{0.0f, 0.0f, 0.0f};
 
         float Mass = 1.0f;
         bool UseGravity = true;
         bool IsKinematic = false;
     };
-}
+} // namespace Hybrid

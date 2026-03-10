@@ -26,7 +26,7 @@
 #include "runtime/modules/asset/asset_manager.h"
 #include "runtime/modules/asset/material.h"
 #include "runtime/modules/asset/mesh.h"
-#include <runtime/modules/physics/components/collider_component.h>
+#include <runtime/modules/scene/components/collider_component.h>
 
 
 namespace Hybrid

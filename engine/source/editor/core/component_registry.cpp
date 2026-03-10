@@ -10,7 +10,7 @@
 #include "runtime/core/base/math_util.h"
 #include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/scene.h"
-#include "runtime/modules/physics/components/rigidbody_component.h"
+#include "runtime/modules/scene/components/rigidbody_component.h"
 
 namespace Hybrid
 {

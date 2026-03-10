@@ -17,7 +17,7 @@
 #include "runtime/modules/scene/scene_manager.h"
 #include "runtime/modules/window/window_system.h"
 #include "runtime/modules/physics/physics_system.h"
-#include "runtime/modules/physics/components/rigidbody_component.h"
+#include "runtime/modules/scene/components/rigidbody_component.h"
 
 namespace Hybrid
 {

@@ -6,8 +6,8 @@
 #include "runtime/modules/scene/scene.h"
 #include "runtime/modules/scene/entity.h"
 #include "runtime/core/base/math_util.h"
-#include "runtime/modules/physics/components/collider_component.h"
-#include "runtime/modules/physics/components/rigidbody_component.h"
+#include "runtime/modules/scene/components/collider_component.h"
+#include "runtime/modules/scene/components/rigidbody_component.h"
 
 #include <imgui.h>
 #include <entt/entt.hpp>
