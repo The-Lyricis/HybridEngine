@@ -48,17 +48,25 @@ namespace Hybrid
         auto* editor_layer = new EditorLayer(std::move(services));
 
         EditorModeCallbacks mode_callbacks;
-        mode_callbacks.enter_play_mode = [&engine]()
+        mode_callbacks.enter_play_mode_from_scene = [&engine](std::shared_ptr<Scene> scene) -> bool
             {
-                engine.enterPlayMode();
+                return engine.enterPlayModeFromScene(scene);
             };
         mode_callbacks.exit_play_mode = [&engine]()
             {
                 engine.exitPlayMode();
             };
+        mode_callbacks.toggle_pause_mode = [&engine]()
+            {
+                engine.togglePlayPause();
+            };
         mode_callbacks.is_play_mode = [&engine]() -> bool
             {
                 return engine.isPlayMode();
+            };
+        mode_callbacks.is_pause_mode = [&engine]() -> bool
+            {
+                return engine.isPlayPaused();
             };
         editor_layer->setModeCallbacks(std::move(mode_callbacks));
 

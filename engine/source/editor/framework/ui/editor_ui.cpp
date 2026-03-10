@@ -4,6 +4,8 @@
 
 #include <ImGuizmo.h>
 #include <imgui_internal.h>
+#include <glad/gl.h>
+#include <stb_image.h>
 
 #include "editor/core/editor_context.h"
 #include "editor/tools/panels/hierarchy_panel.h"
@@ -14,6 +16,81 @@
 
 namespace Hybrid
 {
+    namespace
+    {
+        static GLuint LoadTextureRGBA8(const std::string& path)
+        {
+            int w = 0, h = 0, comp = 0;
+            stbi_set_flip_vertically_on_load(0);
+            unsigned char* data = stbi_load(path.c_str(), &w, &h, &comp, 4);
+            if (!data || w <= 0 || h <= 0)
+            {
+                if (data)
+                    stbi_image_free(data);
+                return 0;
+            }
+
+            GLuint tex = 0;
+            glGenTextures(1, &tex);
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+            glBindTexture(GL_TEXTURE_2D, 0);
+
+            stbi_image_free(data);
+            return tex;
+        }
+
+        struct TopToolbarIcons
+        {
+            GLuint play = 0;
+            GLuint pause = 0;
+            GLuint stop = 0;
+            bool loaded = false;
+
+            void destroy()
+            {
+                auto del = [](GLuint& tex)
+                {
+                    if (tex)
+                    {
+                        glDeleteTextures(1, &tex);
+                        tex = 0;
+                    }
+                };
+
+                del(play);
+                del(pause);
+                del(stop);
+                loaded = false;
+            }
+        };
+
+        static TopToolbarIcons g_TopToolbarIcons;
+
+        static void PushActiveToolStyle(bool active, bool alert = false)
+        {
+            if (!active)
+                return;
+
+            const ImVec4 base = alert ? ImVec4(0.80f, 0.22f, 0.22f, 0.90f) : ImVec4(0.25f, 0.45f, 0.95f, 0.90f);
+            const ImVec4 hover = alert ? ImVec4(0.86f, 0.26f, 0.26f, 1.00f) : ImVec4(0.25f, 0.45f, 0.95f, 1.00f);
+            const ImVec4 active_col = alert ? ImVec4(0.72f, 0.18f, 0.18f, 1.00f) : ImVec4(0.20f, 0.40f, 0.90f, 1.00f);
+            ImGui::PushStyleColor(ImGuiCol_Button, base);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, active_col);
+        }
+
+        static void PopActiveToolStyle(bool active)
+        {
+            if (active)
+                ImGui::PopStyleColor(3);
+        }
+    }
+
     EditorUI::EditorUI() = default;
 
     EditorUI::~EditorUI()
@@ -54,6 +131,7 @@ namespace Hybrid
         m_InspectorPanel.reset();
         m_HierarchyPanel.reset();
         m_ctx.reset();
+        g_TopToolbarIcons.destroy();
 
         m_initialized = false;
         m_window = nullptr;
@@ -183,8 +261,9 @@ namespace Hybrid
         ImGui::PopStyleVar(3);
 
         m_DockSpaceID = ImGui::GetID("HybridDockSpace");
-        ImGui::DockSpace(m_DockSpaceID, ImVec2(0, 0), ImGuiDockNodeFlags_None);
         drawMenuBar();
+        drawTopToolbar();
+        ImGui::DockSpace(m_DockSpaceID, ImVec2(0, 0), ImGuiDockNodeFlags_None);
         ImGui::End();
     }
 
@@ -271,60 +350,127 @@ namespace Hybrid
             ImGui::EndMenu();
         }
 
-        ImGui::Separator();
+        ImGui::EndMenuBar();
+    }
 
-        if (!is_playing)
+    void EditorUI::drawTopToolbar()
+    {
+        if (!m_ctx)
+            return;
+
+        const bool is_playing = m_ctx->is_play_mode ? m_ctx->is_play_mode() : false;
+        const bool is_paused = m_ctx->is_pause_mode ? m_ctx->is_pause_mode() : false;
+        const float toolbar_height = 22.0f;
+
+        if (!g_TopToolbarIcons.loaded)
         {
-            if (ImGui::Button("Play"))
+            const std::string base = std::string(HYBRID_ROOT_DIR) + "/assets/icons/";
+            g_TopToolbarIcons.play = LoadTextureRGBA8(base + "icon_topTool_play.png");
+            g_TopToolbarIcons.pause = LoadTextureRGBA8(base + "icon_topTool_pause.png");
+            g_TopToolbarIcons.stop = LoadTextureRGBA8(base + "icon_topTool_stop.png");
+            g_TopToolbarIcons.loaded =
+                (g_TopToolbarIcons.play != 0 && g_TopToolbarIcons.pause != 0 && g_TopToolbarIcons.stop != 0);
+        }
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 4.0f));
+        ImGui::BeginChild("##EditorTopToolbar",
+                          ImVec2(0.0f, toolbar_height),
+                          ImGuiChildFlags_None,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PopStyleVar();
+
+        const float content_x = ImGui::GetCursorPosX();
+        const float content_y = ImGui::GetCursorPosY();
+        const ImVec2 content_avail = ImGui::GetContentRegionAvail();
+
+        std::string status_line;
+        if (m_ctx->active_document)
+            status_line = m_ctx->active_document->isSaved() ? m_ctx->active_document->vpath : m_ctx->active_document->display_name;
+        else
+            status_line = "Untitled";
+
+        if (m_ctx->active_document && m_ctx->active_document->dirty)
+            status_line += " *";
+        if (!m_ctx->status_message.empty())
+            status_line += " | " + m_ctx->status_message;
+
+        const ImVec2 button_size(32.0f, 20.0f);
+        const ImVec2 icon_size(18.0f, 18.0f);
+        const float text_y = content_y + std::max(0.0f, (content_avail.y - ImGui::GetTextLineHeight()) * 0.5f);
+        const float button_y = content_y + std::max(0.0f, (content_avail.y - button_size.y) * 0.5f);
+
+        ImGui::SetCursorPosY(text_y);
+        ImGui::TextUnformatted(status_line.c_str());
+        if (m_ctx->active_document && !m_ctx->active_document->native_path.empty() &&
+            ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+        {
+            ImGui::SetTooltip("%s", m_ctx->active_document->native_path.string().c_str());
+        }
+
+        const float gap = ImGui::GetStyle().ItemSpacing.x;
+        const float controls_width = button_size.x * 2.0f + gap;
+        const float start_x = content_x + std::max(0.0f, (content_avail.x - controls_width) * 0.5f);
+
+        ImGui::SetCursorPosX(start_x);
+        ImGui::SetCursorPosY(button_y);
+
+        auto drawTopToolbarButton = [&](const char* id, GLuint icon, const char* fallback, const char* tooltip, bool active, bool alert) -> bool
+        {
+            PushActiveToolStyle(active, alert);
+            bool pressed = false;
+
+            if (icon != 0)
             {
-                if (m_ctx && m_ctx->enter_play_mode)
+                const ImVec2 cursor = ImGui::GetCursorScreenPos();
+                if (ImGui::Button(id, button_size))
+                    pressed = true;
+
+                const ImVec2 icon_min(
+                    cursor.x + (button_size.x - icon_size.x) * 0.5f,
+                    cursor.y + (button_size.y - icon_size.y) * 0.5f);
+                const ImVec2 icon_max(icon_min.x + icon_size.x, icon_min.y + icon_size.y);
+                ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)icon, icon_min, icon_max);
+            }
+            else
+            {
+                pressed = ImGui::Button(fallback, button_size);
+            }
+
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+                ImGui::SetTooltip("%s", tooltip);
+
+            PopActiveToolStyle(active);
+            return pressed;
+        };
+
+        const bool play_active = is_playing;
+        const GLuint play_icon = is_playing ? g_TopToolbarIcons.stop : g_TopToolbarIcons.play;
+        if (drawTopToolbarButton("##TopToolbarPlay", play_icon, is_playing ? "Stop" : "Play", is_playing ? "Stop" : "Play", play_active, is_playing))
+        {
+            if (!is_playing)
+            {
+                if (m_ctx->enter_play_mode)
                     m_ctx->enter_play_mode();
             }
-        }
-        else
-        {
-            if (ImGui::Button("Stop"))
+            else if (m_ctx->exit_play_mode)
             {
-                if (m_ctx && m_ctx->exit_play_mode)
-                    m_ctx->exit_play_mode();
+                m_ctx->exit_play_mode();
             }
         }
 
         ImGui::SameLine();
-        ImGui::TextUnformatted(is_playing ? "Mode: Play" : "Mode: Edit");
-
-        if (m_ctx)
+        const bool pause_enabled = is_playing && static_cast<bool>(m_ctx->toggle_pause_mode);
+        if (!pause_enabled)
+            ImGui::BeginDisabled();
+        if (drawTopToolbarButton("##TopToolbarPause", g_TopToolbarIcons.pause, is_paused ? "Resume" : "Pause", is_paused ? "Resume" : "Pause", is_paused, false) &&
+            m_ctx->toggle_pause_mode)
         {
-            std::string scene_label = "Scene: ";
-            if (m_ctx->active_document)
-                scene_label += m_ctx->active_document->isSaved() ? m_ctx->active_document->vpath : m_ctx->active_document->display_name;
-            else
-                scene_label += "Untitled";
-
-            if (m_ctx->active_document && m_ctx->active_document->dirty)
-                scene_label += " *";
-
-            ImGui::SameLine();
-            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-            ImGui::SameLine();
-            ImGui::TextUnformatted(scene_label.c_str());
-
-            if (m_ctx->active_document && !m_ctx->active_document->native_path.empty() &&
-                ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-            {
-                ImGui::SetTooltip("%s", m_ctx->active_document->native_path.string().c_str());
-            }
-
-            if (!m_ctx->status_message.empty())
-            {
-                ImGui::SameLine();
-                ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-                ImGui::SameLine();
-                ImGui::TextDisabled("%s", m_ctx->status_message.c_str());
-            }
+            m_ctx->toggle_pause_mode();
         }
+        if (!pause_enabled)
+            ImGui::EndDisabled();
 
-        ImGui::EndMenuBar();
+        ImGui::EndChild();
     }
 
     void EditorUI::buildDefaultLayout()
@@ -352,5 +498,3 @@ namespace Hybrid
         ImGui::DockBuilderFinish(m_DockSpaceID);
     }
 } // namespace Hybrid
-
-

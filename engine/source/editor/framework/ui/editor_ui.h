@@ -39,6 +39,7 @@ namespace Hybrid
         void drawDockSpaceRoot();
         void buildDefaultLayout();
         void drawMenuBar();
+        void drawTopToolbar();
 
     private:
         GLFWwindow* m_window = nullptr;

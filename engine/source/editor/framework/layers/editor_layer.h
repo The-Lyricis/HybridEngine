@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <memory>
 
 #include "editor/framework/camera/editor_camera.h"
 #include "editor/framework/ui/editor_ui.h"
@@ -14,9 +15,11 @@ namespace Hybrid
 {
     struct EditorModeCallbacks
     {
-        std::function<void()> enter_play_mode;
+        std::function<bool(std::shared_ptr<Scene>)> enter_play_mode_from_scene;
         std::function<void()> exit_play_mode;
+        std::function<void()> toggle_pause_mode;
         std::function<bool()> is_play_mode;
+        std::function<bool()> is_pause_mode;
     };
     // Editor orchestration layer: UI draw + bridge from EditorContext to render inputs.
     class EditorLayer final : public Layer

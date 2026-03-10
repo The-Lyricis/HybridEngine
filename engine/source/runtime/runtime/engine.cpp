@@ -468,33 +468,43 @@ namespace Hybrid
         if (!m_RuntimeScene)
             return;
 
+        if (m_PlayPaused)
+            return;
+
         m_PhysicsSystem.tick(dt, *m_RuntimeScene);
         m_RuntimeScene->onUpdate(dt);
     }
 
     void HybridEngine::enterPlayMode()
     {
+        (void)enterPlayModeFromScene(m_EditorScene);
+    }
+
+    bool HybridEngine::enterPlayModeFromScene(const std::shared_ptr<Scene>& source_scene)
+    {
         if (isPlayMode())
         {
             HBD_CORE_WARN("Already in Play mode.");
-            return;
+            return false;
         }
 
-        if (!m_EditorScene)
+        if (!source_scene)
         {
-            HBD_CORE_WARN("Cannot enter Play mode: editor scene is null.");
-            return;
+            HBD_CORE_WARN("Cannot enter Play mode: source scene is null.");
+            return false;
         }
 
-        m_RuntimeScene = cloneScene(m_EditorScene);
+        m_RuntimeScene = source_scene->cloneRuntime();
         if (!m_RuntimeScene)
         {
-            HBD_CORE_ERROR("Failed to clone editor scene for Play mode.");
-            return;
+            HBD_CORE_ERROR("Failed to clone scene for Play mode.");
+            return false;
         }
 
         m_SceneRunState = SceneRunState::Play;
+        m_PlayPaused = false;
         HBD_CORE_INFO("Entered Play mode.");
+        return true;
     }
 
     void HybridEngine::exitPlayMode()
@@ -507,103 +517,17 @@ namespace Hybrid
 
         m_RuntimeScene.reset();
         m_SceneRunState = SceneRunState::Edit;
+        m_PlayPaused = false;
         HBD_CORE_INFO("Exited Play mode.");
     }
 
-    std::shared_ptr<Scene> HybridEngine::cloneScene(const std::shared_ptr<Scene>& source)
+    void HybridEngine::togglePlayPause()
     {
-        if (!source)
-            return nullptr;
+        if (!isPlayMode())
+            return;
 
-        auto dst = std::make_shared<Scene>();
-        dst->setName(source->getName());
-
-        auto& srcReg = source->getRegistry();
-        auto& dstReg = dst->getRegistry();
-
-        std::unordered_map<entt::entity, entt::entity> entityMap;
-
-        // 1) Create entities with UUID + Tag
-        auto srcView = srcReg.view<IDComponent, TagComponent, TransformComponent>();
-        for (auto srcEntity : srcView)
-        {
-            const auto& srcID = srcView.get<IDComponent>(srcEntity);
-            const auto& srcTag = srcView.get<TagComponent>(srcEntity);
-
-            Entity dstEntity = dst->createEntityWithUUID(srcID.ID, srcTag.Tag);
-            entityMap[srcEntity] = dstEntity.GetHandle();
-        }
-
-        // 2) Copy basic transform TRS
-        for (const auto& [srcEntity, dstEntity] : entityMap)
-        {
-            const auto& srcTc = srcReg.get<TransformComponent>(srcEntity);
-            auto& dstTc = dstReg.get<TransformComponent>(dstEntity);
-
-            dstTc.Position = srcTc.Position;
-            dstTc.Rotation = srcTc.Rotation;
-            dstTc.Scale = srcTc.Scale;
-
-            dstTc.LocalMatrix = glm::mat4(1.0f);
-            dstTc.WorldMatrix = glm::mat4(1.0f);
-
-            dstTc.DirtyLocal = true;
-            dstTc.DirtyWorld = true;
-
-            dstTc.Parent = entt::null;
-            dstTc.FirstChild = entt::null;
-            dstTc.NextSibling = entt::null;
-            dstTc.PrevSibling = entt::null;
-        }
-
-        // 3) Copy optional components
-        for (const auto& [srcEntity, dstEntity] : entityMap)
-        {
-            if (srcReg.all_of<CameraComponent>(srcEntity))
-                dstReg.emplace_or_replace<CameraComponent>(dstEntity, srcReg.get<CameraComponent>(srcEntity));
-
-            if (srcReg.all_of<MeshRendererComponent>(srcEntity))
-                dstReg.emplace_or_replace<MeshRendererComponent>(dstEntity, srcReg.get<MeshRendererComponent>(srcEntity));
-
-            if (srcReg.all_of<DirectionalLightComponent>(srcEntity))
-                dstReg.emplace_or_replace<DirectionalLightComponent>(dstEntity, srcReg.get<DirectionalLightComponent>(srcEntity));
-
-            if (srcReg.all_of<PointLightComponent>(srcEntity))
-                dstReg.emplace_or_replace<PointLightComponent>(dstEntity, srcReg.get<PointLightComponent>(srcEntity));
-
-            if (srcReg.all_of<RigidbodyComponent>(srcEntity))
-                dstReg.emplace_or_replace<RigidbodyComponent>(dstEntity, srcReg.get<RigidbodyComponent>(srcEntity));
-        }
-
-        // 4) Remap transform hierarchy
-        for (const auto& [srcEntity, dstEntity] : entityMap)
-        {
-            const auto& srcTc = srcReg.get<TransformComponent>(srcEntity);
-            auto& dstTc = dstReg.get<TransformComponent>(dstEntity);
-
-            auto remapEntity = [&](entt::entity e) -> entt::entity
-                {
-                    if (e == entt::null)
-                        return entt::null;
-
-                    auto it = entityMap.find(e);
-                    if (it == entityMap.end())
-                        return entt::null;
-
-                    return it->second;
-                };
-
-            dstTc.Parent = remapEntity(srcTc.Parent);
-            dstTc.FirstChild = remapEntity(srcTc.FirstChild);
-            dstTc.NextSibling = remapEntity(srcTc.NextSibling);
-            dstTc.PrevSibling = remapEntity(srcTc.PrevSibling);
-
-            dstTc.DirtyWorld = true;
-        }
-
-        // 5) Rebuild matrices
-        dst->onUpdate(0.0f);
-
-        return dst;
+        m_PlayPaused = !m_PlayPaused;
+        HBD_CORE_INFO(m_PlayPaused ? "Paused Play mode." : "Resumed Play mode.");
     }
+
 } // namespace Hybrid

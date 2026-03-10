@@ -1,5 +1,6 @@
 #pragma once
 #include <entt/entt.hpp>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -41,6 +42,7 @@ namespace Hybrid
         void destroyEntity(Entity entity);
 
         void onUpdate(float dt);
+        std::shared_ptr<Scene> cloneRuntime() const;
 
         // 便于序列化：稳定遍历入口（按 root 开始 DFS/层级输出）
         std::vector<Entity> getRootEntities() const;

@@ -161,7 +161,8 @@ namespace Hybrid
 
         ImGui::Begin("##UnityTools", nullptr, flags);
 
-        const ImVec2 btnSize(34.0f, 34.0f);
+        const ImVec2 button_size(36.0f, 20.0f);
+        const ImVec2 icon_size(18.0f, 18.0f);
 
         auto ImageToolButton = [&](GLuint tex, const char* tip, ToolMode mode)
             {
@@ -173,11 +174,15 @@ namespace Hybrid
 
                 if (tex != 0)
                 {
-                    // ImageButton signature varies slightly by ImGui version.
-                    ImVec2 uv0(0, 0), uv1(1, 1);
-                    ImVec4 bg(0, 0, 0, 0);           // Transparent background.
-                    ImVec4 tint(1, 1, 1, 1);         // Keep original icon color.
-                    pressed = ImGui::ImageButton("##toolbtn", (ImTextureID)(intptr_t)tex, btnSize, uv0, uv1, bg, tint);
+                    const ImVec2 cursor = ImGui::GetCursorScreenPos();
+                    if (ImGui::Button("##toolbtn", button_size))
+                        pressed = true;
+
+                    const ImVec2 icon_min(
+                        cursor.x + (button_size.x - icon_size.x) * 0.5f,
+                        cursor.y + (button_size.y - icon_size.y) * 0.5f);
+                    const ImVec2 icon_max(icon_min.x + icon_size.x, icon_min.y + icon_size.y);
+                    ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)tex, icon_min, icon_max);
                 }
                 else
                 {
@@ -185,7 +190,7 @@ namespace Hybrid
                     const char* name = (mode == ToolMode::Hand) ? "Hand" :
                         (mode == ToolMode::Move) ? "Move" :
                         (mode == ToolMode::Rotate) ? "Rot" : "Scl";
-                    pressed = ImGui::Button(name, btnSize);
+                    pressed = ImGui::Button(name, button_size);
                 }
 
                 if (pressed)

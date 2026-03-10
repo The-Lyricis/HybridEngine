@@ -55,17 +55,30 @@ namespace Hybrid
         auto& ctx = m_editor_ui.context();
         ctx.enter_play_mode = [this]()
             {
-                if (m_mode_callbacks.enter_play_mode)
-                    m_mode_callbacks.enter_play_mode();
+                const auto& document = m_scene_io.getActiveDocument();
+                if (!document || !document->scene)
+                    return;
+
+                if (m_mode_callbacks.enter_play_mode_from_scene)
+                    (void)m_mode_callbacks.enter_play_mode_from_scene(document->scene);
             };
         ctx.exit_play_mode = [this]()
             {
                 if (m_mode_callbacks.exit_play_mode)
                     m_mode_callbacks.exit_play_mode();
             };
+        ctx.toggle_pause_mode = [this]()
+            {
+                if (m_mode_callbacks.toggle_pause_mode)
+                    m_mode_callbacks.toggle_pause_mode();
+            };
         ctx.is_play_mode = [this]() -> bool
             {
                 return m_mode_callbacks.is_play_mode ? m_mode_callbacks.is_play_mode() : false;
+            };
+        ctx.is_pause_mode = [this]() -> bool
+            {
+                return m_mode_callbacks.is_pause_mode ? m_mode_callbacks.is_pause_mode() : false;
             };
         ctx.open_scene = [this](const std::string& scene_vpath)
             {
@@ -103,7 +116,9 @@ namespace Hybrid
         ctx.request_save_scene_as = {};
         ctx.enter_play_mode = {};
         ctx.exit_play_mode = {};
+        ctx.toggle_pause_mode = {};
         ctx.is_play_mode = {};
+        ctx.is_pause_mode = {};
         ctx.selected = entt::null;
         ctx.clearActiveDocument();
 
