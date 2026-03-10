@@ -202,7 +202,6 @@ namespace Hybrid
                 auto rock = scene->createEntity("ROCK-A");
                 auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
                 mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
-                mr.Primitive = 0;
 
                 auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
                 tr.Position = {0.0f, 4.0f, 0.0f};
@@ -218,7 +217,6 @@ namespace Hybrid
                 auto rock = scene->createEntity("Tree");
                 auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
                 mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
-                mr.Primitive = 0;
 
                 auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
                 tr.Position = { 2.0f, 4.0f, 2.0f };
@@ -233,8 +231,7 @@ namespace Hybrid
             auto fallingCube = scene->createEntity("FallingCube");
 
             auto& mr = fallingCube.AddComponent<Hybrid::MeshRendererComponent>();
-            mr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
-            mr.Primitive = 0;
+            mr.Mesh = m_RuntimeResourceSystem->getBuiltinMeshID(BuiltinMesh::Cube);
 
             auto& tr = fallingCube.GetComponent<Hybrid::TransformComponent>();
             tr.Position = { 0.0f, 5.0f, 0.0f };
@@ -253,8 +250,7 @@ namespace Hybrid
                     auto cube = scene->createEntity(name);
 
                     auto& mr = cube.AddComponent<Hybrid::MeshRendererComponent>();
-                    mr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
-                    mr.Primitive = 0;
+                    mr.Mesh = m_RuntimeResourceSystem->getBuiltinMeshID(BuiltinMesh::Cube);
 
                     auto& tr = cube.GetComponent<Hybrid::TransformComponent>();
                     tr.Position = { startX + x * spacing, 0.0f, startZ + z * spacing };

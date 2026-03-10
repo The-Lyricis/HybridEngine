@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "asset_manager.h"
+#include "builtin_assets.h"
 #include "asset_registry.h"
 #include "asset_loader.h"
 #include "asset_meta_store.h"
@@ -24,7 +25,7 @@ namespace Hybrid
         std::shared_ptr<IVirtualFileSystem> getVFS() const { return m_vfs; }
         std::shared_ptr<AssetRegistry> getRegistry() const { return m_registry; }
         std::shared_ptr<AssetManager> getManager() const { return m_manager; }
-        AssetID getBuiltinCubeMeshID() const { return m_builtinCubeMeshId; }
+        AssetID getBuiltinMeshID(BuiltinMesh mesh) const;
 
     private:
         void registerDefaultLoaders(); // Register runtime loaders (texture/mesh/material).
@@ -32,7 +33,7 @@ namespace Hybrid
         // Default runtime fallback assets.
         void createDefaultTexture();
         void createDefaultMaterial();
-        void createBuiltinCubeMesh();
+        void createBuiltinMesh(BuiltinMesh mesh);
 
     private:
         std::shared_ptr<IVirtualFileSystem> m_vfs;      // Logical path -> native file access.
@@ -41,7 +42,7 @@ namespace Hybrid
         std::unique_ptr<AssetMetaStore>     m_metaStore; // Meta file read path at startup.
         std::shared_ptr<Texture>            m_defaultTexture; // 1x1 white fallback texture.
         std::shared_ptr<Material>           m_defaultMaterial; // Fallback material.
-        AssetID                             m_builtinCubeMeshId{}; // Built-in cube mesh asset id.
+        AssetID                             m_builtinCubeMeshId{}; // Built-in mesh ids, starting with cube.
         ProjectContext m_project; // Project context for path resolution and info.
     };
 } // namespace Hybrid

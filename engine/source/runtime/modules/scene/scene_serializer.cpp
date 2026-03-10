@@ -5,6 +5,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
+#include "runtime/modules/asset/asset_registry.h"
 #include "scene.h"
 #include "components.h"
 #include "uuid.h"
@@ -46,7 +47,39 @@ namespace Hybrid
             return static_cast<uint64_t>(reg.get<IDComponent>(e).ID);
         }
 
-        static void writeComponents(entt::registry& reg, entt::entity e, json& je)
+        static std::string assetPathFor(const AssetRegistry* registry, AssetID id)
+        {
+            if (!registry || id.value == 0)
+                return {};
+
+            const auto* meta = registry->find(id);
+            if (!meta || !meta->is_valid)
+                return {};
+
+            if (!meta->source_path.empty())
+                return meta->source_path;
+            return meta->cooked_path;
+        }
+
+        static AssetID resolveAsset(const json& j,
+                                    const char* id_key,
+                                    const char* path_key,
+                                    const AssetRegistry* registry)
+        {
+            if (registry && j.contains(path_key) && j[path_key].is_string())
+            {
+                const std::string logical = j[path_key].get<std::string>();
+                if (!logical.empty())
+                {
+                    if (const auto* meta = registry->findByPath(logical))
+                        return meta->id;
+                }
+            }
+
+            return AssetID::FromRaw(j.value(id_key, 0ull));
+        }
+
+        static void writeComponents(entt::registry& reg, entt::entity e, json& je, const AssetRegistry* registry)
         {
             // Camera
             if (reg.all_of<CameraComponent>(e))
@@ -67,9 +100,16 @@ namespace Hybrid
                 je["meshRenderer"] = {
                     {"mesh", mr.Mesh.value},
                     {"material", mr.Material.value},
-                    {"primitive", mr.Primitive},
                     {"tint", toJson(mr.Tint)}
                 };
+
+                const std::string mesh_path = assetPathFor(registry, mr.Mesh);
+                if (!mesh_path.empty())
+                    je["meshRenderer"]["meshPath"] = mesh_path;
+
+                const std::string material_path = assetPathFor(registry, mr.Material);
+                if (!material_path.empty())
+                    je["meshRenderer"]["materialPath"] = material_path;
             }
 
             // DirectionalLight
@@ -94,7 +134,7 @@ namespace Hybrid
             }
         }
 
-        static void readComponents(entt::registry& reg, entt::entity e, const json& je)
+        static void readComponents(entt::registry& reg, entt::entity e, const json& je, const AssetRegistry* registry)
         {
             // Camera
             if (je.contains("camera") && je["camera"].is_object())
@@ -113,9 +153,8 @@ namespace Hybrid
                 const auto& jm = je["meshRenderer"];
                 auto& mr = reg.all_of<MeshRendererComponent>(e) ? reg.get<MeshRendererComponent>(e)
                     : reg.emplace<MeshRendererComponent>(e);
-                mr.Mesh = AssetID::FromRaw(jm.value("mesh", 0ull));
-                mr.Material = AssetID::FromRaw(jm.value("material", 0ull));
-                mr.Primitive = jm.value("primitive", 0);
+                mr.Mesh = resolveAsset(jm, "mesh", "meshPath", registry);
+                mr.Material = resolveAsset(jm, "material", "materialPath", registry);
 
                 if (jm.contains("tint") && jm["tint"].is_array() && jm["tint"].size() == 4)
                     mr.Tint = vec4From(jm["tint"]);
@@ -146,7 +185,7 @@ namespace Hybrid
         }
 
         // DFS write：保持层级顺序稳定（root -> children, sibling order）
-        static void writeEntityDFS(const Scene& scene, entt::entity e, json& outEntities)
+        static void writeEntityDFS(const Scene& scene, entt::entity e, json& outEntities, const AssetRegistry* registry)
         {
             auto& reg = const_cast<entt::registry&>(scene.getRegistry());
 
@@ -170,7 +209,7 @@ namespace Hybrid
             };
 
             // 新增：写其它组件
-            writeComponents(reg, e, je);
+            writeComponents(reg, e, je, registry);
 
             outEntities.push_back(std::move(je));
 
@@ -182,7 +221,7 @@ namespace Hybrid
                 if (reg.valid(child) && reg.all_of<TransformComponent>(child))
                     next = reg.get<TransformComponent>(child).NextSibling;
 
-                writeEntityDFS(scene, child, outEntities);
+                writeEntityDFS(scene, child, outEntities, registry);
                 child = next;
             }
         }
@@ -203,7 +242,7 @@ namespace Hybrid
         }
     } // namespace
 
-    bool SceneSerializer::SerializeToFile(const Scene& scene, const std::filesystem::path& path)
+    bool SceneSerializer::SerializeToFile(const Scene& scene, const std::filesystem::path& path, const AssetRegistry* registry)
     {
         // 让层级/矩阵状态先同步一次（不影响可持久化数据，只是避免脏状态）
         const_cast<Scene&>(scene).onUpdate(0.0f);
@@ -213,7 +252,7 @@ namespace Hybrid
         root["entities"] = json::array();
 
         for (auto r : collectRoots(scene))
-            writeEntityDFS(scene, r, root["entities"]);
+            writeEntityDFS(scene, r, root["entities"], registry);
 
         std::ofstream ofs(path, std::ios::out | std::ios::trunc);
         if (!ofs.is_open())
@@ -223,7 +262,7 @@ namespace Hybrid
         return true;
     }
 
-    bool SceneSerializer::DeserializeFromFile(Scene& scene, const std::filesystem::path& path)
+    bool SceneSerializer::DeserializeFromFile(Scene& scene, const std::filesystem::path& path, const AssetRegistry* registry)
     {
         std::ifstream ifs(path);
         if (!ifs.is_open())
@@ -279,7 +318,7 @@ namespace Hybrid
             }
 
             // v2：读取组件；v1：这些字段不存在会被忽略
-            readComponents(scene.getRegistry(), e.GetHandle(), je);
+            readComponents(scene.getRegistry(), e.GetHandle(), je, registry);
 
             pending.push_back(PendingRel{ uuid, parent_uuid });
         }

@@ -20,6 +20,7 @@ namespace Hybrid
         void onImGuiRender(EditorContext& ctx) override;
 
     private:
+        void drawWindowContextMenu(EditorContext& ctx) override;
         struct Entry
         {
             std::filesystem::path physical;
@@ -32,6 +33,7 @@ namespace Hybrid
         void renderDirectoryTree(EditorContext& ctx);
         void renderContent(EditorContext& ctx);
         void renderRenamePopup(EditorContext& ctx);
+        void openCreateFolderPopup();
 
         void gatherEntries(const std::filesystem::path& dir);
         bool isHiddenFile(const std::filesystem::path& p) const;

@@ -151,26 +151,6 @@ namespace Hybrid
             changed |= DrawAssetSlot("Mesh", mr->Mesh);
             changed |= DrawAssetSlot("Material", mr->Material);
 
-            static constexpr const char* primitive_names[] = {
-                "Cube"
-            };
-
-            ImGui::PushID("Primitive");
-            ImGui::Columns(2);
-            ImGui::SetColumnWidth(0, 90.0f);
-            ImGui::TextUnformatted("Primitive");
-            ImGui::NextColumn();
-            int primitive = mr->Primitive;
-            if (primitive < 0 || primitive >= static_cast<int>(std::size(primitive_names)))
-                primitive = 0;
-            if (ImGui::Combo("##primitive", &primitive, primitive_names, static_cast<int>(std::size(primitive_names))))
-            {
-                mr->Primitive = primitive;
-                changed = true;
-            }
-            ImGui::Columns(1);
-            ImGui::PopID();
-
             ImGui::PushID("Tint");
             ImGui::Columns(2);
             ImGui::SetColumnWidth(0, 90.0f);

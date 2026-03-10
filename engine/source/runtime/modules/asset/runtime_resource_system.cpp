@@ -3,13 +3,13 @@
 #include <filesystem>
 #include <memory>
 
+#include "builtin_assets.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/render/public/texture.h"
 #include "opengl_texture2d_loader.h"
 #include "mesh_loader.h"
 #include "material_loader.h"
 #include "scene_loader.h"
-#include "mesh.h"
 
 namespace Hybrid
 {
@@ -97,7 +97,7 @@ namespace Hybrid
         registerDefaultLoaders();
         createDefaultTexture();
         createDefaultMaterial();
-        createBuiltinCubeMesh();
+        createBuiltinMesh(BuiltinMesh::Cube);
 
         HBD_CORE_TRACE("RuntimeResourceSystem initialized (project-based)");
     }
@@ -147,15 +147,29 @@ namespace Hybrid
         }
     }
 
-    void RuntimeResourceSystem::createBuiltinCubeMesh()
+    AssetID RuntimeResourceSystem::getBuiltinMeshID(BuiltinMesh mesh) const
+    {
+        switch (mesh)
+        {
+        case BuiltinMesh::Cube:
+            return m_builtinCubeMeshId;
+        default:
+            return {};
+        }
+    }
+
+    void RuntimeResourceSystem::createBuiltinMesh(BuiltinMesh mesh)
     {
         if (!m_registry || !m_manager)
             return;
 
-        constexpr const char* kBuiltinCubePath = "builtin:Cube";
+        const char* logical_path = BuiltinAssets::meshPath(mesh);
+        const char* logical_hash = BuiltinAssets::meshHash(mesh);
+        if (!logical_path || logical_path[0] == '\0')
+            return;
 
         AssetMetadata meta{};
-        if (const auto* existing = m_registry->findByPath(kBuiltinCubePath))
+        if (const auto* existing = m_registry->findByPath(logical_path))
         {
             meta = *existing;
         }
@@ -163,23 +177,31 @@ namespace Hybrid
         {
             meta.id = m_registry->generateUniqueID();
             meta.type = AssetType::Mesh;
-            meta.source_path = kBuiltinCubePath;
+            meta.source_path = logical_path;
             meta.cooked_path.clear();
-            meta.hash = "builtin_cube_v1";
+            meta.hash = logical_hash ? logical_hash : "";
             meta.is_valid = true;
             m_registry->registerAsset(meta);
         }
 
-        auto cube = Mesh::CreateCube();
-        if (!cube)
+        auto builtin_mesh = BuiltinAssets::createMesh(mesh);
+        if (!builtin_mesh)
         {
-            HBD_CORE_WARN("RuntimeResourceSystem: failed to build built-in cube mesh");
+            HBD_CORE_WARN("RuntimeResourceSystem: failed to build built-in mesh {}", logical_path);
             return;
         }
 
-        m_builtinCubeMeshId = meta.id;
-        m_manager->registerResident<Mesh>(m_builtinCubeMeshId, cube);
-        HBD_CORE_INFO("RuntimeResourceSystem: built-in cube mesh asset {}", m_builtinCubeMeshId.value);
+        switch (mesh)
+        {
+        case BuiltinMesh::Cube:
+            m_builtinCubeMeshId = meta.id;
+            break;
+        default:
+            break;
+        }
+
+        m_manager->registerResident<Mesh>(meta.id, builtin_mesh);
+        HBD_CORE_INFO("RuntimeResourceSystem: built-in mesh {} asset {}", logical_path, meta.id.value);
     }
 
 } // namespace Hybrid

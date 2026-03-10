@@ -99,6 +99,12 @@ namespace Hybrid
                 syncContextDocumentState();
                 return saved;
             };
+        ctx.get_builtin_mesh_id = [this](BuiltinMesh mesh) -> AssetID
+            {
+                if (!m_services.resources)
+                    return {};
+                return m_services.resources->getBuiltinMeshID(mesh);
+            };
 
         (void)m_scene_io.restoreStartupScene();
         syncContextDocumentState();
@@ -114,6 +120,7 @@ namespace Hybrid
         ctx.open_scene = {};
         ctx.request_save_scene = {};
         ctx.request_save_scene_as = {};
+        ctx.get_builtin_mesh_id = {};
         ctx.enter_play_mode = {};
         ctx.exit_play_mode = {};
         ctx.toggle_pause_mode = {};

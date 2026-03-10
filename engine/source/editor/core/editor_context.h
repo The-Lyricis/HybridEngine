@@ -10,6 +10,8 @@
 
 #include "editor/core/editor_types.h"
 #include "editor/core/scene_document.h"
+#include "runtime/modules/asset/asset_type.h"
+#include "runtime/modules/asset/builtin_assets.h"
 
 namespace Hybrid
 {
@@ -50,6 +52,7 @@ namespace Hybrid
         std::function<void(const std::string& scene_vpath)> open_scene;
         std::function<bool()> request_save_scene;
         std::function<bool()> request_save_scene_as;
+        std::function<AssetID(BuiltinMesh)> get_builtin_mesh_id;
         bool pan_tool = false;
         bool suppress_tool_shortcuts = false;
 

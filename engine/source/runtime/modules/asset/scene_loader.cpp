@@ -5,7 +5,7 @@
 
 namespace Hybrid
 {
-    std::shared_ptr<Scene> SceneLoader::loadFromLogicalPath(const std::string& logical, IVirtualFileSystem& vfs)
+    std::shared_ptr<Scene> SceneLoader::loadFromLogicalPath(const std::string& logical, IVirtualFileSystem& vfs, const AssetRegistry* registry)
     {
         if (logical.empty())
         {
@@ -21,7 +21,7 @@ namespace Hybrid
         }
 
         auto scene = std::make_shared<Scene>();
-        if (!SceneSerializer::DeserializeFromFile(*scene, *native))
+        if (!SceneSerializer::DeserializeFromFile(*scene, *native, registry))
         {
             HBD_CORE_ERROR("SceneLoader: deserialize failed {}", native->string());
             return nullptr;
@@ -46,6 +46,6 @@ namespace Hybrid
             return nullptr;
         }
 
-        return loadFromLogicalPath(logical, vfs);
+        return loadFromLogicalPath(logical, vfs, nullptr);
     }
 } // namespace Hybrid

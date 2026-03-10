@@ -97,7 +97,6 @@ namespace Hybrid
             return;
 
         Renderer::initialize();
-        createCubeResources();
         createMeshShader();
 
         GLFWwindow *window = static_cast<GLFWwindow *>(glfwWindowHandle);
@@ -113,89 +112,6 @@ namespace Hybrid
         m_Initialized = true;
 
         HBD_CORE_TRACE("RenderSystem initialized");
-    }
-
-    void RenderSystem::createCubeResources()
-    {
-        static float s_CubeVertices[] = {
-            // x,    y,    z,    r,   g,   b,   a
-            -0.5f, -0.5f, -0.5f, 1.f, 0.f, 0.f, 1.f, // 0
-            0.5f, -0.5f, -0.5f, 0.f, 1.f, 0.f, 1.f,  // 1
-            0.5f, 0.5f, -0.5f, 0.f, 0.f, 1.f, 1.f,   // 2
-            -0.5f, 0.5f, -0.5f, 1.f, 1.f, 0.f, 1.f,  // 3
-            -0.5f, -0.5f, 0.5f, 1.f, 0.f, 1.f, 1.f,  // 4
-            0.5f, -0.5f, 0.5f, 0.f, 1.f, 1.f, 1.f,   // 5
-            0.5f, 0.5f, 0.5f, 1.f, 1.f, 1.f, 1.f,    // 6
-            -0.5f, 0.5f, 0.5f, 0.2f, 0.2f, 0.2f, 1.f // 7
-        };
-
-        static uint32_t s_CubeIndices[] = {
-            // back (-Z)
-            0, 1, 2, 2, 3, 0,
-            // front (+Z)
-            4, 5, 6, 6, 7, 4,
-            // left (-X)
-            0, 3, 7, 7, 4, 0,
-            // right (+X)
-            1, 5, 6, 6, 2, 1,
-            // bottom (-Y)
-            0, 1, 5, 5, 4, 0,
-            // top (+Y)
-            3, 2, 6, 6, 7, 3};
-
-        m_CubeVAO = VertexArray::Create();
-        auto vb = VertexBuffer::Create(
-            s_CubeVertices,
-            static_cast<uint32_t>(sizeof(s_CubeVertices)));
-        auto ib = IndexBuffer::Create(
-            s_CubeIndices,
-            (uint32_t)(sizeof(s_CubeIndices) / sizeof(uint32_t)));
-
-        VertexLayout cubeLayout;
-        cubeLayout.stride = (3 + 4) * sizeof(float);
-        cubeLayout.attributes = {
-            {0, 3, 0, false},
-            {1, 4, static_cast<uint32_t>(3 * sizeof(float)), false}};
-        m_CubeVAO->setVertexBuffer(vb, cubeLayout);
-        m_CubeVAO->setIndexBuffer(ib);
-
-        const std::string vs = R"(
-#version 330 core
-layout(location=0) in vec3 aPos;
-layout(location=1) in vec4 aColor;
-
-uniform mat4 u_ViewProjection;
-uniform mat4 u_Model;
-
-out vec4 vColor;
-
-void main() {
-    vColor = aColor;
-    gl_Position = u_ViewProjection * u_Model * vec4(aPos, 1.0);
-}
-)";
-
-        const std::string fs = R"(
-#version 330 core
-in vec4 vColor;
-
-layout(location=0) out vec4 FragColor;
-layout(location=1) out int EntityID;
-
-uniform int u_EntityID;
-uniform int u_Selected;
-
-void main() {
-    vec4 c = vColor;
-    if (u_Selected == 1) {
-        c.rgb = min(c.rgb * 1.35 + vec3(0.08), vec3(1.0)); // 绠€鍗曢珮浜?
-    }
-    FragColor = c;
-    EntityID  = u_EntityID;
-}
-)";
-
-        m_CubeShader = Shader::Create(vs, fs);
     }
 
     RenderSystem::MeshGPU *RenderSystem::getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh)
@@ -592,7 +508,6 @@ void main() {
                 DrawItem item;
                 item.meshId = mr.Mesh;
                 item.materialId = mr.Material;
-                item.primitive = mr.Primitive;
                 item.model = tr.WorldMatrix;
                 item.tint = mr.Tint;
                 item.entityID = (uint32_t)entt::to_integral(e);
@@ -637,7 +552,6 @@ void main() {
                                           void *glfwWindowHandle,
                                           const std::shared_ptr<Framebuffer>& framebuffer)
     {
-        const bool assetPathReady = (m_AssetManager != nullptr) && (m_MeshShader != nullptr);
         if (!framebuffer)
             return;
 
@@ -649,28 +563,8 @@ void main() {
         uint32_t zero = 0;
         glClearBufferuiv(GL_COLOR, 1, &zero);
 
-        // 2) fallback path
-        if (!assetPathReady)
+        if (m_AssetManager && m_MeshShader)
         {
-            if (m_CubeShader && m_CubeVAO)
-            {
-                m_CubeShader->bind();
-                m_CubeShader->setMat4("u_ViewProjection", packet.frame.viewProj);
-
-                for (const auto &item : packet.items)
-                {
-                    if (item.primitive != 0)
-                        continue;
-                    m_CubeShader->setMat4("u_Model", item.model);
-                    m_CubeShader->setInt("u_EntityID", item.entityID);
-                    m_CubeShader->setInt("u_Selected", item.selected ? 1 : 0);
-                    Renderer::submit(m_CubeVAO, m_CubeShader);
-                }
-            }
-        }
-        else
-        {
-            // 3) global shader data (once)
             m_MeshShader->bind();
             m_MeshShader->setMat4("u_ViewProjection", packet.frame.viewProj);
             m_MeshShader->setVec3("u_CameraPos", packet.frame.cameraPos);
@@ -695,7 +589,6 @@ void main() {
             m_MeshShader->setInt("u_AOMap", 3);
             m_MeshShader->setInt("u_EmissiveMap", 4);
 
-            // 4) draw items
             for (const auto &item : packet.items)
             {
                 AssetID meshId = item.meshId;

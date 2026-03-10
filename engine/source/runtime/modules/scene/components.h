@@ -55,9 +55,6 @@ namespace Hybrid
     {
         AssetID Mesh{};
         AssetID Material{};
-
-        int Primitive = 0;
-
         glm::vec4 Tint{1.0f};
     };
 

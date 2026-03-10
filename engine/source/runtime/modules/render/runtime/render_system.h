@@ -52,7 +52,6 @@ namespace Hybrid
         const glm::mat4& getLastProj() const { return m_LastProj; }
 
     private:
-        void createCubeResources();
         void ensureFramebufferSize(std::shared_ptr<Framebuffer>& framebuffer, uint32_t w, uint32_t h);
         void createMeshShader();
 
@@ -110,7 +109,6 @@ namespace Hybrid
         {
             AssetID meshId{};
             AssetID materialId{};
-            int primitive = 0;
             glm::mat4 model{1.0f};
             glm::vec4 tint{1.0f};
             uint32_t entityID = 0;
@@ -156,8 +154,6 @@ namespace Hybrid
 
         std::shared_ptr<Framebuffer> m_SceneFB;
         std::shared_ptr<Framebuffer> m_GameFB;
-        std::shared_ptr<VertexArray> m_CubeVAO;
-        std::shared_ptr<Shader> m_CubeShader;
         std::shared_ptr<Shader> m_MeshShader;
 
         std::shared_ptr<AssetManager> m_AssetManager;

@@ -157,7 +157,8 @@ namespace Hybrid
         if (!native)
             return nullptr;
 
-        auto scene = SceneLoader::loadFromLogicalPath(scene_vpath, *vfs);
+        const auto registry = m_services.resources ? m_services.resources->getRegistry().get() : nullptr;
+        auto scene = SceneLoader::loadFromLogicalPath(scene_vpath, *vfs, registry);
         if (!scene)
             return nullptr;
 
@@ -311,7 +312,8 @@ namespace Hybrid
         }
 
         const bool existed = std::filesystem::exists(*native);
-        if (!SceneSerializer::SerializeToFile(*m_active_document->scene, *native))
+        const auto registry = m_services.resources ? m_services.resources->getRegistry().get() : nullptr;
+        if (!SceneSerializer::SerializeToFile(*m_active_document->scene, *native, registry))
         {
             m_status_message = "场景保存失败";
             HBD_CORE_WARN("EditorSceneIOService: serialize failed: {}", native->string());
