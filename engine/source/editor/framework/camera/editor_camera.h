@@ -39,6 +39,7 @@ namespace Hybrid {
         const glm::mat4& getViewProj() const { return m_ViewProj; }
 
         glm::vec3 getPosition() const { return m_Position; }
+        glm::vec3 getForwardDirection() const { return getForward(); }
         EditorCameraState dumpState() const;
         void loadState(const EditorCameraState& state);
 

@@ -8,13 +8,17 @@
 
 #include "editor/core/editor_context.h"
 #include "editor/services/asset/editor_resource_system.h"
+#include "editor/services/import/import_types.h"
 #include "runtime/core/base/macro.h"
+#include "runtime/modules/asset/asset_registry.h"
+#include "runtime/modules/asset/asset_type.h"
 #include "runtime/modules/asset/runtime_resource_system.h"
 #include "runtime/modules/input/input_layer.h"
 #include "runtime/modules/render/runtime/editor_render_ext.h"
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/render_flags.h"
 #include "runtime/modules/render/runtime/render_system.h"
+#include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/scene.h"
 #include "runtime/modules/scene/scene_manager.h"
 #include "runtime/modules/window/window_system.h"
@@ -102,6 +106,12 @@ namespace Hybrid
                     m_editor_ui.context().selected = entt::null;
                 syncContextDocumentState();
             };
+        ctx.request_reimport_asset = [this](const std::string& asset_vpath) -> bool
+            {
+                const bool ok = reimportAsset(asset_vpath);
+                syncContextDocumentState();
+                return ok;
+            };
         ctx.request_save_scene = [this]() -> bool
             {
                 const bool saved = m_scene_io.requestSave();
@@ -113,6 +123,22 @@ namespace Hybrid
                 const bool saved = m_scene_io.requestSaveAs();
                 syncContextDocumentState();
                 return saved;
+            };
+        ctx.find_asset_by_vpath = [this](const std::string& asset_vpath) -> AssetID
+            {
+                return findAssetByVPath(asset_vpath);
+            };
+        ctx.instantiate_scene_asset = [this](AssetID asset_id) -> bool
+            {
+                const bool instantiated = instantiateSceneAsset(asset_id);
+                syncContextDocumentState();
+                return instantiated;
+            };
+        ctx.instantiate_scene_project_path = [this](const std::string& rel_path) -> bool
+            {
+                const bool instantiated = instantiateSceneProjectPath(rel_path);
+                syncContextDocumentState();
+                return instantiated;
             };
         ctx.get_builtin_mesh_id = [this](BuiltinMesh mesh) -> AssetID
             {
@@ -136,8 +162,12 @@ namespace Hybrid
         auto& ctx = m_editor_ui.context();
         ctx.notify_asset_source_event = {};
         ctx.open_scene = {};
+        ctx.request_reimport_asset = {};
         ctx.request_save_scene = {};
         ctx.request_save_scene_as = {};
+        ctx.find_asset_by_vpath = {};
+        ctx.instantiate_scene_asset = {};
+        ctx.instantiate_scene_project_path = {};
         ctx.get_builtin_mesh_id = {};
         ctx.enter_play_mode = {};
         ctx.exit_play_mode = {};
@@ -300,6 +330,146 @@ namespace Hybrid
         {
             editor_ext->request_pick = false;
         }
+    }
+
+    bool EditorLayer::reimportAsset(const std::string& asset_vpath)
+    {
+        auto& ctx = m_editor_ui.context();
+        if (asset_vpath.empty() || !m_services.editor_resources || !m_services.resources)
+            return false;
+
+        ImportRequest request{};
+        request.source_path = asset_vpath;
+        request.force_reimport = true;
+
+        const ImportResult result = m_services.editor_resources->importAsset(request);
+        if (!result.success)
+        {
+            ctx.setStatusMessage(result.message.empty() ? "Reimport failed." : result.message);
+            return false;
+        }
+
+        auto manager = m_services.resources->getManager();
+        if (manager)
+        {
+            for (const auto& meta : result.assets)
+            {
+                if (meta.id.value != 0)
+                    manager->unload(meta.id);
+            }
+        }
+
+        ctx.setStatusMessage("Reimport completed.");
+        return true;
+    }
+
+    AssetID EditorLayer::findAssetByVPath(const std::string& asset_vpath) const
+    {
+        if (!m_services.resources)
+            return {};
+
+        auto registry = m_services.resources->getRegistry();
+        if (!registry)
+            return {};
+
+        if (const auto* meta = registry->findByPath(asset_vpath))
+            return meta->id;
+
+        return {};
+    }
+
+    bool EditorLayer::instantiateSceneProjectPath(const std::string& rel_path)
+    {
+        if (rel_path.empty())
+            return false;
+
+        const std::string vpath = std::string("asset:") + std::filesystem::path(rel_path).generic_string();
+        AssetID asset_id = findAssetByVPath(vpath);
+
+        if (asset_id.value == 0)
+        {
+            if (!m_services.editor_resources)
+            {
+                m_editor_ui.context().setStatusMessage("Cannot import dropped asset.");
+                return false;
+            }
+
+            ImportRequest request{};
+            request.source_path = vpath;
+            const ImportResult result = m_services.editor_resources->importAsset(request);
+            if (!result.success || result.primary_id.value == 0)
+            {
+                m_editor_ui.context().setStatusMessage(
+                    result.message.empty() ? "Asset import failed." : result.message);
+                return false;
+            }
+
+            asset_id = result.primary_id;
+        }
+
+        return instantiateSceneAsset(asset_id);
+    }
+
+    glm::vec3 EditorLayer::getSceneDropPosition() const
+    {
+        return m_editor_camera.getPosition() + m_editor_camera.getForwardDirection() * 6.0f;
+    }
+
+    bool EditorLayer::instantiateSceneAsset(AssetID asset_id)
+    {
+        auto& ctx = m_editor_ui.context();
+        if (asset_id.value == 0 || !ctx.active_scene)
+            return false;
+
+        if (ctx.is_play_mode && ctx.is_play_mode())
+        {
+            ctx.setStatusMessage("Cannot instantiate assets during Play Mode.");
+            return false;
+        }
+
+        if (!m_services.resources)
+            return false;
+
+        auto registry = m_services.resources->getRegistry();
+        if (!registry)
+            return false;
+
+        const auto* meta = registry->find(asset_id);
+        if (!meta || !meta->is_valid)
+        {
+            ctx.setStatusMessage("Dropped asset is invalid.");
+            return false;
+        }
+
+        if (meta->type != AssetType::Mesh)
+        {
+            if (meta->type == AssetType::Scene)
+                ctx.setStatusMessage("Scene assets cannot be instantiated into Scene View.");
+            else
+                ctx.setStatusMessage("Dropped asset type is not instantiable yet.");
+            return false;
+        }
+
+        std::string name = "Mesh";
+        if (!meta->source_path.empty())
+            name = std::filesystem::path(meta->source_path.substr(meta->source_path.find(':') + 1)).stem().string();
+        if (name.empty())
+            name = "Mesh";
+
+        Entity entity = ctx.active_scene->createRenderableEntity(name);
+        auto& tr = entity.GetComponent<TransformComponent>();
+        tr.Position = getSceneDropPosition();
+        tr.DirtyLocal = true;
+        tr.DirtyWorld = true;
+
+        auto& renderer = entity.GetComponent<MeshRendererComponent>();
+        renderer.Mesh = asset_id;
+
+        ctx.active_scene->MarkDirtyRecursive(entity);
+        ctx.selected = entity.GetHandle();
+        ctx.markSceneDirty();
+        ctx.setStatusMessage("Instantiated mesh into scene.");
+        return true;
     }
 
     void EditorLayer::updateEditorCamera(float dt)

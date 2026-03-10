@@ -1,6 +1,7 @@
 #include "project_panel.h"
 
 #include "editor/core/editor_context.h"
+#include "editor/core/editor_drag_drop.h"
 #include "editor/platform/windows/file_dialogs_win32.h"
 
 #include <algorithm>
@@ -46,6 +47,7 @@ namespace Hybrid
         const bool can_open = has_target && (is_dir || target->rel.extension() == ".scene");
         const bool can_copy_asset_path = has_target && !target->rel.empty();
         const bool can_duplicate = has_target;
+        const bool can_reimport = has_target && !is_dir && !target->rel.empty() && ctx.request_reimport_asset;
         const bool can_show_in_explorer = has_target || !m_currentDir.empty();
         const bool can_new_folder_here = (!has_target || is_dir);
         const bool can_rename = has_target;
@@ -85,6 +87,12 @@ namespace Hybrid
         {
             if (duplicateEntry(ctx, *target))
                 gatherEntries(m_currentDir);
+        }
+
+        if (ImGui::MenuItem("Reimport", nullptr, false, can_reimport))
+        {
+            if (ctx.request_reimport_asset)
+                (void)ctx.request_reimport_asset(relToAssetVPath(target->rel));
         }
 
         ImGui::Separator();
@@ -647,6 +655,18 @@ namespace Hybrid
             if (clicked)
             {
                 m_selectedRelStr = relStr;
+            }
+
+            if (!e.is_dir && !relStr.empty())
+            {
+                AssetID asset_id{};
+                if (ctx.find_asset_by_vpath)
+                    asset_id = ctx.find_asset_by_vpath(relToAssetVPath(e.rel));
+
+                if (asset_id.value != 0)
+                    EditorDragDrop::BeginDragAsset(asset_id);
+                else
+                    EditorDragDrop::BeginDragProjectPath(relStr.c_str());
             }
 
             const bool double_clicked = ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);

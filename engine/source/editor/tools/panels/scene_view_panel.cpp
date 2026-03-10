@@ -1,6 +1,7 @@
 #include "scene_view_panel.h"
 
 #include "editor/core/editor_context.h"
+#include "editor/core/editor_drag_drop.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -228,6 +229,19 @@ namespace Hybrid
 
         ImGui::GetWindowDrawList()->AddImage(
             (ImTextureID)(intptr_t)m_colorTextureID, canvas_min, canvas_max, {0, 1}, {1, 0});
+
+        if (ImGui::BeginDragDropTargetCustom(ImRect(canvas_min, canvas_max), ImGui::GetID("##SceneViewAssetDropTarget")))
+        {
+            AssetID dropped_asset{};
+            if (ctx.instantiate_scene_asset && EditorDragDrop::AcceptAsset(dropped_asset))
+                (void)ctx.instantiate_scene_asset(dropped_asset);
+
+            std::string dropped_rel_path;
+            if (ctx.instantiate_scene_project_path && EditorDragDrop::AcceptProjectPath(dropped_rel_path))
+                (void)ctx.instantiate_scene_project_path(dropped_rel_path);
+
+            ImGui::EndDragDropTarget();
+        }
 
         ctx.scene_viewport_image_hovered = ImGui::IsMouseHoveringRect(canvas_min, canvas_max, false);
         ctx.scene_viewport_hovered = ctx.scene_viewport_image_hovered;

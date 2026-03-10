@@ -39,6 +39,11 @@ namespace Hybrid
         void syncSceneViewState();
         void updateFrameContext();         // Push current editor state into FrameContext/Flags/Ext.
         void updateEditorCamera(float dt);
+        bool reimportAsset(const std::string& asset_vpath);
+        AssetID findAssetByVPath(const std::string& asset_vpath) const;
+        bool instantiateSceneAsset(AssetID asset_id);
+        bool instantiateSceneProjectPath(const std::string& rel_path);
+        glm::vec3 getSceneDropPosition() const;
         void bindAssetChangeCallback();
         void pollFileWatcher();
         bool toAssetVPath(const std::filesystem::path& physical_path, std::string& out_vpath) const;
