@@ -194,6 +194,7 @@ namespace Hybrid
         frame_context->viewport_size = {ctx.viewport_size.x, ctx.viewport_size.y};
         editor_ext->viewport_active = ctx.viewport_image_hovered;
         editor_ext->use_game_camera = ctx.use_game_camera;
+        editor_ext->show_collider_debug = ctx.show_collider_debug;
         editor_ext->selected_entity_id =
             (ctx.selected == entt::null) ? 0u : static_cast<uint32_t>(entt::to_integral(ctx.selected));
         editor_ext->pan_tool = ctx.pan_tool;

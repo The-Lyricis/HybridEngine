@@ -131,6 +131,8 @@ namespace Hybrid
         auto dynamicView = registry.view<TransformComponent, RigidbodyComponent, ColliderComponent>();
         auto staticView = registry.view<TransformComponent, ColliderComponent>();
 
+        constexpr float kCollisionSlop = 0.001f;
+
         for (auto dynamicEntity : dynamicView)
         {
             auto& dynamicTransform = dynamicView.get<TransformComponent>(dynamicEntity);
@@ -140,7 +142,7 @@ namespace Hybrid
             if (!dynamicCollider.Enabled || dynamicCollider.Type != ColliderType::Box)
                 continue;
 
-            const AABB dynamicAABB = buildAABB(dynamicTransform, dynamicCollider);
+            AABB dynamicAABB = buildAABB(dynamicTransform, dynamicCollider);
 
             for (auto staticEntity : staticView)
             {
@@ -159,10 +161,20 @@ namespace Hybrid
                 const AABB staticAABB = buildAABB(staticTransform, staticCollider);
                 const CollisionHit hit = intersectAABB(dynamicAABB, staticAABB);
 
-                if (hit.Hit)
+                if (!hit.Hit)
+                    continue;
+
+                const float correction = hit.Penetration + kCollisionSlop;
+                dynamicTransform.Position -= hit.Normal * correction;
+                dynamicTransform.DirtyLocal = true;
+                dynamicTransform.DirtyWorld = true;
+
+                if (std::abs(hit.Normal.y) > 0.5f && dynamicBody.Velocity.y < 0.0f)
                 {
-                    HBD_CORE_TRACE("Collision detected. Penetration = {}", hit.Penetration);
+                    dynamicBody.Velocity.y = 0.0f;
                 }
+
+                dynamicAABB = buildAABB(dynamicTransform, dynamicCollider);
             }
         }
     }

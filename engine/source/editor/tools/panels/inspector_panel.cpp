@@ -5,6 +5,8 @@
 #include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/entity.h"
 #include "runtime/core/base/math_util.h"
+#include "runtime/modules/physics/components/collider_component.h"
+#include "runtime/modules/physics/components/rigidbody_component.h"
 
 #include <imgui.h>
 #include <entt/entt.hpp>
@@ -12,6 +14,12 @@
 
 namespace Hybrid
 {
+    static const char* kColliderTypeNames[] =
+    {
+        "None",
+        "Box",
+        "Sphere"
+    };
     static bool DrawVec3Control(const char* label, glm::vec3& value, float speed)
     {
         ImGui::PushID(label);
@@ -94,6 +102,85 @@ namespace Hybrid
             {
                 tr->DirtyLocal = true;
                 ctx.active_scene->MarkDirtyRecursive(Entity(ctx.selected, &reg, ctx.active_scene));
+            }
+        }
+        ImGui::Separator();
+
+        // Collider
+        if (auto* collider = reg.try_get<ColliderComponent>(ctx.selected))
+        {
+            if (ImGui::TreeNodeEx("Collider", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::Checkbox("Enabled", &collider->Enabled);
+                ImGui::Checkbox("Is Trigger", &collider->IsTrigger);
+
+                int type_index = static_cast<int>(collider->Type);
+                if (ImGui::Combo("Type", &type_index, kColliderTypeNames, IM_ARRAYSIZE(kColliderTypeNames)))
+                {
+                    collider->Type = static_cast<ColliderType>(type_index);
+                }
+
+                DrawVec3Control("Center", collider->Center, 0.05f);
+
+                switch (collider->Type)
+                {
+                case ColliderType::Box:
+                {
+                    DrawVec3Control("Half Extents", collider->Box.HalfExtents, 0.05f);
+
+                    collider->Box.HalfExtents.x = std::max(0.0f, collider->Box.HalfExtents.x);
+                    collider->Box.HalfExtents.y = std::max(0.0f, collider->Box.HalfExtents.y);
+                    collider->Box.HalfExtents.z = std::max(0.0f, collider->Box.HalfExtents.z);
+                    break;
+                }
+                case ColliderType::Sphere:
+                {
+                    ImGui::PushID("Radius");
+                    ImGui::Columns(2);
+                    ImGui::SetColumnWidth(0, 90.0f);
+                    ImGui::TextUnformatted("Radius");
+                    ImGui::NextColumn();
+
+                    ImGui::DragFloat("##v", &collider->Sphere.Radius, 0.05f, 0.0f, 1000.0f);
+
+                    ImGui::Columns(1);
+                    ImGui::PopID();
+
+                    collider->Sphere.Radius = std::max(0.0f, collider->Sphere.Radius);
+                    break;
+                }
+                default:
+                    break;
+                }
+
+                ImGui::TreePop();
+            }
+        }
+        ImGui::Separator();
+
+        // Rigidbody
+        if (auto* rigidbody = reg.try_get<RigidbodyComponent>(ctx.selected))
+        {
+            if (ImGui::TreeNodeEx("Rigidbody", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::Checkbox("Use Gravity", &rigidbody->UseGravity);
+                ImGui::Checkbox("Is Kinematic", &rigidbody->IsKinematic);
+
+                ImGui::PushID("Mass");
+                ImGui::Columns(2);
+                ImGui::SetColumnWidth(0, 90.0f);
+                ImGui::TextUnformatted("Mass");
+                ImGui::NextColumn();
+                ImGui::DragFloat("##v", &rigidbody->Mass, 0.05f, 0.0f, 1000.0f);
+                ImGui::Columns(1);
+                ImGui::PopID();
+
+                rigidbody->Mass = std::max(0.0f, rigidbody->Mass);
+
+                DrawVec3Control("Velocity", rigidbody->Velocity, 0.05f);
+                DrawVec3Control("Force", rigidbody->Force, 0.05f);
+
+                ImGui::TreePop();
             }
         }
 

@@ -42,5 +42,7 @@ namespace Hybrid
         std::function<void()> enter_play_mode;
         std::function<void()> exit_play_mode;
         std::function<bool()> is_play_mode;
+
+        bool show_collider_debug = true;
     };
 } // namespace Hybrid

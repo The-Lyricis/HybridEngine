@@ -913,6 +913,10 @@ namespace Hybrid
 
             if (srcReg.all_of<RigidbodyComponent>(srcEntity))
                 dstReg.emplace_or_replace<RigidbodyComponent>(dstEntity, srcReg.get<RigidbodyComponent>(srcEntity));
+            if (srcReg.all_of<ColliderComponent>(srcEntity))
+                dstReg.emplace_or_replace<ColliderComponent>(
+                    dstEntity,
+                    srcReg.get<ColliderComponent>(srcEntity));
         }
 
         // 4) Remap transform hierarchy

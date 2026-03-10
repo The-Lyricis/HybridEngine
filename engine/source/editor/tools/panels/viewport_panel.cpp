@@ -239,6 +239,8 @@ namespace Hybrid
             ImGui::SameLine();
             if (ImGui::Button(ctx.use_game_camera ? "Switch to Editor Camera" : "Switch to Game Camera"))
                 ctx.use_game_camera = !ctx.use_game_camera;
+            ImGui::SameLine();
+            ImGui::Checkbox("Show Colliders", &ctx.show_collider_debug);
 
             ImGui::Separator();
         }

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <cstdint>
 #include <memory>
@@ -54,6 +54,7 @@ namespace Hybrid
         void createCubeResources();
         void ensureFramebufferSize(uint32_t w, uint32_t h);
         void createMeshShader();
+        void createDebugBoxShader();
 
         struct MeshGPU
         {
@@ -116,11 +117,14 @@ namespace Hybrid
             bool selected = false;
         };
 
+        
         struct RenderPacket
         {
             FrameData frame;
             LightData lights;
             std::vector<DrawItem> items;
+            bool showColliderDebug = false;
+            std::shared_ptr<Scene> scene;
         };
 
         // Extract ECS data + camera/light state into a draw packet.
@@ -151,6 +155,7 @@ namespace Hybrid
         std::shared_ptr<VertexArray> m_CubeVAO;
         std::shared_ptr<Shader> m_CubeShader;
         std::shared_ptr<Shader> m_MeshShader;
+        std::shared_ptr<Shader> m_DebugBoxShader;
 
         std::shared_ptr<AssetManager> m_AssetManager;
         std::unordered_map<AssetID, MeshGPU, AssetID::Hasher> m_MeshCache;
