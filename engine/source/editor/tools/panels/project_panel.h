@@ -30,7 +30,8 @@ namespace Hybrid
 
         void ensureRootInit();
         void drawCommonContextMenu(EditorContext& ctx, const Entry* target);
-        void renderToolbar(EditorContext& ctx);
+        void renderPathHeader() const;
+        void renderCreateFolderPopup();
         void renderDirectoryTree(EditorContext& ctx);
         void renderContent(EditorContext& ctx);
         void renderRenamePopup(EditorContext& ctx);
@@ -61,7 +62,6 @@ namespace Hybrid
         std::vector<Entry> m_entries;
 
         std::string m_selectedRelStr;
-        bool m_showMetaFiles = false;
 
         // Create-folder UI state.
         bool m_openCreateFolderPopup = false;
@@ -75,5 +75,6 @@ namespace Hybrid
         // Auto-refresh current folder view for external file changes.
         std::chrono::steady_clock::time_point m_lastAutoRefresh{};
         float m_autoRefreshIntervalSec = 0.3f;
+        bool m_columnsInitialized = false;
     };
 } // namespace Hybrid

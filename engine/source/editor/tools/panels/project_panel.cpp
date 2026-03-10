@@ -450,7 +450,7 @@ namespace Hybrid
             if (isHiddenFile(p))
                 continue;
 
-            if (!m_showMetaFiles && isMetaFile(p))
+            if (isMetaFile(p))
                 continue;
 
             if (!is_dir && !it->is_regular_file())
@@ -475,7 +475,7 @@ namespace Hybrid
         });
     }
 
-    void ProjectPanel::renderToolbar(EditorContext& ctx)
+    void ProjectPanel::renderPathHeader() const
     {
         std::string pathLabel = "Assets";
         if (!m_assetsRoot.empty() && !m_currentDir.empty())
@@ -487,33 +487,10 @@ namespace Hybrid
         }
 
         ImGui::TextUnformatted(pathLabel.c_str());
-        ImGui::SameLine();
+    }
 
-        if (ImGui::Button("Up"))
-        {
-            if (!m_assetsRoot.empty() && m_currentDir != m_assetsRoot)
-            {
-                m_currentDir = m_currentDir.parent_path();
-                gatherEntries(m_currentDir);
-                m_selectedRelStr.clear();
-            }
-        }
-        ImGui::SameLine();
-
-        if (ImGui::Button("Refresh"))
-        {
-            gatherEntries(m_currentDir);
-        }
-        ImGui::SameLine();
-
-        if (ImGui::Button("New Folder"))
-        {
-            openCreateFolderPopup();
-        }
-        ImGui::SameLine();
-
-        ImGui::Checkbox("Show .meta", &m_showMetaFiles);
-
+    void ProjectPanel::renderCreateFolderPopup()
+    {
         if (m_openCreateFolderPopup)
         {
             ImGui::OpenPopup("Create Folder");
@@ -653,8 +630,6 @@ namespace Hybrid
         if (m_assetsRoot.empty())
             return;
 
-        ImGui::Separator();
-
         bool request_refresh = false;
         bool request_clear_selection = false;
 
@@ -770,10 +745,13 @@ namespace Hybrid
 
         ImGui::Begin(getName(), &m_open);
 
-        renderToolbar(ctx);
-        ImGui::Separator();
-
+        const float project_panel_width = ImGui::GetContentRegionAvail().x;
         ImGui::Columns(2, "ProjectColumns", true);
+        if (!m_columnsInitialized)
+        {
+            ImGui::SetColumnWidth(0, project_panel_width * 0.25f);
+            m_columnsInitialized = true;
+        }
 
         ImGui::BeginChild("##ProjectTree");
         renderDirectoryTree(ctx);
@@ -782,11 +760,14 @@ namespace Hybrid
         ImGui::NextColumn();
 
         ImGui::BeginChild("##ProjectContent");
+        renderPathHeader();
+        ImGui::Separator();
         renderContent(ctx);
         ImGui::EndChild();
 
         ImGui::Columns(1);
 
+        renderCreateFolderPopup();
         ImGui::End();
     }
 } // namespace Hybrid
