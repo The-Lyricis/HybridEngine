@@ -17,6 +17,27 @@ namespace Hybrid
             return e != entt::null && reg.valid(e) && reg.all_of<TransformComponent>(e);
         }
 
+        void collectHierarchyOrder(entt::registry& reg,
+                                   entt::entity node,
+                                   std::vector<entt::entity>& out)
+        {
+            if (!hasTransform(reg, node))
+                return;
+
+            out.push_back(node);
+
+            entt::entity child = reg.get<TransformComponent>(node).FirstChild;
+            while (child != entt::null)
+            {
+                entt::entity next = entt::null;
+                if (hasTransform(reg, child))
+                    next = reg.get<TransformComponent>(child).NextSibling;
+
+                collectHierarchyOrder(reg, child, out);
+                child = next;
+            }
+        }
+
         glm::mat4 composeLocalMatrix(const TransformComponent& tc)
         {
             const glm::mat4 T = glm::translate(glm::mat4(1.0f), tc.Position);
@@ -407,12 +428,31 @@ namespace Hybrid
         auto& dstReg = dst->getRegistry();
 
         std::unordered_map<entt::entity, entt::entity> entityMap;
-
-        auto srcView = srcReg.view<const IDComponent, const TagComponent, const TransformComponent>();
-        for (auto srcEntity : srcView)
+        std::vector<entt::entity> roots;
         {
-            const auto& srcID = srcView.get<const IDComponent>(srcEntity);
-            const auto& srcTag = srcView.get<const TagComponent>(srcEntity);
+            auto rootView = srcReg.view<const TransformComponent>();
+            for (auto srcEntity : rootView)
+            {
+                const auto& tc = rootView.get<const TransformComponent>(srcEntity);
+                if (tc.Parent == entt::null)
+                    roots.push_back(srcEntity);
+            }
+        }
+
+        std::sort(roots.begin(), roots.end(), [](entt::entity a, entt::entity b)
+        {
+            return entt::to_integral(a) < entt::to_integral(b);
+        });
+
+        std::vector<entt::entity> orderedEntities;
+        auto& mutableSrcReg = const_cast<entt::registry&>(srcReg);
+        for (entt::entity root : roots)
+            collectHierarchyOrder(mutableSrcReg, root, orderedEntities);
+
+        for (auto srcEntity : orderedEntities)
+        {
+            const auto& srcID = srcReg.get<const IDComponent>(srcEntity);
+            const auto& srcTag = srcReg.get<const TagComponent>(srcEntity);
 
             Entity dstEntity = dst->createEntityWithUUID(srcID.ID, srcTag.Tag);
             entityMap[srcEntity] = dstEntity.GetHandle();

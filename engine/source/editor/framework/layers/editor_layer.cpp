@@ -271,6 +271,7 @@ namespace Hybrid
         editor_ext->selected_entity_id =
             (ctx.selected == entt::null) ? kInvalidEntityID : static_cast<uint32_t>(entt::to_integral(ctx.selected));
         editor_ext->pan_tool = ctx.pan_tool;
+        editor_ext->show_collider_debug = ctx.show_collider_debug;
 
         if (editor_ext->render_scene_view)
         {

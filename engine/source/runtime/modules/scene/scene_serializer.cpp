@@ -11,6 +11,8 @@
 #include "components.h"
 #include "uuid.h"
 
+#include <unordered_map>
+
 namespace Hybrid
 {
     namespace
@@ -394,17 +396,28 @@ namespace Hybrid
         }
 
         // Phase B: set parent relations (keep local)
+        std::unordered_map<uint64_t, std::vector<uint64_t>> children_by_parent;
+        children_by_parent.reserve(pending.size());
         for (const auto& rel : pending)
         {
-            if (rel.parent == 0)
+            if (rel.parent != 0)
+                children_by_parent[rel.parent].push_back(rel.self);
+        }
+
+        for (const auto& [parent_uuid, child_uuids] : children_by_parent)
+        {
+            Entity parent = scene.findEntityByUUID(UUID{ parent_uuid });
+            if (!parent.IsValid())
                 continue;
 
-            Entity child = scene.findEntityByUUID(UUID{ rel.self });
-            Entity parent = scene.findEntityByUUID(UUID{ rel.parent });
-            if (!child.IsValid() || !parent.IsValid())
-                continue;
+            for (auto it = child_uuids.rbegin(); it != child_uuids.rend(); ++it)
+            {
+                Entity child = scene.findEntityByUUID(UUID{ *it });
+                if (!child.IsValid())
+                    continue;
 
-            scene.SetParent(child, parent, /*worldPositionStays=*/false);
+                scene.SetParent(child, parent, /*worldPositionStays=*/false);
+            }
         }
 
         scene.onUpdate(0.0f);
