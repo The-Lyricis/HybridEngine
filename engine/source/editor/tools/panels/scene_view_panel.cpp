@@ -212,7 +212,7 @@ namespace Hybrid
 
         if (!g_ToolIcons.loaded)
         {
-            const std::string base = std::string(HYBRID_ROOT_DIR) + "/assets/icons/";
+            const std::string base = std::string(HYBRID_ROOT_DIR) + "/resources/icons/";
             g_ToolIcons.hand = LoadTextureRGBA8(base + "icon_editorTools_pan.png");
             g_ToolIcons.move = LoadTextureRGBA8(base + "icon_editorTools_drag.png");
             g_ToolIcons.rotate = LoadTextureRGBA8(base + "icon_editorTools_rotate.png");

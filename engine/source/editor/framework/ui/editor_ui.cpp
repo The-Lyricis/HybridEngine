@@ -365,7 +365,7 @@ namespace Hybrid
 
         if (!g_TopToolbarIcons.loaded)
         {
-            const std::string base = std::string(HYBRID_ROOT_DIR) + "/assets/icons/";
+            const std::string base = std::string(HYBRID_ROOT_DIR) + "/resources/icons/";
             g_TopToolbarIcons.play = LoadTextureRGBA8(base + "icon_topTool_play.png");
             g_TopToolbarIcons.pause = LoadTextureRGBA8(base + "icon_topTool_pause.png");
             g_TopToolbarIcons.stop = LoadTextureRGBA8(base + "icon_topTool_stop.png");

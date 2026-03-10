@@ -17,10 +17,10 @@ file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
 
 # ------------------------------------------------------------
 # Piccolo 风格：显式把 .rc 资源编进可执行文件，给 exe 设定图标
-# 资源目录在 editor/assets/win
+# 资源目录在 editor/resources/win
 # ------------------------------------------------------------
-set(APP_ICON_RC  "${CMAKE_CURRENT_SOURCE_DIR}/assets/win/app_icon.rc")
-set(APP_ICON_ICO "${CMAKE_CURRENT_SOURCE_DIR}/assets/win/app_icon.ico")
+set(APP_ICON_RC  "${CMAKE_CURRENT_SOURCE_DIR}/resources/win/app_icon.rc")
+set(APP_ICON_ICO "${CMAKE_CURRENT_SOURCE_DIR}/resources/win/app_icon.ico")
 
 if(WIN32 AND EXISTS "${APP_ICON_RC}" AND EXISTS "${APP_ICON_ICO}")
     set(EDITOR_RESOURCES "${APP_ICON_RC}")
@@ -75,13 +75,13 @@ add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
             "${BINARY_ROOT_DIR}"
 )
 
-# 2) 拷贝 editor/assets（仅当存在）
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets")
+# 2) 拷贝 editor/resources（仅当存在）
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resources")
     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}/assets"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}/resources"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/assets"
-                "${BINARY_ROOT_DIR}/assets"
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+                "${BINARY_ROOT_DIR}/resources"
     )
 endif()
 
