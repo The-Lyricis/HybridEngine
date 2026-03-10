@@ -483,17 +483,17 @@ namespace Hybrid
         ImGui::DockBuilderSetNodeSize(m_DockSpaceID, ImGui::GetMainViewport()->Size);
 
         ImGuiID dock_main = m_DockSpaceID;
-        ImGuiID dock_left = 0, dock_right = 0, dock_bottom = 0, dock_center = 0;
+        ImGuiID dock_right = 0, dock_left_area = 0, dock_project = 0, dock_top = 0, dock_hierarchy = 0;
 
-        ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Left, 0.20f, &dock_left, &dock_main);
-        ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Right, 0.25f, &dock_right, &dock_main);
-        ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Down, 0.25f, &dock_bottom, &dock_center);
+        ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Right, 0.25f, &dock_right, &dock_left_area);
+        ImGui::DockBuilderSplitNode(dock_left_area, ImGuiDir_Down, 0.30f, &dock_project, &dock_top);
+        ImGui::DockBuilderSplitNode(dock_top, ImGuiDir_Left, 0.22f, &dock_hierarchy, &dock_main);
 
-        ImGui::DockBuilderDockWindow("Hierarchy", dock_left);
         ImGui::DockBuilderDockWindow("Inspector", dock_right);
-        ImGui::DockBuilderDockWindow("Project", dock_bottom);
-        ImGui::DockBuilderDockWindow("Scene", dock_center);
-        ImGui::DockBuilderDockWindow("Game", dock_center);
+        ImGui::DockBuilderDockWindow("Project", dock_project);
+        ImGui::DockBuilderDockWindow("Hierarchy", dock_hierarchy);
+        ImGui::DockBuilderDockWindow("Scene", dock_main);
+        ImGui::DockBuilderDockWindow("Game", dock_main);
 
         ImGui::DockBuilderFinish(m_DockSpaceID);
     }

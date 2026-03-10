@@ -75,6 +75,6 @@ namespace Hybrid
         // Auto-refresh current folder view for external file changes.
         std::chrono::steady_clock::time_point m_lastAutoRefresh{};
         float m_autoRefreshIntervalSec = 0.3f;
-        bool m_columnsInitialized = false;
+        float m_leftPaneWidth = 0.0f;
     };
 } // namespace Hybrid

@@ -745,27 +745,47 @@ namespace Hybrid
 
         ImGui::Begin(getName(), &m_open);
 
-        const float project_panel_width = ImGui::GetContentRegionAvail().x;
-        ImGui::Columns(2, "ProjectColumns", true);
-        if (!m_columnsInitialized)
-        {
-            ImGui::SetColumnWidth(0, project_panel_width * 0.25f);
-            m_columnsInitialized = true;
-        }
+        const float panel_width = ImGui::GetContentRegionAvail().x;
+        const float panel_height = ImGui::GetContentRegionAvail().y;
+        const float splitter_width = 6.0f;
+        const float min_tree_width = 120.0f;
+        const float min_content_width = 200.0f;
+        const float max_tree_width = std::max(min_tree_width, panel_width - splitter_width - min_content_width);
 
-        ImGui::BeginChild("##ProjectTree");
+        if (m_leftPaneWidth <= 0.0f)
+            m_leftPaneWidth = panel_width * 0.25f;
+
+        m_leftPaneWidth = std::clamp(m_leftPaneWidth, min_tree_width, max_tree_width);
+
+        ImGui::BeginChild("##ProjectTree", ImVec2(m_leftPaneWidth, 0.0f), false);
         renderDirectoryTree(ctx);
         ImGui::EndChild();
 
-        ImGui::NextColumn();
+        ImGui::SameLine(0.0f, 0.0f);
 
-        ImGui::BeginChild("##ProjectContent");
+        ImGui::InvisibleButton("##ProjectSplitter", ImVec2(splitter_width, panel_height));
+        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        if (ImGui::IsItemActive())
+            m_leftPaneWidth = std::clamp(m_leftPaneWidth + ImGui::GetIO().MouseDelta.x, min_tree_width, max_tree_width);
+
+        const ImVec2 splitter_min = ImGui::GetItemRectMin();
+        const ImVec2 splitter_max = ImGui::GetItemRectMax();
+        ImU32 splitter_color = ImGui::GetColorU32(ImGuiCol_Separator);
+        if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+            splitter_color = ImGui::GetColorU32(ImGuiCol_SeparatorHovered);
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(splitter_min.x, splitter_min.y),
+                                            ImVec2(splitter_min.x, splitter_max.y),
+                                            splitter_color,
+                                            1.0f);
+
+        ImGui::SameLine(0.0f, 0.0f);
+
+        ImGui::BeginChild("##ProjectContent", ImVec2(0.0f, 0.0f), false);
         renderPathHeader();
         ImGui::Separator();
         renderContent(ctx);
         ImGui::EndChild();
-
-        ImGui::Columns(1);
 
         renderCreateFolderPopup();
         ImGui::End();
