@@ -53,8 +53,10 @@ namespace Hybrid
 
         // One-shot startup check: enqueue only missing meta/cooked assets.
         void bootstrapImportOnce();
+        size_t reconcileMovedAssets();
         // Handle UI rename/move with stable AssetID.
         bool moveAsset(const std::string& old_source_vpath, const std::string& new_source_vpath);
+        bool renameFolder(const std::string& old_folder_vpath, const std::string& new_folder_vpath);
 
     private:
         struct PendingSourceChange
@@ -81,6 +83,7 @@ namespace Hybrid
 
         static bool normalizeAssetLogicalPath(const std::string& input, std::string& out_path);
         static AssetSourceChangeType mergeChangeType(AssetSourceChangeType existing, AssetSourceChangeType incoming);
+        static std::string buildDefaultCookedPath(const AssetMetadata& meta);
         static std::string makeSimpleHash(const std::filesystem::path& file);
 
     private:

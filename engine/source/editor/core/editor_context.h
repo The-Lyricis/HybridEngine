@@ -51,6 +51,7 @@ namespace Hybrid
         std::function<void(const AssetSourceEvent&)> notify_asset_source_event;
         std::function<void(const std::string& scene_vpath)> open_scene;
         std::function<bool(const std::string& asset_vpath)> request_reimport_asset;
+        std::function<bool(const std::string& old_folder_vpath, const std::string& new_folder_vpath)> request_rename_folder;
         std::function<bool()> request_save_scene;
         std::function<bool()> request_save_scene_as;
         std::function<AssetID(const std::string& asset_vpath)> find_asset_by_vpath;

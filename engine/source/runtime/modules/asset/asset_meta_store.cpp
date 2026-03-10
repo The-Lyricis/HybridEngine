@@ -188,6 +188,11 @@ namespace Hybrid
         return result;
     }
 
+    bool AssetMetaStore::loadOne(const std::filesystem::path& meta_file, AssetMetadata& out) const
+    {
+        return parseMetaFile(meta_file, out);
+    }
+
     bool AssetMetaStore::saveOne(const AssetMetadata& meta, const std::filesystem::path& assets_root)
     {
         if (!m_registry || assets_root.empty())
@@ -197,6 +202,8 @@ namespace Hybrid
         if (!isValidLogicalPath(meta.source_path))
             return false;
         if (!meta.cooked_path.empty() && !isValidLogicalPath(meta.cooked_path))
+            return false;
+        if ((meta.parent_id.value == 0) != (meta.subasset_key.empty()))
             return false;
 
         std::string source_alias, source_rel;
@@ -332,6 +339,31 @@ namespace Hybrid
         if (j.contains("hash") && j["hash"].is_string())
             meta.hash = j["hash"].get<std::string>();
 
+        if (j.contains("parent_id"))
+        {
+            if (!parseAssetId(j["parent_id"], meta.parent_id))
+            {
+                HBD_CORE_WARN("AssetMetaStore: invalid parent_id {}", file.string());
+                return false;
+            }
+        }
+
+        if (j.contains("subasset_key"))
+        {
+            if (!j["subasset_key"].is_string())
+            {
+                HBD_CORE_WARN("AssetMetaStore: invalid subasset_key {}", file.string());
+                return false;
+            }
+            meta.subasset_key = j["subasset_key"].get<std::string>();
+        }
+
+        if ((meta.parent_id.value == 0) != (meta.subasset_key.empty()))
+        {
+            HBD_CORE_WARN("AssetMetaStore: parent_id/subasset_key mismatch {}", file.string());
+            return false;
+        }
+
         if (j.contains("hard_deps"))
         {
             if (!parseAssetIdArray(j["hard_deps"], meta.hard_deps))
@@ -367,6 +399,10 @@ namespace Hybrid
         j["source_path"] = meta.source_path;
         j["cooked_path"] = meta.cooked_path;
         j["hash"] = meta.hash;
+        if (meta.parent_id.value != 0)
+            j["parent_id"] = std::to_string(meta.parent_id.value);
+        if (!meta.subasset_key.empty())
+            j["subasset_key"] = meta.subasset_key;
         j["is_valid"] = meta.is_valid;
 
         j["hard_deps"] = json::array();

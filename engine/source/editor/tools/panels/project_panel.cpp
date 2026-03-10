@@ -392,9 +392,21 @@ namespace Hybrid
 
         if (from_is_dir)
         {
-            for (const auto& old_rel : old_files)
+            auto old_rel = std::filesystem::relative(from, m_assetsRoot, ec);
+            if (ec)
+                return false;
+
+            ec.clear();
+            auto new_rel = std::filesystem::relative(to, m_assetsRoot, ec);
+            if (ec)
+                return false;
+
+            if (ctx.request_rename_folder)
+                return ctx.request_rename_folder(relToAssetVPath(old_rel), relToAssetVPath(new_rel));
+
+            for (const auto& old_file_rel : old_files)
             {
-                std::filesystem::path old_abs = m_assetsRoot / old_rel;
+                std::filesystem::path old_abs = m_assetsRoot / old_file_rel;
                 auto sub = std::filesystem::relative(old_abs, from, ec);
                 if (ec)
                 {
@@ -410,7 +422,7 @@ namespace Hybrid
                     continue;
                 }
 
-                notifyAssetMove(old_rel, new_rel);
+                notifyAssetMove(old_file_rel, new_rel);
             }
             return true;
         }
@@ -481,6 +493,182 @@ namespace Hybrid
                 return a.is_dir > b.is_dir;
             return a.physical.filename().string() < b.physical.filename().string();
         });
+    }
+
+    std::filesystem::path ProjectPanel::findRelocatedDirectoryCandidate() const
+    {
+        if (m_assetsRoot.empty() || m_entries.empty())
+            return {};
+
+        std::vector<std::string> child_names;
+        child_names.reserve(m_entries.size());
+        for (const auto& entry : m_entries)
+        {
+            const std::string name = entry.physical.filename().string();
+            if (!name.empty())
+                child_names.push_back(name);
+        }
+        if (child_names.empty())
+            return {};
+
+        auto score_directory = [this, &child_names](const std::filesystem::path& dir) -> size_t
+        {
+            std::error_code ec;
+            if (!std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
+                return 0;
+
+            size_t score = 0;
+            for (const auto& child_name : child_names)
+            {
+                if (std::filesystem::exists(dir / child_name, ec) && !ec)
+                    ++score;
+                ec.clear();
+            }
+            return score;
+        };
+
+        std::filesystem::path best_candidate;
+        size_t best_score = 0;
+        bool ambiguous = false;
+
+        const auto nearest_existing_parent = findNearestExistingDirectory();
+        if (!nearest_existing_parent.empty() && nearest_existing_parent != m_currentDir)
+        {
+            std::error_code ec;
+            for (std::filesystem::directory_iterator it(nearest_existing_parent, ec), end; it != end; it.increment(ec))
+            {
+                if (ec)
+                {
+                    ec.clear();
+                    continue;
+                }
+                if (!it->is_directory())
+                    continue;
+                if (isHiddenFile(it->path()))
+                    continue;
+
+                const size_t score = score_directory(it->path());
+                if (score == 0)
+                    continue;
+                if (score > best_score)
+                {
+                    best_score = score;
+                    best_candidate = it->path();
+                    ambiguous = false;
+                }
+                else if (score == best_score)
+                {
+                    ambiguous = true;
+                }
+            }
+        }
+
+        if (best_score > 0 && !ambiguous)
+            return best_candidate;
+
+        std::error_code ec;
+        for (std::filesystem::recursive_directory_iterator it(m_assetsRoot, ec), end; it != end; it.increment(ec))
+        {
+            if (ec)
+            {
+                ec.clear();
+                continue;
+            }
+            if (!it->is_directory())
+                continue;
+            if (isHiddenFile(it->path()))
+                continue;
+
+            const auto& candidate = it->path();
+            if (candidate == m_currentDir)
+                continue;
+
+            const size_t score = score_directory(candidate);
+            if (score == 0)
+                continue;
+
+            if (score > best_score)
+            {
+                best_score = score;
+                best_candidate = candidate;
+                ambiguous = false;
+            }
+            else if (score == best_score)
+            {
+                ambiguous = true;
+            }
+        }
+
+        if (best_score > 0 && !ambiguous)
+            return best_candidate;
+
+        return {};
+    }
+
+    std::filesystem::path ProjectPanel::findNearestExistingDirectory() const
+    {
+        if (m_assetsRoot.empty())
+            return {};
+
+        std::error_code ec;
+        std::filesystem::path candidate = m_currentDir.empty() ? m_assetsRoot : m_currentDir;
+        const std::filesystem::path root = m_assetsRoot.lexically_normal();
+
+        while (!candidate.empty())
+        {
+            const std::filesystem::path normalized = candidate.lexically_normal();
+            if (std::filesystem::exists(normalized, ec) && std::filesystem::is_directory(normalized, ec))
+                return normalized;
+            ec.clear();
+
+            if (normalized == root)
+                break;
+
+            const auto parent = normalized.parent_path();
+            if (parent.empty() || parent == normalized)
+                break;
+            candidate = parent;
+        }
+
+        if (std::filesystem::exists(root, ec) && std::filesystem::is_directory(root, ec))
+            return root;
+        return {};
+    }
+
+    bool ProjectPanel::ensureCurrentDirAvailable(EditorContext& ctx)
+    {
+        if (m_assetsRoot.empty())
+            return false;
+
+        std::error_code ec;
+        if (!m_currentDir.empty() && std::filesystem::exists(m_currentDir, ec) && std::filesystem::is_directory(m_currentDir, ec))
+            return false;
+
+        const auto relocated = findRelocatedDirectoryCandidate();
+        if (!relocated.empty())
+        {
+            m_currentDir = relocated;
+            gatherEntries(m_currentDir);
+            m_selectedRelStr.clear();
+            ctx.setStatusMessage("Current folder was moved externally. View relocated.");
+            return true;
+        }
+
+        const auto fallback = findNearestExistingDirectory();
+        if (!fallback.empty())
+        {
+            m_currentDir = fallback;
+            gatherEntries(m_currentDir);
+            m_selectedRelStr.clear();
+            ctx.setStatusMessage("Current folder no longer exists. Returned to nearest valid folder.");
+            return true;
+        }
+
+        m_currentDir = m_assetsRoot;
+        gatherEntries(m_currentDir);
+        m_selectedRelStr.clear();
+        ctx.setStatusMessage("Current folder no longer exists. Returned to Assets.");
+        return true;
     }
 
     void ProjectPanel::renderPathHeader() const
@@ -757,6 +945,8 @@ namespace Hybrid
                 const auto elapsed = std::chrono::duration<float>(now - m_lastAutoRefresh).count();
                 if (elapsed >= m_autoRefreshIntervalSec)
                 {
+                    if (ensureCurrentDirAvailable(ctx))
+                        m_lastAutoRefresh = now;
                     gatherEntries(m_currentDir);
                     m_lastAutoRefresh = now;
                 }

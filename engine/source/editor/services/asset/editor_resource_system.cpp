@@ -43,6 +43,24 @@ namespace Hybrid
             const std::string rel = (pos == std::string::npos) ? logical_path : logical_path.substr(pos + 1);
             return std::filesystem::path(rel).extension() == ".meta";
         }
+
+        std::string inferAssetVPathFromMetaFile(const std::filesystem::path& meta_file,
+                                                const std::filesystem::path& assets_root)
+        {
+            if (assets_root.empty() || meta_file.extension() != ".meta")
+                return {};
+
+            std::error_code ec;
+            const std::filesystem::path source_physical = meta_file.parent_path() / meta_file.stem();
+            if (!std::filesystem::exists(source_physical))
+                return {};
+
+            auto rel = std::filesystem::relative(source_physical, assets_root, ec);
+            if (ec || rel.empty())
+                return {};
+
+            return std::string("asset:") + rel.generic_string();
+        }
     } // namespace
 
     bool EditorResourceSystem::initialize(RuntimeResourceSystem& runtime_system)
@@ -235,6 +253,8 @@ namespace Hybrid
         if (assets_root.empty() || !std::filesystem::exists(assets_root))
             return;
 
+        (void)reconcileMovedAssets();
+
         size_t queued_missing_meta = 0;
         size_t queued_missing_cooked = 0;
         size_t scanned = 0;
@@ -344,12 +364,20 @@ namespace Hybrid
         }
 
         AssetMetadata moved = *old_meta;
+        const std::string old_default_cooked = buildDefaultCookedPath(moved);
         moved.source_path = new_norm;
         moved.is_valid = true;
 
         if (auto source_physical = vfs->resolve(new_norm))
         {
             moved.hash = makeSimpleHash(*source_physical);
+        }
+
+        if (!old_default_cooked.empty() && moved.cooked_path == old_default_cooked)
+        {
+            const std::string new_default_cooked = buildDefaultCookedPath(moved);
+            if (!new_default_cooked.empty())
+                moved.cooked_path = new_default_cooked;
         }
 
         const auto& assets_root = registry->getRoot();
@@ -380,6 +408,85 @@ namespace Hybrid
         clear_pending(old_norm);
         clear_pending(new_norm);
         registry->registerAsset(moved);
+
+        if (m_importManager && m_importManager->canImport(new_norm, moved.type))
+            enqueueManualReimport(new_norm);
+
+        return true;
+    }
+
+    bool EditorResourceSystem::renameFolder(const std::string& old_folder_vpath, const std::string& new_folder_vpath)
+    {
+        if (!m_runtime || !m_metaStore)
+            return false;
+
+        std::string old_norm;
+        std::string new_norm;
+        if (!normalizeAssetLogicalPath(old_folder_vpath, old_norm) ||
+            !normalizeAssetLogicalPath(new_folder_vpath, new_norm))
+        {
+            HBD_CORE_WARN("EditorResourceSystem: rename folder path invalid ({} -> {})",
+                          old_folder_vpath,
+                          new_folder_vpath);
+            return false;
+        }
+
+        if (old_norm == new_norm)
+            return true;
+
+        auto registry = m_runtime->getRegistry();
+        auto vfs = m_runtime->getVFS();
+        if (!registry || !vfs)
+            return false;
+
+        const auto& assets_root = registry->getRoot();
+        if (assets_root.empty())
+            return false;
+
+        const std::string old_prefix = old_norm + "/";
+        const std::string new_prefix = new_norm + "/";
+        const auto assets = registry->getAllAssets();
+
+        size_t moved_count = 0;
+        for (auto meta : assets)
+        {
+            if (meta.source_path.rfind(old_prefix, 0) != 0)
+                continue;
+
+            const std::string old_source = meta.source_path;
+            const std::string old_default_cooked = buildDefaultCookedPath(meta);
+            meta.source_path = new_prefix + old_source.substr(old_prefix.size());
+
+            if (auto source_physical = vfs->resolve(meta.source_path))
+                meta.hash = makeSimpleHash(*source_physical);
+
+            if (!old_default_cooked.empty() && meta.cooked_path == old_default_cooked)
+            {
+                const std::string new_default_cooked = buildDefaultCookedPath(meta);
+                if (!new_default_cooked.empty())
+                    meta.cooked_path = new_default_cooked;
+            }
+
+            if (!m_metaStore->saveOne(meta, assets_root))
+            {
+                HBD_CORE_WARN("EditorResourceSystem: rename folder save meta failed {}", meta.source_path);
+                return false;
+            }
+
+            m_pending_changes.erase(old_source);
+            m_pending_changes.erase(meta.source_path);
+            m_event_queue.erase(std::remove(m_event_queue.begin(), m_event_queue.end(), old_source), m_event_queue.end());
+            m_event_queue.erase(std::remove(m_event_queue.begin(), m_event_queue.end(), meta.source_path), m_event_queue.end());
+            registry->registerAsset(meta);
+            if (m_importManager && m_importManager->canImport(meta.source_path, meta.type))
+                enqueueManualReimport(meta.source_path);
+            ++moved_count;
+        }
+
+        HBD_CORE_INFO("EditorResourceSystem: renamed folder {} -> {}, updated {} assets",
+                      old_norm,
+                      new_norm,
+                      moved_count);
         return true;
     }
 
@@ -399,14 +506,25 @@ namespace Hybrid
             return false;
         }
 
-        registry->registerAsset(meta);
+        std::string old_source_path;
+        if (const auto* existing = registry->find(meta.id))
+        {
+            if (!existing->source_path.empty() && existing->source_path != meta.source_path)
+                old_source_path = existing->source_path;
+        }
 
         const bool ok = m_metaStore->saveOne(meta, asset_root);
         if (!ok)
         {
             HBD_CORE_ERROR("Editor save meta failed for {}", meta.source_path);
+            return false;
         }
-        return ok;
+
+        if (!old_source_path.empty())
+            (void)m_metaStore->removeOne(old_source_path, asset_root);
+
+        registry->registerAsset(meta);
+        return true;
     }
 
     void EditorResourceSystem::registerDefaultImporters()
@@ -418,6 +536,85 @@ namespace Hybrid
         m_importManager->registerImporter(std::make_shared<MeshImporter>());
         m_importManager->registerImporter(std::make_shared<AudioImporter>());
         m_importManager->registerImporter(std::make_shared<SceneImporter>());
+    }
+
+    size_t EditorResourceSystem::reconcileMovedAssets()
+    {
+        if (!m_runtime || !m_metaStore)
+            return 0;
+
+        auto registry = m_runtime->getRegistry();
+        auto vfs = m_runtime->getVFS();
+        if (!registry || !vfs)
+            return 0;
+
+        const auto& assets_root = registry->getRoot();
+        if (assets_root.empty() || !std::filesystem::exists(assets_root))
+            return 0;
+
+        size_t reconciled = 0;
+        std::error_code ec;
+        std::filesystem::recursive_directory_iterator it(assets_root, ec), end;
+        if (ec)
+            return 0;
+
+        for (; it != end; it.increment(ec))
+        {
+            if (ec)
+            {
+                ec.clear();
+                continue;
+            }
+
+            if (!it->is_regular_file())
+                continue;
+            if (it->path().extension() != ".meta")
+                continue;
+
+            AssetMetadata meta{};
+            if (!m_metaStore->loadOne(it->path(), meta))
+                continue;
+
+            if (meta.source_path.empty() || vfs->exists(meta.source_path))
+                continue;
+
+            std::string inferred_vpath = inferAssetVPathFromMetaFile(it->path(), assets_root);
+            if (inferred_vpath.empty() || inferred_vpath == meta.source_path)
+                continue;
+
+            const std::string old_default_cooked = buildDefaultCookedPath(meta);
+            meta.source_path = inferred_vpath;
+
+            auto source_physical = vfs->resolve(inferred_vpath);
+            if (source_physical)
+                meta.hash = makeSimpleHash(*source_physical);
+
+            if (!old_default_cooked.empty() && meta.cooked_path == old_default_cooked)
+            {
+                const std::string new_default_cooked = buildDefaultCookedPath(meta);
+                if (!new_default_cooked.empty())
+                    meta.cooked_path = new_default_cooked;
+            }
+
+            if (!m_metaStore->saveOne(meta, assets_root))
+            {
+                HBD_CORE_WARN("EditorResourceSystem: reconcile save failed for {}", inferred_vpath);
+                continue;
+            }
+
+            registry->registerAsset(meta);
+            if (m_importManager && m_importManager->canImport(meta.source_path, meta.type))
+                enqueueManualReimport(meta.source_path);
+            ++reconciled;
+            HBD_CORE_INFO("EditorResourceSystem: reconciled moved asset {} -> {}",
+                          it->path().string(),
+                          inferred_vpath);
+        }
+
+        if (reconciled > 0)
+            HBD_CORE_INFO("EditorResourceSystem: reconciled {} moved assets from meta scan", reconciled);
+
+        return reconciled;
     }
 
     void EditorResourceSystem::emitAssetsReloaded(AssetsReloadedEvent event) const
@@ -610,6 +807,33 @@ namespace Hybrid
             return AssetSourceChangeType::Added;
 
         return AssetSourceChangeType::Modified;
+    }
+
+    std::string EditorResourceSystem::buildDefaultCookedPath(const AssetMetadata& meta)
+    {
+        if (meta.source_path.empty())
+            return {};
+
+        const auto colon_pos = meta.source_path.find(':');
+        if (colon_pos == std::string::npos || colon_pos + 1 >= meta.source_path.size())
+            return {};
+
+        std::filesystem::path rel(meta.source_path.substr(colon_pos + 1));
+        switch (meta.type)
+        {
+        case AssetType::Mesh:
+            rel.replace_extension(".hmesh");
+            return std::string("cache:Cooked/") + rel.generic_string();
+        case AssetType::Texture2D:
+        case AssetType::TextureCube:
+            rel.replace_extension(".htex");
+            return std::string("cache:Cooked/") + rel.generic_string();
+        case AssetType::Scene:
+            rel.replace_extension(".hscene");
+            return std::string("cache:Cooked/") + rel.generic_string();
+        default:
+            return {};
+        }
     }
 
     std::string EditorResourceSystem::makeSimpleHash(const std::filesystem::path& file)

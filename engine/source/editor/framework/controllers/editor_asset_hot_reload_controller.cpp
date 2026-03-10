@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <utility>
+#include <vector>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -118,6 +119,19 @@ namespace Hybrid
         return true;
     }
 
+    bool EditorAssetHotReloadController::requestRenameFolder(const std::string& old_folder_vpath,
+                                                             const std::string& new_folder_vpath)
+    {
+        if (old_folder_vpath.empty() || new_folder_vpath.empty() || !m_services.editor_resources)
+            return false;
+
+        if (!m_services.editor_resources->renameFolder(old_folder_vpath, new_folder_vpath))
+            return false;
+
+        setStatusMessage("Folder renamed.");
+        return true;
+    }
+
     void EditorAssetHotReloadController::handleAssetsReloaded(const AssetsReloadedEvent& event)
     {
         if (m_services.resources)
@@ -162,10 +176,39 @@ namespace Hybrid
             return;
 
         m_file_watcher_poll_elapsed = 0.0f;
-        m_file_watcher.poll([this](const std::filesystem::path& physical_path, FileWatcherChangeType type) {
+        std::vector<std::pair<std::filesystem::path, FileWatcherChangeType>> events;
+        m_file_watcher.poll([&events](const std::filesystem::path& physical_path, FileWatcherChangeType type) {
+            events.emplace_back(physical_path, type);
+        });
+
+        bool has_topology_change = false;
+        for (const auto& [path, type] : events)
+        {
+            (void)path;
+            if (type == FileWatcherChangeType::Added || type == FileWatcherChangeType::Removed)
+            {
+                has_topology_change = true;
+                break;
+            }
+        }
+
+        if (has_topology_change)
+            (void)m_services.editor_resources->reconcileMovedAssets();
+
+        auto registry = m_services.resources ? m_services.resources->getRegistry() : nullptr;
+        for (const auto& [physical_path, type] : events)
+        {
             std::string source_vpath;
             if (!toAssetVPath(physical_path, source_vpath))
-                return;
+                continue;
+
+            if (registry)
+            {
+                if (type == FileWatcherChangeType::Added && registry->findByPath(source_vpath))
+                    continue;
+                if (type == FileWatcherChangeType::Removed && !registry->findByPath(source_vpath))
+                    continue;
+            }
 
             const AssetSourceChangeType change =
                 (type == FileWatcherChangeType::Removed)
@@ -173,7 +216,7 @@ namespace Hybrid
                     : (type == FileWatcherChangeType::Added ? AssetSourceChangeType::Added
                                                             : AssetSourceChangeType::Modified);
             m_services.editor_resources->enqueueSourceChanged(source_vpath, change);
-        });
+        }
     }
 
     float EditorAssetHotReloadController::getFileWatcherPollInterval() const

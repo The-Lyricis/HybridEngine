@@ -20,9 +20,8 @@ namespace Hybrid
         Script
     };
 
-    // 序列化映射
-    AssetType    AssetTypeFromString(const std::string& name);
-    std::string  AssetTypeToString(AssetType type);
+    AssetType AssetTypeFromString(const std::string& name);
+    std::string AssetTypeToString(AssetType type);
 
     struct AssetID
     {
@@ -41,7 +40,7 @@ namespace Hybrid
 
     struct AssetHandle
     {
-        AssetID  id{};
+        AssetID id{};
         uint32_t generation = 0;
 
         bool valid() const { return id.value != 0; }
@@ -49,14 +48,15 @@ namespace Hybrid
 
     struct AssetMetadata
     {
-        AssetID     id{};
-        AssetType   type{AssetType::Unknown}; // 资源类型
-        std::string source_path;              // 逻辑路径 alias:relative
-        std::string cooked_path;              // 逻辑路径 alias:relative
-        std::string hash;                     // 源文件 + 导入设置哈希
-        std::vector<AssetID> hard_deps;       // 必需依赖
-        std::vector<AssetID> soft_deps;       // 可选依赖
+        AssetID id{};
+        AssetType type{AssetType::Unknown};
+        std::string source_path;
+        std::string cooked_path;
+        std::string hash;
+        AssetID parent_id{};
+        std::string subasset_key;
+        std::vector<AssetID> hard_deps;
+        std::vector<AssetID> soft_deps;
         bool is_valid = false;
     };
 } // namespace Hybrid
-

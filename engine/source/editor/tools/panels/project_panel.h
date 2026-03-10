@@ -53,6 +53,9 @@ namespace Hybrid
         bool duplicateEntry(EditorContext& ctx, const Entry& e);
         bool deleteEntry(EditorContext& ctx, const Entry& e);
         bool renameEntry(EditorContext& ctx, const std::filesystem::path& from, const std::filesystem::path& to);
+        bool ensureCurrentDirAvailable(EditorContext& ctx);
+        std::filesystem::path findRelocatedDirectoryCandidate() const;
+        std::filesystem::path findNearestExistingDirectory() const;
 
     private:
         std::filesystem::path m_assetsRoot;

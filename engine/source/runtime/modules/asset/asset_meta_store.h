@@ -22,6 +22,7 @@ namespace Hybrid
         explicit AssetMetaStore(std::shared_ptr<AssetRegistry> registry);
 
         AssetMetaLoadResult loadAll(const std::filesystem::path& assets_root);
+        bool loadOne(const std::filesystem::path& meta_file, AssetMetadata& out) const;
         bool saveOne(const AssetMetadata& meta, const std::filesystem::path& assets_root);
         bool removeOne(const std::string& source_path, const std::filesystem::path& assets_root);
 

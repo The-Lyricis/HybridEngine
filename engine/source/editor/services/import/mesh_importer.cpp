@@ -175,6 +175,11 @@ namespace Hybrid
             return std::string("asset:") + sub_rel.generic_string();
         }
 
+        std::string buildMaterialSubassetKey(const std::string& material_name, int material_index)
+        {
+            return std::string("material:") + sanitizeToken(material_name) + ":" + std::to_string(material_index);
+        }
+
         std::string buildReferencedAssetPath(const std::string& source_rel_path, const std::string& ref_path)
         {
             if (ref_path.empty())
@@ -559,6 +564,12 @@ namespace Hybrid
             return out;
         }
 
+        AssetID mesh_asset_id{};
+        if (const auto* existing_mesh = registry.findByPath(request.source_path))
+            mesh_asset_id = existing_mesh->id;
+        else
+            mesh_asset_id = registry.generateUniqueID();
+
         // Inline material sub-assets generation for OBJ/MTL.
         std::unordered_map<int, AssetID> material_index_to_id;
         std::vector<AssetMetadata> generated_assets;
@@ -601,12 +612,17 @@ namespace Hybrid
 
             const std::string material_source_path =
                 buildMaterialSubassetSourcePath(src_rel, material_name, material_index);
+            const std::string subasset_key = buildMaterialSubassetKey(material_name, material_index);
 
             AssetMetadata material_meta{};
-            if (const auto* existing = registry.findByPath(material_source_path))
+            std::string previous_material_source_path;
+            if (const auto* existing = registry.findBySubasset(mesh_asset_id, subasset_key))
+                material_meta = *existing;
+            else if (const auto* existing = registry.findByPath(material_source_path))
                 material_meta = *existing;
             else
                 material_meta.id = registry.generateUniqueID();
+            previous_material_source_path = material_meta.source_path;
 
             auto importTextureRef = [&](const std::string& ref_path) -> AssetID {
                 const std::string texture_source_path = buildReferencedAssetPath(src_rel, ref_path);
@@ -712,6 +728,15 @@ namespace Hybrid
                 return out;
             }
 
+            if (!previous_material_source_path.empty() && previous_material_source_path != material_source_path)
+            {
+                if (auto previous_native = vfs.resolve(previous_material_source_path))
+                {
+                    std::error_code remove_ec;
+                    std::filesystem::remove(*previous_native, remove_ec);
+                }
+            }
+
             {
                 std::ofstream material_ofs(*material_native, std::ios::binary | std::ios::trunc);
                 if (!material_ofs)
@@ -732,6 +757,8 @@ namespace Hybrid
             material_meta.source_path = material_source_path;
             material_meta.cooked_path.clear();
             material_meta.hash = request.hash + "|mtl:" + std::to_string(material_index) + ":" + material_name;
+            material_meta.parent_id = mesh_asset_id;
+            material_meta.subasset_key = subasset_key;
             material_meta.is_valid = true;
             material_meta.hard_deps.clear();
             material_meta.soft_deps.clear();
@@ -805,12 +832,14 @@ namespace Hybrid
         if (const auto* existing = registry.findByPath(request.source_path))
             mesh_meta = *existing;
         else
-            mesh_meta.id = registry.generateUniqueID();
+            mesh_meta.id = mesh_asset_id;
 
         mesh_meta.type = AssetType::Mesh;
         mesh_meta.source_path = request.source_path;
         mesh_meta.cooked_path = cooked_path;
         mesh_meta.hash = request.hash;
+        mesh_meta.parent_id = {};
+        mesh_meta.subasset_key.clear();
         mesh_meta.is_valid = true;
         mesh_meta.hard_deps.clear();
         mesh_meta.soft_deps.clear();

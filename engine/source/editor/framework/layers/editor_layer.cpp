@@ -106,6 +106,12 @@ namespace Hybrid
                 syncContextDocumentState();
                 return ok;
             };
+        ctx.request_rename_folder = [this](const std::string& old_folder_vpath, const std::string& new_folder_vpath) -> bool
+            {
+                const bool ok = m_asset_hot_reload_controller.requestRenameFolder(old_folder_vpath, new_folder_vpath);
+                syncContextDocumentState();
+                return ok;
+            };
         ctx.request_save_scene = [this]() -> bool
             {
                 const bool saved = m_scene_io.requestSave();
@@ -157,6 +163,7 @@ namespace Hybrid
         ctx.notify_asset_source_event = {};
         ctx.open_scene = {};
         ctx.request_reimport_asset = {};
+        ctx.request_rename_folder = {};
         ctx.request_save_scene = {};
         ctx.request_save_scene_as = {};
         ctx.find_asset_by_vpath = {};

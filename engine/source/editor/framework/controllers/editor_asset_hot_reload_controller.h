@@ -25,6 +25,7 @@ namespace Hybrid
 
         void update(float dt);
         bool requestReimport(const std::string& asset_vpath);
+        bool requestRenameFolder(const std::string& old_folder_vpath, const std::string& new_folder_vpath);
 
     private:
         void handleAssetsReloaded(const AssetsReloadedEvent& event);
