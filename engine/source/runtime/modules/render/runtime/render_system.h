@@ -142,7 +142,9 @@ namespace Hybrid
                                 const std::shared_ptr<Framebuffer>& framebuffer);
         void executePickingPass(const RenderPacket& packet, void* glfwWindowHandle);
         void executeSelectionOutlinePass(const RenderPacket& packet, void* glfwWindowHandle);
-        void executeGizmoPass(const RenderPacket& packet, void* glfwWindowHandle);
+        void executeGizmoPass(const RenderPacket& packet,
+            void* glfwWindowHandle,
+            const std::shared_ptr<Framebuffer>& framebuffer);
         void executeGridPass(const RenderPacket& packet, void* glfwWindowHandle);
         void executeShadowPass(const RenderPacket& packet, void* glfwWindowHandle);
         void executePostProcessPass(const RenderPacket& packet, void* glfwWindowHandle);
@@ -151,6 +153,7 @@ namespace Hybrid
         MeshGPU *getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh);
         MaterialGPU *getOrCreateMaterialGPU(AssetID id, const std::shared_ptr<Material> &mat);
         TexturePtr createSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+        MeshGPU* getOrCreateDebugBoxMeshGPU();
         
 
     private:

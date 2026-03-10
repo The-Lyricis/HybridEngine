@@ -572,7 +572,7 @@ void main()
         if (HasFlag(flags, RenderFlags::SelectionOutline))
             executeSelectionOutlinePass(packet, glfwWindowHandle);
         if (HasFlag(flags, RenderFlags::Gizmos))
-            executeGizmoPass(packet, glfwWindowHandle);
+            executeGizmoPass(packet, glfwWindowHandle, framebuffer);
         if (HasFlag(flags, RenderFlags::Grid))
             executeGridPass(packet, glfwWindowHandle);
         if (HasFlag(flags, RenderFlags::Shadows))
@@ -707,28 +707,35 @@ void main()
         (void)glfwWindowHandle;
     }
 
-    void RenderSystem::executeGizmoPass(const RenderPacket& packet, void* glfwWindowHandle)
+    void RenderSystem::executeGizmoPass(const RenderPacket& packet,
+        void* glfwWindowHandle,
+        const std::shared_ptr<Framebuffer>& framebuffer)
     {
         (void)glfwWindowHandle;
 
         if (!packet.showColliderDebug)
             return;
 
+        if (!framebuffer)
+            return;
+
         std::shared_ptr<Scene> scene = packet.scene;
         if (!scene)
             return;
 
-        if (!m_DebugBoxShader || !m_CubeVAO || !m_SceneFB)
+        if (!m_DebugBoxShader)
+            return;
+
+        auto* debugBoxMeshGPU = getOrCreateDebugBoxMeshGPU();
+        if (!debugBoxMeshGPU)
             return;
 
         auto& registry = scene->getRegistry();
         auto view = registry.view<TransformComponent, ColliderComponent>();
 
-        // 关键：画到 Scene framebuffer，而不是默认 framebuffer
-        m_SceneFB->bind();
-        RenderCommand::setViewport(0, 0, m_SceneFB->getWidth(), m_SceneFB->getHeight());
+        framebuffer->bind();
+        RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
 
-        // 不要清屏，只叠加绘制
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -736,7 +743,6 @@ void main()
 
         m_DebugBoxShader->bind();
         m_DebugBoxShader->setMat4("u_ViewProjection", packet.frame.viewProj);
-        m_DebugBoxShader->setVec4("u_Color", glm::vec4(0.2f, 0.95f, 0.35f, 1.0f));
 
         for (auto e : view)
         {
@@ -746,6 +752,10 @@ void main()
             if (!col.Enabled || col.Type != ColliderType::Box)
                 continue;
 
+            glm::vec4 color = glm::vec4(0.2f, 0.95f, 0.35f, 1.0f);
+            if (col.IsTrigger)
+                color = glm::vec4(1.0f, 0.85f, 0.2f, 1.0f);
+
             glm::mat4 colliderLocal =
                 glm::translate(glm::mat4(1.0f), col.Center) *
                 glm::scale(glm::mat4(1.0f), col.Box.HalfExtents * 2.0f);
@@ -753,13 +763,34 @@ void main()
             glm::mat4 model = tr.WorldMatrix * colliderLocal;
 
             m_DebugBoxShader->setMat4("u_Model", model);
-            Renderer::submit(m_CubeVAO, m_DebugBoxShader);
+            m_DebugBoxShader->setVec4("u_Color", color);
+
+            for (const auto& sm : debugBoxMeshGPU->submeshes)
+            {
+                debugBoxMeshGPU->vao->bind();
+                RenderCommand::drawIndexed(sm.index_count, sm.index_offset);
+            }
         }
 
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         glEnable(GL_CULL_FACE);
 
-        m_SceneFB->unbind();
+        framebuffer->unbind();
+    }
+
+    RenderSystem::MeshGPU* RenderSystem::getOrCreateDebugBoxMeshGPU()
+    {
+        static constexpr uint64_t kDebugBoxMeshRawID = 0xFFFFFFF1ull;
+        const AssetID debugBoxId = AssetID::FromRaw(kDebugBoxMeshRawID);
+
+        if (auto it = m_MeshCache.find(debugBoxId); it != m_MeshCache.end())
+            return &it->second;
+
+        auto cubeMesh = Mesh::CreateCube();
+        if (!cubeMesh)
+            return nullptr;
+
+        return getOrCreateMeshGPU(debugBoxId, cubeMesh);
     }
 
     void RenderSystem::executeGridPass(const RenderPacket& packet, void* glfwWindowHandle)
