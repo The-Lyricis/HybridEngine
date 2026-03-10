@@ -6,6 +6,7 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
+#include <shellapi.h>
 #include <objbase.h>
 #include <shobjidl.h>
 #include <windows.h>
@@ -105,6 +106,27 @@ namespace Hybrid
         CoTaskMemFree(raw_path);
         return selected;
     }
+
+    bool ShowInExplorerWin32(const std::filesystem::path& path)
+    {
+        if (path.empty() || !std::filesystem::exists(path))
+            return false;
+
+        const std::wstring wide = path.wstring();
+
+        HINSTANCE result = nullptr;
+        if (std::filesystem::is_directory(path))
+        {
+            result = ShellExecuteW(nullptr, L"open", wide.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        }
+        else
+        {
+            const std::wstring args = L"/select,\"" + wide + L"\"";
+            result = ShellExecuteW(nullptr, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+        }
+
+        return reinterpret_cast<intptr_t>(result) > 32;
+    }
 }
 
 #else
@@ -117,6 +139,11 @@ namespace Hybrid
         const std::wstring&)
     {
         return std::nullopt;
+    }
+
+    bool ShowInExplorerWin32(const std::filesystem::path&)
+    {
+        return false;
     }
 }
 

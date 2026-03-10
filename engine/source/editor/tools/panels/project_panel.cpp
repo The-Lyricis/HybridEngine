@@ -1,6 +1,7 @@
 #include "project_panel.h"
 
 #include "editor/core/editor_context.h"
+#include "editor/platform/windows/file_dialogs_win32.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -45,6 +46,7 @@ namespace Hybrid
         const bool can_open = has_target && (is_dir || target->rel.extension() == ".scene");
         const bool can_copy_asset_path = has_target && !target->rel.empty();
         const bool can_duplicate = has_target;
+        const bool can_show_in_explorer = has_target || !m_currentDir.empty();
         const bool can_new_folder_here = (!has_target || is_dir);
         const bool can_rename = has_target;
         const bool can_delete = has_target;
@@ -59,18 +61,6 @@ namespace Hybrid
         {
             if (openEntry(ctx, *target))
                 m_selectedRelStr.clear();
-        }
-
-        if (ImGui::MenuItem("Copy Asset Path", nullptr, false, can_copy_asset_path))
-        {
-            const auto vpath = relToAssetVPath(target->rel);
-            ImGui::SetClipboardText(vpath.c_str());
-        }
-
-        if (ImGui::MenuItem("Duplicate", nullptr, false, can_duplicate))
-        {
-            if (duplicateEntry(ctx, *target))
-                gatherEntries(m_currentDir);
         }
 
         if (ImGui::BeginMenu("Create"))
@@ -89,6 +79,23 @@ namespace Hybrid
             std::strncpy(m_renameInput, old_name.c_str(), sizeof(m_renameInput) - 1);
             m_renameInput[sizeof(m_renameInput) - 1] = '\0';
             m_openRenamePopup = true;
+        }
+
+        if (ImGui::MenuItem("Duplicate", nullptr, false, can_duplicate))
+        {
+            if (duplicateEntry(ctx, *target))
+                gatherEntries(m_currentDir);
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("Show in Explorer", nullptr, false, can_show_in_explorer))
+            (void)ShowInExplorerWin32(has_target ? target->physical : m_currentDir);
+
+        if (ImGui::MenuItem("Copy Asset Path", nullptr, false, can_copy_asset_path))
+        {
+            const auto vpath = relToAssetVPath(target->rel);
+            ImGui::SetClipboardText(vpath.c_str());
         }
 
         if (ImGui::MenuItem("Delete", nullptr, false, can_delete))
