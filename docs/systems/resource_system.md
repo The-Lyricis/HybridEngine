@@ -1,75 +1,205 @@
-# Resource System 说明
+# Resource System
 
-更新：2026-02-15  
-适用范围：`engine/source/runtime/function/asset`，`runtime/core/base/virtual_file_system.*`，`runtime/function/render/texture*`。
+Updated: 2026-03-10
+Scope: `TDA572/engine/source/runtime/modules/asset`, `TDA572/engine/source/editor/services/asset`
 
-## 目录与依赖
-- 核心代码：`function/asset/*`（AssetManager/Registry/Loader/ResourceSystem）、`core/base/virtual_file_system.*`
-- 渲染依赖：OpenGL（默认 Loader）、stb_image（纹理解码）
-- 宏：`HYBRID_PROJECT_ROOT_DIR`（源码根），可选 `HYBRID_ROOT_DIR`（bin/安装根）
+## Purpose
 
-## 核心职责
-- **VFS**：`IVirtualFileSystem` + `NativeFileSystem`，逻辑路径格式 `alias:/relative`，多挂载点优先级。
-- **AssetRegistry**：AssetID/元数据管理，路径规范化（逻辑路径或 root 相对），随机 64-bit ID 去重。
-- **AssetManager**：
-  - 状态机：Unloaded/Loading/Loaded/Failed
-  - 缓存 + in-flight 合并
-  - 默认资源回退（按 type_index）
-  - 纹理异步加载禁用（GPU 资源 async 直接回退默认）
-- **Loader**：当前实现 `GLTexture2DLoader`（stb 解码、GL 上下文检查、强制 RGBA）。
-- **ResourceSystem**：组合 VFS/Registry/Manager，挂载资源根；注册默认 Loader；创建 1x1 白纹理并设为默认 Texture。
+This document describes the current resource-system structure, the responsibility split between runtime and editor layers, and the current rules for import, registration, loading, caching, and default resources.
 
-## 初始化流程
-1) `ResourceSystem::initialize()`  
-   - 依次尝试 `HYBRID_ROOT_DIR/asset`、`HYBRID_PROJECT_ROOT_DIR/engine/asset`，首个存在即挂载为 `asset:/`。  
-   - 创建 `AssetRegistry`（root=asset root）。  
-   - 创建 `AssetManager` 并注册默认 Loader。  
-   - 创建 1x1 白纹理（通过 `Texture::Create` 工厂）并设为默认 Texture。
-2) Loader 注册：OpenGL 2D 纹理。
+## Current Structure
 
-## 加载流程（Texture 示例）
-```
-loadSync<Texture>(id):
-  - 查缓存 -> in-flight -> 状态置 Loading
-  - 拷贝元数据 -> 调用 Loader
-  - 写回状态/缓存；失败则回退默认纹理
+The current resource system is split into two layers:
 
-loadAsync<Texture>(id):
-  - 对 GPU 资源直接警告并返回默认纹理（禁用后台创建）
-```
+- runtime resource layer: `RuntimeResourceSystem`
+- editor resource layer: `EditorResourceSystem`
 
-## 默认资源
-- 1x1 RGBA 白纹理（运行时创建，GL 实现）。  
-- AssetManager 默认表：加载失败或 async 被禁用时回退。
+They share the same core asset infrastructure:
 
-## 注意事项 / 待办
-- **stb 实现**：确保有单独 `.cpp` 定义 `STB_IMAGE_IMPLEMENTATION` 参与 HybridRuntime 构建。
-- **GL 上下文**：Loader/析构仍要求在持有 GL 上下文的线程；尚无 GPU 回收队列。
-- **Cube/Array**：`GLTexture::Create` 仅完整实现 2D，其他类型待补数据上传。
-- **硬依赖/热重载**：尚未实现文件监听、硬依赖加载、默认 error 资源。
-- **路径要求**：元数据的 `source_path/cooked_path` 必须是逻辑路径 `alias:/relative`。
+- `IVirtualFileSystem`
+- `AssetRegistry`
+- `AssetMetaStore`
+- `AssetManager`
+- asset loaders
 
-## 使用摘记
-- 注册 Loader：ResourceSystem 内已默认注册 `GLTexture2DLoader`。
-- 设置默认：`AssetManager::setDefault<T>(ptr)`，回退通过 type_index 匹配。
-- VFS 解析：若相对部分以 `/` 或 `\` 开头会被剥离；alias 未找到返回 nullopt。
+## Core Responsibilities
 
-## Fixed Bugs
+### 1. `IVirtualFileSystem`
+
+Responsible for logical-path to physical-path mapping.
+
+Current rule:
+
+- logical paths such as `asset:Scenes/Demo.scene` should be used
+- mount points resolve them to real filesystem locations
+
+### 2. `AssetRegistry`
+
+Responsible for asset metadata indexing.
+
+Main responsibilities:
+
+- maintain `AssetID -> AssetMetadata`
+- maintain logical-path to `AssetID` mapping
+- generate new unique `AssetID`
+- provide a common lookup point for SceneSerializer, importers, and loaders
+
+### 3. `AssetMetaStore`
+
+Responsible for `.meta` file IO.
+
+Main responsibilities:
+
+- scan and load existing `.meta` files at startup
+- save new asset metadata
+- remove stale metadata files
+- validate logical-path fields such as `source_path` and `cooked_path`
+
+### 4. `AssetManager`
+
+Responsible for runtime load state, caching, and default-resource fallback.
+
+Main responsibilities:
+
+- `loadSync<T>(id)`
+- `loadAsync<T>(id)`
+- loaded-object cache
+- in-flight state management
+- fallback to default resources on load failure
+- explicit `unload(id)` support
+
+### 5. `Loader`
+
+Each asset type enters runtime through a corresponding loader.
+
+Current key loaders include:
+
+- `GLTexture2DLoader`
+- `MeshCookedLoader`
+- `MaterialFileLoader`
+- `SceneLoader`
+
+## Current Implementation State
+
+### 1. RuntimeResourceSystem
+
+Current responsibilities:
+
+- create and configure the VFS
+- create `AssetRegistry`
+- scan and load `.meta`
+- create `AssetManager`
+- register default loaders
+- create default resources
+- register built-in resident resources such as the built-in cube mesh
+
+### 2. EditorResourceSystem
+
+Current responsibilities:
+
+- initialize importers
+- scan `Assets/` at startup and fill in missing meta or cooked outputs
+- respond to file changes and queue import work
+- process import work per frame
+- support move, delete, and reimport flows
+- clear runtime cache after successful import
+
+Typical call sites include:
+
+- `bootstrapImportOnce()`
+- `processImportQueue(...)`
+
+### 3. Default resources
+
+Current default resources include at least:
+
+- default Texture
+- default Material
+- built-in Mesh
+
+These are used for:
+
+- load-failure fallback
+- keeping the system runnable before the full asset path is ready
+
+## Current Load Chain
+
+Typical chain:
+
+1. upper layer obtains an `AssetID`
+2. it calls `AssetManager::loadSync<T>(id)`
+3. `AssetManager` queries metadata from `AssetRegistry`
+4. the matching loader is selected
+5. the loader reads the logical-path target through VFS
+6. a runtime object is created
+7. the object is cached and returned
+
+If loading fails:
+
+- the system falls back to the registered default resource
+
+## Relationship to the Render System
+
+The render system now directly depends on the main resource path:
+
+- `RenderSystem` loads Mesh / Material / Texture through `AssetManager`
+- `RenderSystem` manages GPU-side caches itself
+- the resource system owns CPU-side asset objects and default resources
+- the render system resolves and uploads them to GPU
+
+## Problems Hit and Fixes
 
 ### 1. OBJ material sub-assets were incomplete
-- Symptom: OBJ import could generate `.mat.meta` entries but miss the actual `.mat` source file, or fail to carry texture references through the material asset.
-- Root cause: `MeshImporter` created material metadata but did not fully write material JSON and texture dependency data as part of the OBJ/MTL import path.
-- Fix: OBJ import now writes real `.mat` files, imports referenced texture assets, and records material `hard_deps` for those textures.
-- Result: the runtime material loader receives complete `.mat` data and the mesh -> material -> texture dependency chain is preserved.
 
-### 2. Runtime asset cache kept stale materials and textures after reimport
-- Symptom: editor reimport completed, but runtime still used old `Material` or `Texture` instances from `AssetManager` cache.
-- Root cause: editor import flow updated metadata and cooked/source files, but did not explicitly unload already cached runtime assets for the same ids.
-- Fix: after each successful import, `EditorResourceSystem` now unloads every asset id returned by the import result from `AssetManager`.
-- Result: subsequent loads fetch fresh material and texture content instead of stale cached objects.
+Problem:
 
-### 3. Texture upload orientation mismatch with OBJ UV convention
-- Symptom: texture data, UVs, and material ids were all correct, but sampling `texture(u_AlbedoMap, vUV)` still produced black or obviously wrong regions.
-- Root cause: decoded PNG/HTEX pixel data was uploaded to OpenGL without vertical flipping, while the OBJ UV convention in this pipeline expected the opposite row origin.
-- Fix: `GLTexture2DLoader` now vertically flips RGBA rows before `glTexImage2D` upload.
-- Result: imported meshes sample the intended atlas regions with their original OBJ UVs.
+- OBJ import could produce `.mat.meta`
+- but not always a complete `.mat` source file
+- or the material-to-texture dependency chain was not fully established
+
+Fix:
+
+- OBJ import now writes real `.mat` files
+- referenced texture assets are imported too
+- texture dependencies are written into the material relationship
+
+### 2. Reimport could keep stale runtime cache alive
+
+Problem:
+
+- editor import completed
+- but `AssetManager` still kept old runtime objects cached
+
+Fix:
+
+- `EditorResourceSystem` now calls `unload` for returned asset ids after successful import
+
+### 3. Texture upload orientation did not match the OBJ UV convention
+
+Problem:
+
+- texture data, UVs, and material ids were correct
+- but rendering still showed obvious mismatch or black regions
+
+Root cause:
+
+- the OpenGL upload path did not vertically flip image data to match the current OBJ/UV convention
+
+Fix:
+
+- `GLTexture2DLoader` now vertically flips RGBA data before upload
+
+## Current Open Issues
+
+- GPU resource release and cross-thread cleanup are still thin
+- more asset types still need more complete default-resource and error-resource handling
+- async loading for GPU resources still needs caution
+- the hot-reload chain can still be strengthened later
+
+## Future Improvement Plan
+
+I plan to continue with these steps:
+
+1. I will keep improving hot-reload and cache-invalidation behavior.
+2. I will continue to define clearer default-resource rules for more asset types.
+3. If the project later needs more complex async loading, I will design a dedicated GPU-thread and destruction-queue path for it.
