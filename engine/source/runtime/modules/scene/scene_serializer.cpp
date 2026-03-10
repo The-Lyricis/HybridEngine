@@ -1,6 +1,7 @@
 // scene_serializer.cpp
 #include "scene_serializer.h"
 
+#include <algorithm>
 #include <fstream>
 #include <vector>
 #include <nlohmann/json.hpp>
@@ -132,6 +133,36 @@ namespace Hybrid
                     {"range", pl.Range}
                 };
             }
+
+            if (reg.all_of<ColliderComponent>(e))
+            {
+                const auto& collider = reg.get<ColliderComponent>(e);
+                json jc = {
+                    {"type", static_cast<int>(collider.Type)},
+                    {"enabled", collider.Enabled},
+                    {"isTrigger", collider.IsTrigger},
+                    {"center", toJson(collider.Center)}
+                };
+
+                if (collider.Type == ColliderType::Box)
+                    jc["halfExtents"] = toJson(collider.Box.HalfExtents);
+                else if (collider.Type == ColliderType::Sphere)
+                    jc["radius"] = collider.Sphere.Radius;
+
+                je["collider"] = std::move(jc);
+            }
+
+            if (reg.all_of<RigidbodyComponent>(e))
+            {
+                const auto& rb = reg.get<RigidbodyComponent>(e);
+                je["rigidbody"] = {
+                    {"velocity", toJson(rb.Velocity)},
+                    {"force", toJson(rb.Force)},
+                    {"mass", rb.Mass},
+                    {"useGravity", rb.UseGravity},
+                    {"isKinematic", rb.IsKinematic}
+                };
+            }
         }
 
         static void readComponents(entt::registry& reg, entt::entity e, const json& je, const AssetRegistry* registry)
@@ -181,6 +212,45 @@ namespace Hybrid
                     pl.Color = vec3From(jl["color"]);
                 pl.Intensity = jl.value("intensity", 1.0f);
                 pl.Range = jl.value("range", 10.0f);
+            }
+
+            if (je.contains("collider") && je["collider"].is_object())
+            {
+                const auto& jc = je["collider"];
+                auto& collider = reg.all_of<ColliderComponent>(e) ? reg.get<ColliderComponent>(e)
+                    : reg.emplace<ColliderComponent>(e);
+
+                collider.Type = static_cast<ColliderType>(jc.value("type", static_cast<int>(ColliderType::Box)));
+                collider.Enabled = jc.value("enabled", true);
+                collider.IsTrigger = jc.value("isTrigger", false);
+
+                if (jc.contains("center") && jc["center"].is_array() && jc["center"].size() == 3)
+                    collider.Center = vec3From(jc["center"]);
+
+                if (jc.contains("halfExtents") && jc["halfExtents"].is_array() && jc["halfExtents"].size() == 3)
+                    collider.Box.HalfExtents = vec3From(jc["halfExtents"]);
+
+                collider.Box.HalfExtents.x = std::max(0.0f, collider.Box.HalfExtents.x);
+                collider.Box.HalfExtents.y = std::max(0.0f, collider.Box.HalfExtents.y);
+                collider.Box.HalfExtents.z = std::max(0.0f, collider.Box.HalfExtents.z);
+
+                collider.Sphere.Radius = std::max(0.0f, jc.value("radius", collider.Sphere.Radius));
+            }
+
+            if (je.contains("rigidbody") && je["rigidbody"].is_object())
+            {
+                const auto& jr = je["rigidbody"];
+                auto& rb = reg.all_of<RigidbodyComponent>(e) ? reg.get<RigidbodyComponent>(e)
+                    : reg.emplace<RigidbodyComponent>(e);
+
+                if (jr.contains("velocity") && jr["velocity"].is_array() && jr["velocity"].size() == 3)
+                    rb.Velocity = vec3From(jr["velocity"]);
+                if (jr.contains("force") && jr["force"].is_array() && jr["force"].size() == 3)
+                    rb.Force = vec3From(jr["force"]);
+
+                rb.Mass = std::max(0.0f, jr.value("mass", 1.0f));
+                rb.UseGravity = jr.value("useGravity", true);
+                rb.IsKinematic = jr.value("isKinematic", false);
             }
         }
 

@@ -1,5 +1,6 @@
 #include "component_registry.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include <glm/glm.hpp>
@@ -10,16 +11,34 @@
 #include "runtime/core/base/math_util.h"
 #include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/scene.h"
+#include "runtime/modules/scene/components/collider_component.h"
 #include "runtime/modules/scene/components/rigidbody_component.h"
 
 namespace Hybrid
 {
     namespace
     {
+        static const char* kColliderTypeNames[] =
+        {
+            "None",
+            "Box",
+            "Sphere"
+        };
+
         template<typename T>
         bool HasComponent(Entity entity)
         {
             return entity && entity.HasComponent<T>();
+        }
+
+        template<typename T>
+        bool AddComponent(Entity entity)
+        {
+            if (!entity || entity.HasComponent<T>())
+                return false;
+
+            entity.AddComponent<T>();
+            return true;
         }
 
         template<typename T>
@@ -164,6 +183,54 @@ namespace Hybrid
             return changed;
         }
 
+        bool DrawColliderComponent(EditorContext&, Entity, void* componentPtr)
+        {
+            if (componentPtr == nullptr)
+                return false;
+
+            auto* collider = static_cast<ColliderComponent*>(componentPtr);
+            bool changed = false;
+
+            changed |= ImGui::Checkbox("Enabled", &collider->Enabled);
+            changed |= ImGui::Checkbox("Is Trigger", &collider->IsTrigger);
+
+            int type_index = static_cast<int>(collider->Type);
+            if (ImGui::Combo("Type", &type_index, kColliderTypeNames, IM_ARRAYSIZE(kColliderTypeNames)))
+            {
+                collider->Type = static_cast<ColliderType>(type_index);
+                changed = true;
+            }
+
+            changed |= DrawVec3Control("Center", collider->Center, 0.05f);
+
+            switch (collider->Type)
+            {
+            case ColliderType::Box:
+                changed |= DrawVec3Control("Half Extents", collider->Box.HalfExtents, 0.05f);
+                collider->Box.HalfExtents.x = std::max(0.0f, collider->Box.HalfExtents.x);
+                collider->Box.HalfExtents.y = std::max(0.0f, collider->Box.HalfExtents.y);
+                collider->Box.HalfExtents.z = std::max(0.0f, collider->Box.HalfExtents.z);
+                break;
+            case ColliderType::Sphere:
+                ImGui::PushID("Radius");
+                ImGui::Columns(2);
+                ImGui::SetColumnWidth(0, 90.0f);
+                ImGui::TextUnformatted("Radius");
+                ImGui::NextColumn();
+                if (ImGui::DragFloat("##v", &collider->Sphere.Radius, 0.05f, 0.0f, 1000.0f))
+                    changed = true;
+                ImGui::Columns(1);
+                ImGui::PopID();
+
+                collider->Sphere.Radius = std::max(0.0f, collider->Sphere.Radius);
+                break;
+            default:
+                break;
+            }
+
+            return changed;
+        }
+
         std::vector<ComponentDesc> BuildDescriptors()
         {
             std::vector<ComponentDesc> descriptors;
@@ -172,6 +239,7 @@ namespace Hybrid
             tag_desc.name = "Tag";
             tag_desc.flags = ComponentFlags::Serializable;
             tag_desc.has = &HasComponent<TagComponent>;
+            tag_desc.add = &AddComponent<TagComponent>;
             tag_desc.get = &GetComponentPtr<TagComponent>;
             tag_desc.remove = &RemoveComponent<TagComponent>;
             tag_desc.properties = {
@@ -194,6 +262,7 @@ namespace Hybrid
             transform_desc.name = "Transform";
             transform_desc.flags = ComponentFlags::Serializable;
             transform_desc.has = &HasComponent<TransformComponent>;
+            transform_desc.add = &AddComponent<TransformComponent>;
             transform_desc.get = &GetComponentPtr<TransformComponent>;
             transform_desc.remove = &RemoveComponent<TransformComponent>;
             transform_desc.draw_custom = &DrawTransformComponent;
@@ -203,6 +272,7 @@ namespace Hybrid
             camera_desc.name = "Camera";
             camera_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
             camera_desc.has = &HasComponent<CameraComponent>;
+            camera_desc.add = &AddComponent<CameraComponent>;
             camera_desc.get = &GetComponentPtr<CameraComponent>;
             camera_desc.remove = &RemoveComponent<CameraComponent>;
             camera_desc.properties = {
@@ -248,6 +318,7 @@ namespace Hybrid
             directional_light_desc.name = "Directional Light";
             directional_light_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
             directional_light_desc.has = &HasComponent<DirectionalLightComponent>;
+            directional_light_desc.add = &AddComponent<DirectionalLightComponent>;
             directional_light_desc.get = &GetComponentPtr<DirectionalLightComponent>;
             directional_light_desc.remove = &RemoveComponent<DirectionalLightComponent>;
             directional_light_desc.properties = {
@@ -279,6 +350,7 @@ namespace Hybrid
             point_light_desc.name = "Point Light";
             point_light_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
             point_light_desc.has = &HasComponent<PointLightComponent>;
+            point_light_desc.add = &AddComponent<PointLightComponent>;
             point_light_desc.get = &GetComponentPtr<PointLightComponent>;
             point_light_desc.remove = &RemoveComponent<PointLightComponent>;
             point_light_desc.properties = {
@@ -316,10 +388,21 @@ namespace Hybrid
             };
             descriptors.push_back(point_light_desc);
 
+            ComponentDesc collider_desc;
+            collider_desc.name = "Collider";
+            collider_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
+            collider_desc.has = &HasComponent<ColliderComponent>;
+            collider_desc.add = &AddComponent<ColliderComponent>;
+            collider_desc.get = &GetComponentPtr<ColliderComponent>;
+            collider_desc.remove = &RemoveComponent<ColliderComponent>;
+            collider_desc.draw_custom = &DrawColliderComponent;
+            descriptors.push_back(collider_desc);
+
             ComponentDesc rigidbody_desc;
             rigidbody_desc.name = "Rigidbody";
             rigidbody_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
             rigidbody_desc.has = &HasComponent<RigidbodyComponent>;
+            rigidbody_desc.add = &AddComponent<RigidbodyComponent>;
             rigidbody_desc.get = &GetComponentPtr<RigidbodyComponent>;
             rigidbody_desc.remove = &RemoveComponent<RigidbodyComponent>;
             rigidbody_desc.properties = {
@@ -380,6 +463,7 @@ namespace Hybrid
             mesh_renderer_desc.name = "Mesh Renderer";
             mesh_renderer_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
             mesh_renderer_desc.has = &HasComponent<MeshRendererComponent>;
+            mesh_renderer_desc.add = &AddComponent<MeshRendererComponent>;
             mesh_renderer_desc.get = &GetComponentPtr<MeshRendererComponent>;
             mesh_renderer_desc.remove = &RemoveComponent<MeshRendererComponent>;
             mesh_renderer_desc.draw_custom = &DrawMeshRendererComponent;

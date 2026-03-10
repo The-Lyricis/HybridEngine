@@ -80,6 +80,7 @@ namespace Hybrid
 
     using PropertyDrawOverride = bool (*)(const char* label, void* valuePtr);
     using ComponentHasFn = bool (*)(Entity entity);
+    using ComponentAddFn = bool (*)(Entity entity);
     using ComponentGetFn = void* (*)(Entity entity);
     using ComponentRemoveFn = void (*)(Entity entity);
     using ComponentCustomDrawFn = bool (*)(EditorContext& ctx, Entity entity, void* componentPtr);
@@ -106,6 +107,7 @@ namespace Hybrid
         ComponentFlags flags = ComponentFlags::None;
 
         ComponentHasFn has = nullptr;
+        ComponentAddFn add = nullptr;
         ComponentGetFn get = nullptr;
         ComponentRemoveFn remove = nullptr;
 

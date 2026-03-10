@@ -5,36 +5,12 @@
 
 #include "runtime/modules/scene/scene.h"
 #include "runtime/modules/scene/entity.h"
-#include "runtime/core/base/math_util.h"
-#include "runtime/modules/scene/components/collider_component.h"
-#include "runtime/modules/scene/components/rigidbody_component.h"
 
 #include <imgui.h>
 #include <entt/entt.hpp>
 
 namespace Hybrid
 {
-    static const char* kColliderTypeNames[] =
-    {
-        "None",
-        "Box",
-        "Sphere"
-    };
-    static bool DrawVec3Control(const char* label, glm::vec3& value, float speed)
-    {
-        ImGui::PushID(label);
-        ImGui::Columns(2);
-        ImGui::SetColumnWidth(0, 90.0f);
-        ImGui::TextUnformatted(label);
-        ImGui::NextColumn();
-
-        const bool changed = ImGui::DragFloat3("##v", &value.x, speed);
-
-        ImGui::Columns(1);
-        ImGui::PopID();
-        return changed;
-    }
-
     void InspectorPanel::onImGuiRender(EditorContext& ctx)
     {
         if (!m_open) return;
@@ -88,84 +64,49 @@ namespace Hybrid
 
             ImGui::PopID();
         }
+
         ImGui::Separator();
 
-        // Collider
-        if (auto* collider = reg.try_get<ColliderComponent>(ctx.selected))
+        const bool is_play_mode = ctx.is_play_mode && ctx.is_play_mode();
+        if (is_play_mode)
+            ImGui::BeginDisabled();
+
+        if (ImGui::Button("Add Component", ImVec2(-1.0f, 0.0f)))
+            ImGui::OpenPopup("##InspectorAddComponent");
+
+        if (is_play_mode)
+            ImGui::EndDisabled();
+
+        if (ImGui::BeginPopup("##InspectorAddComponent"))
         {
-            if (ImGui::TreeNodeEx("Collider", ImGuiTreeNodeFlags_DefaultOpen))
+            bool has_addable_entry = false;
+
+            for (const ComponentDesc& desc : ComponentRegistry::GetDescriptors())
             {
-                ImGui::Checkbox("Enabled", &collider->Enabled);
-                ImGui::Checkbox("Is Trigger", &collider->IsTrigger);
+                if (!HasAny(desc.flags, ComponentFlags::Addable) || desc.add == nullptr)
+                    continue;
 
-                int type_index = static_cast<int>(collider->Type);
-                if (ImGui::Combo("Type", &type_index, kColliderTypeNames, IM_ARRAYSIZE(kColliderTypeNames)))
+                has_addable_entry = true;
+
+                const bool already_has_component = desc.has && desc.has(selected_entity);
+                if (already_has_component)
+                    ImGui::BeginDisabled();
+
+                if (ImGui::MenuItem(desc.name))
                 {
-                    collider->Type = static_cast<ColliderType>(type_index);
+                    if (!already_has_component && desc.add(selected_entity))
+                        ctx.markSceneDirty();
+                    ImGui::CloseCurrentPopup();
                 }
 
-                DrawVec3Control("Center", collider->Center, 0.05f);
-
-                switch (collider->Type)
-                {
-                case ColliderType::Box:
-                {
-                    DrawVec3Control("Half Extents", collider->Box.HalfExtents, 0.05f);
-
-                    collider->Box.HalfExtents.x = std::max(0.0f, collider->Box.HalfExtents.x);
-                    collider->Box.HalfExtents.y = std::max(0.0f, collider->Box.HalfExtents.y);
-                    collider->Box.HalfExtents.z = std::max(0.0f, collider->Box.HalfExtents.z);
-                    break;
-                }
-                case ColliderType::Sphere:
-                {
-                    ImGui::PushID("Radius");
-                    ImGui::Columns(2);
-                    ImGui::SetColumnWidth(0, 90.0f);
-                    ImGui::TextUnformatted("Radius");
-                    ImGui::NextColumn();
-
-                    ImGui::DragFloat("##v", &collider->Sphere.Radius, 0.05f, 0.0f, 1000.0f);
-
-                    ImGui::Columns(1);
-                    ImGui::PopID();
-
-                    collider->Sphere.Radius = std::max(0.0f, collider->Sphere.Radius);
-                    break;
-                }
-                default:
-                    break;
-                }
-
-                ImGui::TreePop();
+                if (already_has_component)
+                    ImGui::EndDisabled();
             }
-        }
-        ImGui::Separator();
 
-        // Rigidbody
-        if (auto* rigidbody = reg.try_get<RigidbodyComponent>(ctx.selected))
-        {
-            if (ImGui::TreeNodeEx("Rigidbody", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::Checkbox("Use Gravity", &rigidbody->UseGravity);
-                ImGui::Checkbox("Is Kinematic", &rigidbody->IsKinematic);
+            if (!has_addable_entry)
+                ImGui::TextDisabled("No addable components.");
 
-                ImGui::PushID("Mass");
-                ImGui::Columns(2);
-                ImGui::SetColumnWidth(0, 90.0f);
-                ImGui::TextUnformatted("Mass");
-                ImGui::NextColumn();
-                ImGui::DragFloat("##v", &rigidbody->Mass, 0.05f, 0.0f, 1000.0f);
-                ImGui::Columns(1);
-                ImGui::PopID();
-
-                rigidbody->Mass = std::max(0.0f, rigidbody->Mass);
-
-                DrawVec3Control("Velocity", rigidbody->Velocity, 0.05f);
-                DrawVec3Control("Force", rigidbody->Force, 0.05f);
-
-                ImGui::TreePop();
-            }
+            ImGui::EndPopup();
         }
 
         ImGui::End();

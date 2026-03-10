@@ -5,6 +5,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 
 #include "runtime/core/base/math_util.h"
+#include <runtime/modules/scene/components/collider_component.h>
 #include <runtime/modules/scene/components/rigidbody_component.h>
 
 namespace Hybrid
@@ -451,6 +452,9 @@ namespace Hybrid
 
             if (srcReg.all_of<RigidbodyComponent>(srcEntity))
                 dstReg.emplace_or_replace<RigidbodyComponent>(dstEntity, srcReg.get<RigidbodyComponent>(srcEntity));
+
+            if (srcReg.all_of<ColliderComponent>(srcEntity))
+                dstReg.emplace_or_replace<ColliderComponent>(dstEntity, srcReg.get<ColliderComponent>(srcEntity));
         }
 
         auto remapEntity = [&entityMap](entt::entity e) -> entt::entity
