@@ -9,340 +9,11 @@
 
 #include <filesystem>
 #include <fstream>
-#include <nlohmann/json.hpp>
 #include "runtime/modules/project/project_loader.h"
 #include "runtime/modules/project/project_context.h"
-#include "runtime/modules/scene/scene_serializer.h"
-#include "runtime/modules/physics/components/rigidbody_component.h"
-#include "runtime/modules/physics/components/collider_component.h"
 
 namespace Hybrid
 {
-    static void EnsureDemoScenes(const std::filesystem::path& assetsDir)
-    {
-        namespace fs = std::filesystem;
-        using json = nlohmann::json;
-
-        const fs::path scenesDir = assetsDir / "Scenes";
-        const fs::path aPath = scenesDir / "DemoA.scene";
-        const fs::path bPath = scenesDir / "DemoB.scene";
-
-        std::error_code ec;
-        fs::create_directories(scenesDir, ec);
-        if (ec)
-            return;
-
-        auto write = [](const fs::path& path, const json& root) -> bool
-            {
-                std::ofstream ofs(path, std::ios::out | std::ios::trunc);
-                if (!ofs)
-                    return false;
-                ofs << root.dump(4);
-                return true;
-            };
-
-        auto makeRoot = []() -> json
-            {
-                json root;
-                root["meta"] = { {"version", 2} };
-                root["entities"] = json::array();
-                return root;
-            };
-
-        auto pushEntity = [](json& root,
-            uint64_t uuid,
-            const std::string& name,
-            uint64_t parent_uuid,
-            const glm::vec3& t,
-            const glm::quat& r,
-            const glm::vec3& s,
-            bool addMeshRenderer,
-            int primitive,
-            const glm::vec4& tint,
-            bool addCamera,
-            bool cameraPrimary,
-            float cameraFovY,
-            float cameraNear,
-            float cameraFar,
-            bool addDirLight,
-            const glm::vec3& lightColor,
-            float lightIntensity)
-            {
-                json e;
-                e["uuid"] = uuid;
-                e["name"] = name;
-                e["parent"] = parent_uuid;
-
-                e["transform"] = {
-                    {"t", json::array({t.x, t.y, t.z})},
-                    {"r", json::array({r.w, r.x, r.y, r.z})}, // [w,x,y,z]
-                    {"s", json::array({s.x, s.y, s.z})}
-                };
-
-                if (addMeshRenderer)
-                {
-                    e["meshRenderer"] = {
-                        {"mesh", 0ull},        // AssetID.value，0 表示无（走默认/primitive）
-                        {"material", 0ull},
-                        {"primitive", primitive},
-                        {"tint", json::array({tint.x, tint.y, tint.z, tint.w})}
-                    };
-                }
-
-                if (addCamera)
-                {
-                    e["camera"] = {
-                        {"primary", cameraPrimary},
-                        {"fovY", cameraFovY},
-                        {"near", cameraNear},
-                        {"far",  cameraFar}
-                    };
-                }
-
-                if (addDirLight)
-                {
-                    e["dirLight"] = {
-                        {"color", json::array({lightColor.x, lightColor.y, lightColor.z})},
-                        {"intensity", lightIntensity}
-                    };
-                }
-
-                root["entities"].push_back(std::move(e));
-            };
-
-        // =========================================================
-        // DemoA：5x5 网格 + 默认相机 + 默认方向光
-        // =========================================================
-        {
-            json root = makeRoot();
-
-            const uint64_t rootId = 1000;
-
-            // Root_A（不渲染）
-            pushEntity(root,
-                rootId,
-                "Root_A",
-                0,
-                glm::vec3{ 0.0f, 0.0f, 0.0f },
-                glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f },
-                glm::vec3{ 1.0f, 1.0f, 1.0f },
-                /*addMeshRenderer=*/false,
-                /*primitive=*/0,
-                glm::vec4{ 1.0f },
-                /*addCamera=*/false,
-                /*cameraPrimary=*/false,
-                45.0f, 0.1f, 500.0f,
-                /*addDirLight=*/false,
-                glm::vec3{ 1.0f, 1.0f, 1.0f },
-                1.0f);
-
-            // Camera_A（Primary）
-            {
-                const uint64_t camId = 1100;
-                const glm::vec3 t{ 0.0f, 12.0f, 12.0f };
-                const glm::quat r = MathUtil::quatFromEulerRadians({ glm::radians(-45.0f), 0.0f, 0.0f });
-                const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
-
-                pushEntity(root,
-                    camId,
-                    "Camera_A",
-                    0,
-                    t, r, s,
-                    /*addMeshRenderer=*/false,
-                    0,
-                    glm::vec4{ 1.0f },
-                    /*addCamera=*/true,
-                    /*cameraPrimary=*/true,
-                    45.0f, 0.1f, 500.0f,
-                    /*addDirLight=*/false,
-                    glm::vec3{ 1.0f, 1.0f, 1.0f },
-                    1.0f);
-            }
-
-            // Sun_A（Directional Light）
-            {
-                const uint64_t sunId = 1101;
-                const glm::vec3 t{ 0.0f, 0.0f, 0.0f };
-                const glm::quat r = MathUtil::quatFromEulerRadians({ glm::radians(-70.5f), glm::radians(-123.7f), 0.0f });
-                const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
-
-                pushEntity(root,
-                    sunId,
-                    "Sun_A",
-                    0,
-                    t, r, s,
-                    /*addMeshRenderer=*/false,
-                    0,
-                    glm::vec4{ 1.0f },
-                    /*addCamera=*/false,
-                    false,
-                    45.0f, 0.1f, 500.0f,
-                    /*addDirLight=*/true,
-                    glm::vec3{ 1.0f, 1.0f, 1.0f },
-                    1.0f);
-            }
-
-            // 5x5 Cubes（渲染）
-            const int gridX = 5;
-            const int gridZ = 5;
-            const float spacing = 2.0f;
-            const float startX = -0.5f * (gridX - 1) * spacing;
-            const float startZ = -0.5f * (gridZ - 1) * spacing;
-
-            uint64_t uid = rootId + 1;
-            for (int z = 0; z < gridZ; ++z)
-            {
-                for (int x = 0; x < gridX; ++x)
-                {
-                    const glm::vec3 t{ startX + x * spacing, 0.0f, startZ + z * spacing };
-                    const glm::quat r{ 1.0f, 0.0f, 0.0f, 0.0f };
-                    const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
-                    const glm::vec4 tint{ 0.85f, 0.90f, 1.0f, 1.0f };
-
-                    pushEntity(root,
-                        uid++,
-                        "A_Cube_" + std::to_string(z) + "_" + std::to_string(x),
-                        rootId,
-                        t, r, s,
-                        /*addMeshRenderer=*/true,
-                        /*primitive=*/0,
-                        tint,
-                        /*addCamera=*/false,
-                        false,
-                        45.0f, 0.1f, 500.0f,
-                        /*addDirLight=*/false,
-                        glm::vec3{ 1.0f, 1.0f, 1.0f },
-                        1.0f);
-                }
-            }
-
-            (void)write(aPath, root);
-        }
-
-        // =========================================================
-        // DemoB：斜坡队列 + 两级层级 + 默认相机 + 默认方向光
-        // =========================================================
-        {
-            json root = makeRoot();
-
-            const uint64_t rootId = 2000;
-            const uint64_t groupId = 2001;
-
-            // Root_B（不渲染）
-            pushEntity(root,
-                rootId,
-                "Root_B",
-                0,
-                glm::vec3{ 0.0f, 0.0f, 0.0f },
-                glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f },
-                glm::vec3{ 1.0f, 1.0f, 1.0f },
-                /*addMeshRenderer=*/false,
-                0,
-                glm::vec4{ 1.0f },
-                /*addCamera=*/false,
-                false,
-                45.0f, 0.1f, 500.0f,
-                /*addDirLight=*/false,
-                glm::vec3{ 1.0f, 1.0f, 1.0f },
-                1.0f);
-
-            // Group_B（不渲染）
-            pushEntity(root,
-                groupId,
-                "Group_B",
-                rootId,
-                glm::vec3{ 0.0f, 0.0f, 0.0f },
-                glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f },
-                glm::vec3{ 1.0f, 1.0f, 1.0f },
-                /*addMeshRenderer=*/false,
-                0,
-                glm::vec4{ 1.0f },
-                /*addCamera=*/false,
-                false,
-                45.0f, 0.1f, 500.0f,
-                /*addDirLight=*/false,
-                glm::vec3{ 1.0f, 1.0f, 1.0f },
-                1.0f);
-
-            // Camera_B（Primary）
-            {
-                const uint64_t camId = 2100;
-                const glm::vec3 t{ 0.0f, 10.0f, 16.0f };
-                const glm::quat r = MathUtil::quatFromEulerRadians({ glm::radians(-35.0f), glm::radians(20.0f), 0.0f });
-                const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
-
-                pushEntity(root,
-                    camId,
-                    "Camera_B",
-                    0,
-                    t, r, s,
-                    /*addMeshRenderer=*/false,
-                    0,
-                    glm::vec4{ 1.0f },
-                    /*addCamera=*/true,
-                    /*cameraPrimary=*/true,
-                    45.0f, 0.1f, 500.0f,
-                    /*addDirLight=*/false,
-                    glm::vec3{ 1.0f, 1.0f, 1.0f },
-                    1.0f);
-            }
-
-            // Sun_B（Directional Light）
-            {
-                const uint64_t sunId = 2101;
-                const glm::vec3 t{ 0.0f, 0.0f, 0.0f };
-                const glm::quat r = MathUtil::quatFromEulerRadians({ glm::radians(-60.0f), glm::radians(-30.0f), 0.0f });
-                const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
-
-                pushEntity(root,
-                    sunId,
-                    "Sun_B",
-                    0,
-                    t, r, s,
-                    /*addMeshRenderer=*/false,
-                    0,
-                    glm::vec4{ 1.0f },
-                    /*addCamera=*/false,
-                    false,
-                    45.0f, 0.1f, 500.0f,
-                    /*addDirLight=*/true,
-                    glm::vec3{ 1.0f, 1.0f, 1.0f },
-                    1.0f);
-            }
-
-            // Blocks（渲染，挂在 Group_B 下）
-            uint64_t uid = 2002;
-            for (int i = 0; i < 12; ++i)
-            {
-                const glm::vec3 t{ -8.0f + i * 1.5f, 0.2f * i, -2.0f + i * 0.6f };
-                const glm::vec3 s{ 1.0f, 1.0f, 1.0f };
-
-                const float yaw = glm::radians(8.0f * static_cast<float>(i));
-                const glm::quat r = MathUtil::quatFromEulerRadians({ 0.0f, yaw, 0.0f });
-
-                const glm::vec4 tint{ 1.0f, 0.90f, 0.75f, 1.0f };
-
-                pushEntity(root,
-                    uid++,
-                    "B_Block_" + std::to_string(i),
-                    groupId,
-                    t, r, s,
-                    /*addMeshRenderer=*/true,
-                    /*primitive=*/0,
-                    tint,
-                    /*addCamera=*/false,
-                    false,
-                    45.0f, 0.1f, 500.0f,
-                    /*addDirLight=*/false,
-                    glm::vec3{ 1.0f, 1.0f, 1.0f },
-                    1.0f);
-            }
-
-            (void)write(bPath, root);
-        }
-    }
-
-   
     void HybridEngine::initialize()
     {
         LogSystem::initialize();
@@ -440,9 +111,6 @@ namespace Hybrid
         }
 
         Hybrid::ProjectService::Set(pctx);
-        EnsureDemoScenes(pctx.assets);
-
-
         HBD_CORE_INFO("Project loaded: {}", fs::absolute(hyprojPath).string());
         HBD_CORE_INFO("Project Root   : {}", pctx.root.string());
         HBD_CORE_INFO("Assets         : {}", pctx.assets.string());
@@ -494,14 +162,16 @@ namespace Hybrid
         m_RenderSystem.initialize(window);
 
         // ===== Scene =====
-        m_EditorScene = std::make_shared<Scene>();
-        auto scene = m_EditorScene;
+        auto scene = std::make_shared<Scene>();
+        scene->setName("Untitled");
+        m_EditorScene = scene;
         m_SceneManager.setActiveScene(scene);
         m_RenderSystem.setScene(scene);
         m_FrameContext.scene = scene;
         m_FrameContext.window_handle = window;
 
-        // ===== Hardcoded Scene Setup for Demo =====
+        // ===== Optional Demo Scene Setup =====
+#if defined(HYBRID_DEV_BUILD)
         {
             auto cam = scene->createEntity("Game Camera");
             cam.AddComponent<Hybrid::CameraComponent>(Hybrid::CameraComponent{true, 45.0f, 0.1f, 500.0f});
@@ -532,7 +202,6 @@ namespace Hybrid
                 auto rock = scene->createEntity("ROCK-A");
                 auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
                 mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
-                mr.Primitive = 0;
 
                 auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
                 tr.Position = {0.0f, 4.0f, 0.0f};
@@ -548,7 +217,6 @@ namespace Hybrid
                 auto rock = scene->createEntity("Tree");
                 auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
                 mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
-                mr.Primitive = 0;
 
                 auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
                 tr.Position = { 2.0f, 4.0f, 2.0f };
@@ -559,46 +227,20 @@ namespace Hybrid
                 HBD_CORE_WARN("rock-a.obj meta not found in registry");
             }
 
-            // 物理测试物体 1：动态下落方块
+            //物理测试物体
             auto fallingCube = scene->createEntity("FallingCube");
 
-            auto& fallingMr = fallingCube.AddComponent<Hybrid::MeshRendererComponent>();
-            fallingMr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
-            fallingMr.Primitive = 0;
+            auto& mr = fallingCube.AddComponent<Hybrid::MeshRendererComponent>();
+            mr.Mesh = m_RuntimeResourceSystem->getBuiltinMeshID(BuiltinMesh::Cube);
 
-            auto& fallingTr = fallingCube.GetComponent<Hybrid::TransformComponent>();
-            fallingTr.Position = { 0.0f, 5.0f, 0.0f };
-            fallingTr.Scale = { 1.0f, 1.0f, 1.0f };
+            auto& tr = fallingCube.GetComponent<Hybrid::TransformComponent>();
+            tr.Position = { 0.0f, 5.0f, 0.0f };
+            tr.Scale = { 1.0f, 1.0f, 1.0f };
 
-            auto& fallingRb = fallingCube.AddComponent<Hybrid::RigidbodyComponent>();
-            fallingRb.Mass = 1.0f;
-            fallingRb.UseGravity = true;
-            fallingRb.IsKinematic = false;
-
-            auto& fallingCol = fallingCube.AddComponent<Hybrid::ColliderComponent>();
-            fallingCol.Type = Hybrid::ColliderType::Box;
-            fallingCol.Enabled = true;
-            fallingCol.IsTrigger = false;
-            fallingCol.Center = { 0.0f, 0.0f, 0.0f };
-            fallingCol.Box.HalfExtents = { 0.5f, 0.5f, 0.5f };
-
-            // 物理测试物体 2：静态地面方块
-            auto groundBox = scene->createEntity("GroundBox");
-
-            auto& groundMr = groundBox.AddComponent<Hybrid::MeshRendererComponent>();
-            groundMr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
-            groundMr.Primitive = 0;
-
-            auto& groundTr = groundBox.GetComponent<Hybrid::TransformComponent>();
-            groundTr.Position = { 0.0f, -1.0f, 0.0f };
-            groundTr.Scale = { 8.0f, 1.0f, 8.0f };
-
-            auto& groundCol = groundBox.AddComponent<Hybrid::ColliderComponent>();
-            groundCol.Type = Hybrid::ColliderType::Box;
-            groundCol.Enabled = true;
-            groundCol.IsTrigger = false;
-            groundCol.Center = { 0.0f, 0.0f, 0.0f };
-            groundCol.Box.HalfExtents = { 0.5f, 0.5f, 0.5f };
+            auto& rb = fallingCube.AddComponent<Hybrid::RigidbodyComponent>();
+            rb.Mass = 1.0f;
+            rb.UseGravity = true;
+            rb.IsKinematic = false;
 
             for (int z = 0; z < gridZ; ++z)
             {
@@ -608,8 +250,7 @@ namespace Hybrid
                     auto cube = scene->createEntity(name);
 
                     auto& mr = cube.AddComponent<Hybrid::MeshRendererComponent>();
-                    mr.Mesh = m_RuntimeResourceSystem->getBuiltinCubeMeshID();
-                    mr.Primitive = 0;
+                    mr.Mesh = m_RuntimeResourceSystem->getBuiltinMeshID(BuiltinMesh::Cube);
 
                     auto& tr = cube.GetComponent<Hybrid::TransformComponent>();
                     tr.Position = { startX + x * spacing, 0.0f, startZ + z * spacing };
@@ -621,11 +262,10 @@ namespace Hybrid
 
 }
         }
+#endif
 
         // 绑定到系统
-        m_SceneManager.setActiveScene(scene);
-        m_RenderSystem.setScene(scene);
-        m_FrameContext.scene = scene;
+        setEditorScene(scene);
         m_FrameContext.window_handle = window;
 
         int fbw = 0, fbh = 0;
@@ -637,6 +277,21 @@ namespace Hybrid
 
         //物理系统初始化
         m_PhysicsSystem.initialize();
+    }
+
+    bool HybridEngine::setEditorScene(std::shared_ptr<Scene> scene)
+    {
+        if (!scene)
+            return false;
+
+        m_EditorScene = std::move(scene);
+        m_SceneManager.setActiveScene(m_EditorScene);
+        m_RenderSystem.setScene(m_EditorScene);
+
+        if (m_SceneRunState == SceneRunState::Edit)
+            m_FrameContext.scene = m_EditorScene;
+
+        return (m_EditorScene != nullptr) && (m_SceneManager.getActiveScene() == m_EditorScene);
     }
 
     void HybridEngine::run()
@@ -809,33 +464,43 @@ namespace Hybrid
         if (!m_RuntimeScene)
             return;
 
+        if (m_PlayPaused)
+            return;
+
         m_PhysicsSystem.tick(dt, *m_RuntimeScene);
         m_RuntimeScene->onUpdate(dt);
     }
 
     void HybridEngine::enterPlayMode()
     {
+        (void)enterPlayModeFromScene(m_EditorScene);
+    }
+
+    bool HybridEngine::enterPlayModeFromScene(const std::shared_ptr<Scene>& source_scene)
+    {
         if (isPlayMode())
         {
             HBD_CORE_WARN("Already in Play mode.");
-            return;
+            return false;
         }
 
-        if (!m_EditorScene)
+        if (!source_scene)
         {
-            HBD_CORE_WARN("Cannot enter Play mode: editor scene is null.");
-            return;
+            HBD_CORE_WARN("Cannot enter Play mode: source scene is null.");
+            return false;
         }
 
-        m_RuntimeScene = cloneScene(m_EditorScene);
+        m_RuntimeScene = source_scene->cloneRuntime();
         if (!m_RuntimeScene)
         {
-            HBD_CORE_ERROR("Failed to clone editor scene for Play mode.");
-            return;
+            HBD_CORE_ERROR("Failed to clone scene for Play mode.");
+            return false;
         }
 
         m_SceneRunState = SceneRunState::Play;
+        m_PlayPaused = false;
         HBD_CORE_INFO("Entered Play mode.");
+        return true;
     }
 
     void HybridEngine::exitPlayMode()
@@ -848,106 +513,17 @@ namespace Hybrid
 
         m_RuntimeScene.reset();
         m_SceneRunState = SceneRunState::Edit;
+        m_PlayPaused = false;
         HBD_CORE_INFO("Exited Play mode.");
     }
 
-    std::shared_ptr<Scene> HybridEngine::cloneScene(const std::shared_ptr<Scene>& source)
+    void HybridEngine::togglePlayPause()
     {
-        if (!source)
-            return nullptr;
+        if (!isPlayMode())
+            return;
 
-        auto dst = std::make_shared<Scene>();
-
-        auto& srcReg = source->getRegistry();
-        auto& dstReg = dst->getRegistry();
-
-        std::unordered_map<entt::entity, entt::entity> entityMap;
-
-        // 1) Create entities with UUID + Tag
-        auto srcView = srcReg.view<IDComponent, TagComponent, TransformComponent>();
-        for (auto srcEntity : srcView)
-        {
-            const auto& srcID = srcView.get<IDComponent>(srcEntity);
-            const auto& srcTag = srcView.get<TagComponent>(srcEntity);
-
-            Entity dstEntity = dst->createEntityWithUUID(srcID.ID, srcTag.Tag);
-            entityMap[srcEntity] = dstEntity.GetHandle();
-        }
-
-        // 2) Copy basic transform TRS
-        for (const auto& [srcEntity, dstEntity] : entityMap)
-        {
-            const auto& srcTc = srcReg.get<TransformComponent>(srcEntity);
-            auto& dstTc = dstReg.get<TransformComponent>(dstEntity);
-
-            dstTc.Position = srcTc.Position;
-            dstTc.Rotation = srcTc.Rotation;
-            dstTc.Scale = srcTc.Scale;
-
-            dstTc.LocalMatrix = glm::mat4(1.0f);
-            dstTc.WorldMatrix = glm::mat4(1.0f);
-
-            dstTc.DirtyLocal = true;
-            dstTc.DirtyWorld = true;
-
-            dstTc.Parent = entt::null;
-            dstTc.FirstChild = entt::null;
-            dstTc.NextSibling = entt::null;
-            dstTc.PrevSibling = entt::null;
-        }
-
-        // 3) Copy optional components
-        for (const auto& [srcEntity, dstEntity] : entityMap)
-        {
-            if (srcReg.all_of<CameraComponent>(srcEntity))
-                dstReg.emplace_or_replace<CameraComponent>(dstEntity, srcReg.get<CameraComponent>(srcEntity));
-
-            if (srcReg.all_of<MeshRendererComponent>(srcEntity))
-                dstReg.emplace_or_replace<MeshRendererComponent>(dstEntity, srcReg.get<MeshRendererComponent>(srcEntity));
-
-            if (srcReg.all_of<DirectionalLightComponent>(srcEntity))
-                dstReg.emplace_or_replace<DirectionalLightComponent>(dstEntity, srcReg.get<DirectionalLightComponent>(srcEntity));
-
-            if (srcReg.all_of<PointLightComponent>(srcEntity))
-                dstReg.emplace_or_replace<PointLightComponent>(dstEntity, srcReg.get<PointLightComponent>(srcEntity));
-
-            if (srcReg.all_of<RigidbodyComponent>(srcEntity))
-                dstReg.emplace_or_replace<RigidbodyComponent>(dstEntity, srcReg.get<RigidbodyComponent>(srcEntity));
-            if (srcReg.all_of<ColliderComponent>(srcEntity))
-                dstReg.emplace_or_replace<ColliderComponent>(
-                    dstEntity,
-                    srcReg.get<ColliderComponent>(srcEntity));
-        }
-
-        // 4) Remap transform hierarchy
-        for (const auto& [srcEntity, dstEntity] : entityMap)
-        {
-            const auto& srcTc = srcReg.get<TransformComponent>(srcEntity);
-            auto& dstTc = dstReg.get<TransformComponent>(dstEntity);
-
-            auto remapEntity = [&](entt::entity e) -> entt::entity
-                {
-                    if (e == entt::null)
-                        return entt::null;
-
-                    auto it = entityMap.find(e);
-                    if (it == entityMap.end())
-                        return entt::null;
-
-                    return it->second;
-                };
-
-            dstTc.Parent = remapEntity(srcTc.Parent);
-            dstTc.FirstChild = remapEntity(srcTc.FirstChild);
-            dstTc.NextSibling = remapEntity(srcTc.NextSibling);
-            dstTc.PrevSibling = remapEntity(srcTc.PrevSibling);
-
-            dstTc.DirtyWorld = true;
-        }
-
-        // 5) Rebuild matrices
-        dst->onUpdate(0.0f);
-
-        return dst;
+        m_PlayPaused = !m_PlayPaused;
+        HBD_CORE_INFO(m_PlayPaused ? "Paused Play mode." : "Resumed Play mode.");
     }
+
 } // namespace Hybrid

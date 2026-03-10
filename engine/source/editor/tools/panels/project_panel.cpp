@@ -129,6 +129,13 @@ namespace Hybrid
         return ok && !ec;
     }
 
+    void ProjectPanel::openCreateFolderPopup()
+    {
+        std::strncpy(m_newFolderName, "NewFolder", sizeof(m_newFolderName) - 1);
+        m_newFolderName[sizeof(m_newFolderName) - 1] = '\0';
+        m_openCreateFolderPopup = true;
+    }
+
     bool ProjectPanel::deleteEntry(EditorContext& ctx, const Entry& e)
     {
         if (e.physical.empty() || !std::filesystem::exists(e.physical))
@@ -326,9 +333,7 @@ namespace Hybrid
 
         if (ImGui::Button("New Folder"))
         {
-            std::strncpy(m_newFolderName, "NewFolder", sizeof(m_newFolderName) - 1);
-            m_newFolderName[sizeof(m_newFolderName) - 1] = '\0';
-            m_openCreateFolderPopup = true;
+            openCreateFolderPopup();
         }
         ImGui::SameLine();
 
@@ -361,7 +366,7 @@ namespace Hybrid
         }
     }
 
-    void ProjectPanel::renderDirectoryTree(EditorContext&)
+    void ProjectPanel::renderDirectoryTree(EditorContext& ctx)
     {
         if (m_assetsRoot.empty())
         {
@@ -447,6 +452,7 @@ namespace Hybrid
         };
 
         drawNode(m_assetsRoot);
+        drawWindowContextMenuIfRequested(ctx, "##ProjectTreeContext");
     }
 
     void ProjectPanel::renderContent(EditorContext& ctx)
@@ -548,7 +554,17 @@ namespace Hybrid
         if (request_clear_selection)
             m_selectedRelStr.clear();
 
+        drawWindowContextMenuIfRequested(ctx, "##ProjectContentContext");
         renderRenamePopup(ctx);
+    }
+
+    void ProjectPanel::drawWindowContextMenu(EditorContext&)
+    {
+        if (ImGui::MenuItem("New Folder"))
+            openCreateFolderPopup();
+
+        if (ImGui::MenuItem("Refresh"))
+            gatherEntries(m_currentDir);
     }
 
     void ProjectPanel::renderRenamePopup(EditorContext& ctx)

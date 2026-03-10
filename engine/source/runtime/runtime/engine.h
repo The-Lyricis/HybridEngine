@@ -54,6 +54,8 @@ namespace Hybrid
 
         std::shared_ptr<Scene> getEditorScene() const { return m_EditorScene; }
         std::shared_ptr<Scene> getRuntimeScene() const { return m_RuntimeScene; }
+        bool setEditorScene(std::shared_ptr<Scene> scene);
+        bool isPlayPaused() const { return m_PlayPaused; }
 
         std::shared_ptr<Scene> getActiveGameScene() const
         {
@@ -61,20 +63,22 @@ namespace Hybrid
                 return m_RuntimeScene;
             return m_EditorScene;
         }
+        bool enterPlayModeFromScene(const std::shared_ptr<Scene>& source_scene);
         void enterPlayMode();
         void exitPlayMode();
+        void togglePlayPause();
 
     private:
         float calculateDeltaTime();
         void updateEditMode(float dt);
         void updatePlayMode(float dt);
-        std::shared_ptr<Scene> cloneScene(const std::shared_ptr<Scene>& source);
 
     private:
         bool m_Running = true;    // Main loop running state.
         bool m_Minimized = false; // Window minimized gate.
 
         SceneRunState m_SceneRunState = SceneRunState::Edit;
+        bool m_PlayPaused = false;
 
         std::shared_ptr<Scene> m_EditorScene;
         std::shared_ptr<Scene> m_RuntimeScene;

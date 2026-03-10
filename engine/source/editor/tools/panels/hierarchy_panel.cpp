@@ -65,7 +65,174 @@ namespace Hybrid
             if (intent == DropIntent::AsChild)
                 drawList->AddRect(min, max, color, 0.0f, 0, 1.0f);
         }
+
+        Entity createDirectionalLight(Scene& scene, const char* name)
+        {
+            Entity entity = scene.createEntity(name);
+            entity.AddComponent<DirectionalLightComponent>();
+            return entity;
+        }
+
+        Entity createBuiltinCube(Scene& scene, AssetID cube_mesh_id)
+        {
+            Entity entity = scene.createEntity("Cube");
+            auto& renderer = entity.AddComponent<MeshRendererComponent>();
+            renderer.Mesh = cube_mesh_id;
+            return entity;
+        }
     } // namespace
+
+    void HierarchyPanel::queueAction(PendingActionType type, entt::entity target)
+    {
+        m_pendingAction = type;
+        m_pendingTarget = target;
+    }
+
+    void HierarchyPanel::drawCommonContextMenu(EditorContext& ctx, entt::registry& registry, entt::entity target)
+    {
+        const bool has_target = hasTransform(registry, target);
+        const bool has_parent =
+            has_target && registry.get<TransformComponent>(target).Parent != entt::null;
+
+        if (ImGui::MenuItem("Delete", nullptr, false, has_target))
+            queueAction(PendingActionType::Delete, target);
+
+        if (ImGui::MenuItem("Unparent", nullptr, false, has_parent))
+            queueAction(PendingActionType::Unparent, target);
+
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("Create Empty"))
+            queueAction(PendingActionType::CreateRootEmpty, target);
+        if (ImGui::BeginMenu("3D Object"))
+        {
+            const bool can_create_cube =
+                ctx.get_builtin_mesh_id && ctx.get_builtin_mesh_id(BuiltinMesh::Cube).value != 0;
+            if (ImGui::MenuItem("Cube", nullptr, false, can_create_cube))
+                queueAction(PendingActionType::CreateRootCube, target);
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Camera"))
+            queueAction(PendingActionType::CreateRootCamera, target);
+        if (ImGui::BeginMenu("Light"))
+        {
+            if (ImGui::MenuItem("Directional Light"))
+                queueAction(PendingActionType::CreateRootDirectionalLight, target);
+            ImGui::EndMenu();
+        }
+
+        if (has_target)
+            ctx.selected = target;
+    }
+
+    void HierarchyPanel::drawWindowContextMenu(EditorContext& ctx)
+    {
+        if (!ctx.active_scene)
+            return;
+
+        auto& registry = ctx.active_scene->getRegistry();
+        drawCommonContextMenu(ctx, registry, entt::null);
+    }
+
+    void HierarchyPanel::drawEntityContextMenu(EditorContext& ctx, entt::registry& registry, entt::entity entity)
+    {
+        if (!ImGui::BeginPopupContextItem())
+            return;
+
+        drawCommonContextMenu(ctx, registry, entity);
+        ImGui::EndPopup();
+    }
+
+    void HierarchyPanel::flushPendingAction(EditorContext& ctx, entt::registry& registry)
+    {
+        if (!ctx.active_scene || m_pendingAction == PendingActionType::None)
+            return;
+
+        auto reset = [this]()
+        {
+            m_pendingAction = PendingActionType::None;
+            m_pendingTarget = entt::null;
+        };
+
+        switch (m_pendingAction)
+        {
+        case PendingActionType::Delete:
+        {
+            if (!registry.valid(m_pendingTarget))
+                break;
+
+            ctx.active_scene->DestroyEntityRecursive(Entity{m_pendingTarget, &registry, ctx.active_scene});
+            if (ctx.selected == m_pendingTarget)
+                ctx.selected = entt::null;
+            ctx.markSceneDirty();
+            break;
+        }
+        case PendingActionType::Unparent:
+        {
+            if (!hasTransform(registry, m_pendingTarget))
+                break;
+
+            Entity child{m_pendingTarget, &registry, ctx.active_scene};
+            if (ctx.active_scene->Detach(child, true))
+            {
+                ctx.selected = m_pendingTarget;
+                ctx.markSceneDirty();
+            }
+            break;
+        }
+        case PendingActionType::CreateRootEmpty:
+        {
+            Entity created = ctx.active_scene->createEntity("Empty");
+            if (hasTransform(registry, m_pendingTarget))
+                ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
+            ctx.selected = created.GetHandle();
+            ctx.markSceneDirty();
+            break;
+        }
+        case PendingActionType::CreateRootCube:
+        {
+            const AssetID cube_mesh_id =
+                ctx.get_builtin_mesh_id ? ctx.get_builtin_mesh_id(BuiltinMesh::Cube) : AssetID{};
+            if (cube_mesh_id.value == 0)
+                break;
+
+            Entity created = createBuiltinCube(*ctx.active_scene, cube_mesh_id);
+            if (hasTransform(registry, m_pendingTarget))
+                ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
+            ctx.selected = created.GetHandle();
+            ctx.markSceneDirty();
+            break;
+        }
+        case PendingActionType::CreateRootCamera:
+        {
+            Entity created = ctx.active_scene->createCameraEntity("Camera", false);
+            if (hasTransform(registry, m_pendingTarget))
+                ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
+            ctx.selected = created.GetHandle();
+            ctx.markSceneDirty();
+            break;
+        }
+        case PendingActionType::CreateRootDirectionalLight:
+        {
+            Entity created = createDirectionalLight(*ctx.active_scene, "Directional Light");
+            if (!hasTransform(registry, m_pendingTarget))
+            {
+                ctx.selected = created.GetHandle();
+                ctx.markSceneDirty();
+                break;
+            }
+
+            if (ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true))
+                ctx.selected = created.GetHandle();
+            ctx.markSceneDirty();
+            break;
+        }
+        case PendingActionType::None:
+            break;
+        }
+
+        reset();
+    }
 
     void HierarchyPanel::drawEntityNode(EditorContext& ctx,
                                         entt::registry& registry,
@@ -97,6 +264,8 @@ namespace Hybrid
 
         if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
             ctx.selected = entity;
+
+        drawEntityContextMenu(ctx, registry, entity);
 
         EditorDragDrop::BeginDragEntity(entity, getEntityLabel(registry, entity));
 
@@ -137,7 +306,10 @@ namespace Hybrid
                         }
 
                         if (ok)
+                        {
                             ctx.selected = dropped;
+                            ctx.markSceneDirty();
+                        }
                     }
                 }
             }
@@ -178,7 +350,10 @@ namespace Hybrid
             {
                 Entity child{dropped, &registry, ctx.active_scene};
                 if (ctx.active_scene->Detach(child, true))
+                {
                     ctx.selected = dropped;
+                    ctx.markSceneDirty();
+                }
             }
             ImGui::EndDragDropTarget();
         }
@@ -225,6 +400,8 @@ namespace Hybrid
             drawEntityNode(ctx, registry, root, visited);
 
         drawRootDropTarget(ctx, registry);
+        drawWindowContextMenuIfRequested(ctx);
+        flushPendingAction(ctx, registry);
 
         ImGui::End();
     }

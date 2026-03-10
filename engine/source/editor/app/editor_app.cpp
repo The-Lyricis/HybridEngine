@@ -39,22 +39,34 @@ namespace Hybrid
         services.render_flags = &engine.getRenderFlags();
         services.editor_ext = &engine.getEditorRenderExt();
         services.consume_pick_result = [&engine](uint32_t& id) { return engine.consumePickResult(id); };
+        services.set_editor_scene = [&engine](std::shared_ptr<Scene> scene) -> bool
+            {
+                return engine.setEditorScene(std::move(scene));
+            };
 
         engine.pushOverlay(new ImGuiLayer(engine.getWindowSystem().getNativeWindow()));
         auto* editor_layer = new EditorLayer(std::move(services));
 
         EditorModeCallbacks mode_callbacks;
-        mode_callbacks.enter_play_mode = [&engine]()
+        mode_callbacks.enter_play_mode_from_scene = [&engine](std::shared_ptr<Scene> scene) -> bool
             {
-                engine.enterPlayMode();
+                return engine.enterPlayModeFromScene(scene);
             };
         mode_callbacks.exit_play_mode = [&engine]()
             {
                 engine.exitPlayMode();
             };
+        mode_callbacks.toggle_pause_mode = [&engine]()
+            {
+                engine.togglePlayPause();
+            };
         mode_callbacks.is_play_mode = [&engine]() -> bool
             {
                 return engine.isPlayMode();
+            };
+        mode_callbacks.is_pause_mode = [&engine]() -> bool
+            {
+                return engine.isPlayPaused();
             };
         editor_layer->setModeCallbacks(std::move(mode_callbacks));
 

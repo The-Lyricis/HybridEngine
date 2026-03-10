@@ -1,5 +1,7 @@
 #pragma once
 
+#include <imgui.h>
+
 namespace Hybrid
 {
     struct EditorContext;
@@ -9,16 +11,27 @@ namespace Hybrid
     public:
         virtual ~IEditorPanel() = default;
 
-        // 面板窗口标题（必须与 DockBuilderDockWindow 的字符串一致）
         virtual const char* getName() const = 0;
-
-        // 渲染 UI
         virtual void onImGuiRender(EditorContext& ctx) = 0;
 
         bool isOpen() const { return m_open; }
         void setOpen(bool open) { m_open = open; }
 
     protected:
-        bool m_open = true; // 是否显示
+        virtual void drawWindowContextMenu(EditorContext& ctx) {}
+
+        void drawWindowContextMenuIfRequested(
+            EditorContext& ctx,
+            const char* popup_id = nullptr,
+            ImGuiPopupFlags flags = ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)
+        {
+            if (!ImGui::BeginPopupContextWindow(popup_id, flags))
+                return;
+
+            drawWindowContextMenu(ctx);
+            ImGui::EndPopup();
+        }
+
+        bool m_open = true;
     };
 } // namespace Hybrid

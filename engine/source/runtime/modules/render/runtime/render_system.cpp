@@ -98,7 +98,6 @@ namespace Hybrid
             return;
 
         Renderer::initialize();
-        createCubeResources();
         createMeshShader();
         createDebugBoxShader();
 
@@ -110,93 +109,11 @@ namespace Hybrid
         spec.width = (uint32_t)std::max(1, w);
         spec.height = (uint32_t)std::max(1, h);
         m_SceneFB = Framebuffer::Create(spec);
+        m_GameFB = Framebuffer::Create(spec);
 
         m_Initialized = true;
 
         HBD_CORE_TRACE("RenderSystem initialized");
-    }
-
-    void RenderSystem::createCubeResources()
-    {
-        static float s_CubeVertices[] = {
-            // x,    y,    z,    r,   g,   b,   a
-            -0.5f, -0.5f, -0.5f, 1.f, 0.f, 0.f, 1.f, // 0
-            0.5f, -0.5f, -0.5f, 0.f, 1.f, 0.f, 1.f,  // 1
-            0.5f, 0.5f, -0.5f, 0.f, 0.f, 1.f, 1.f,   // 2
-            -0.5f, 0.5f, -0.5f, 1.f, 1.f, 0.f, 1.f,  // 3
-            -0.5f, -0.5f, 0.5f, 1.f, 0.f, 1.f, 1.f,  // 4
-            0.5f, -0.5f, 0.5f, 0.f, 1.f, 1.f, 1.f,   // 5
-            0.5f, 0.5f, 0.5f, 1.f, 1.f, 1.f, 1.f,    // 6
-            -0.5f, 0.5f, 0.5f, 0.2f, 0.2f, 0.2f, 1.f // 7
-        };
-
-        static uint32_t s_CubeIndices[] = {
-            // back (-Z)
-            0, 1, 2, 2, 3, 0,
-            // front (+Z)
-            4, 5, 6, 6, 7, 4,
-            // left (-X)
-            0, 3, 7, 7, 4, 0,
-            // right (+X)
-            1, 5, 6, 6, 2, 1,
-            // bottom (-Y)
-            0, 1, 5, 5, 4, 0,
-            // top (+Y)
-            3, 2, 6, 6, 7, 3};
-
-        m_CubeVAO = VertexArray::Create();
-        auto vb = VertexBuffer::Create(
-            s_CubeVertices,
-            static_cast<uint32_t>(sizeof(s_CubeVertices)));
-        auto ib = IndexBuffer::Create(
-            s_CubeIndices,
-            (uint32_t)(sizeof(s_CubeIndices) / sizeof(uint32_t)));
-
-        VertexLayout cubeLayout;
-        cubeLayout.stride = (3 + 4) * sizeof(float);
-        cubeLayout.attributes = {
-            {0, 3, 0, false},
-            {1, 4, static_cast<uint32_t>(3 * sizeof(float)), false}};
-        m_CubeVAO->setVertexBuffer(vb, cubeLayout);
-        m_CubeVAO->setIndexBuffer(ib);
-
-        const std::string vs = R"(
-#version 330 core
-layout(location=0) in vec3 aPos;
-layout(location=1) in vec4 aColor;
-
-uniform mat4 u_ViewProjection;
-uniform mat4 u_Model;
-
-out vec4 vColor;
-
-void main() {
-    vColor = aColor;
-    gl_Position = u_ViewProjection * u_Model * vec4(aPos, 1.0);
-}
-)";
-
-        const std::string fs = R"(
-#version 330 core
-in vec4 vColor;
-
-layout(location=0) out vec4 FragColor;
-layout(location=1) out int EntityID;
-
-uniform int u_EntityID;
-uniform int u_Selected;
-
-void main() {
-    vec4 c = vColor;
-    if (u_Selected == 1) {
-        c.rgb = min(c.rgb * 1.35 + vec3(0.08), vec3(1.0)); // 绠€鍗曢珮浜?
-    }
-    FragColor = c;
-    EntityID  = u_EntityID;
-}
-)";
-
-        m_CubeShader = Shader::Create(vs, fs);
     }
 
     RenderSystem::MeshGPU *RenderSystem::getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh)
@@ -475,19 +392,19 @@ void main()
         m_DebugBoxShader = Shader::Create(vs, fs);
     }
 
-    void RenderSystem::ensureFramebufferSize(uint32_t w, uint32_t h)
+    void RenderSystem::ensureFramebufferSize(std::shared_ptr<Framebuffer>& framebuffer, uint32_t w, uint32_t h)
     {
         w = std::max(1u, w);
         h = std::max(1u, h);
 
-        if (!m_SceneFB)
+        if (!framebuffer)
         {
             FramebufferSpec spec{w, h};
-            m_SceneFB = Framebuffer::Create(spec);
+            framebuffer = Framebuffer::Create(spec);
         }
         else
         {
-            m_SceneFB->resize(w, h);
+            framebuffer->resize(w, h);
         }
     }
 
@@ -496,17 +413,24 @@ void main()
         return m_SceneFB ? m_SceneFB->getColorAttachmentRendererID() : 0;
     }
 
+    uint32_t RenderSystem::getGameColorTexture() const
+    {
+        return m_GameFB ? m_GameFB->getColorAttachmentRendererID() : 0;
+    }
+
     void RenderSystem::onWindowResize(uint32_t width, uint32_t height)
     {
         if (!m_Initialized)
             return;
-        ensureFramebufferSize(width, height);
+        ensureFramebufferSize(m_SceneFB, width, height);
+        ensureFramebufferSize(m_GameFB, width, height);
     }
 
     
     RenderSystem::RenderPacket RenderSystem::buildRenderPacket(const FrameContext& frame_context,
                                                                RenderFlags flags,
-                                                               const EditorRenderExt* editor_ext)
+                                                               const EditorRenderExt* editor_ext,
+                                                               bool cache_editor_camera_state)
     {
         RenderPacket pkt;
 
@@ -563,9 +487,11 @@ void main()
         pkt.frame.cameraPos = cameraPos;
         pkt.frame.time = frame_context.dt;
 
-        // Cache split view/proj for editor gizmo rendering.
-        m_LastView = viewM;
-        m_LastProj = projM;
+        if (cache_editor_camera_state)
+        {
+            m_LastView = viewM;
+            m_LastProj = projM;
+        }
 
         // C) collect lights
         pkt.lights.dir.intensity = 0.0f;
@@ -617,7 +543,6 @@ void main()
                 DrawItem item;
                 item.meshId = mr.Mesh;
                 item.materialId = mr.Material;
-                item.primitive = mr.Primitive;
                 item.model = tr.WorldMatrix;
                 item.tint = mr.Tint;
                 item.entityID = (uint32_t)entt::to_integral(e);
@@ -629,14 +554,17 @@ void main()
         return pkt;
     }
 
-    void RenderSystem::executePasses(const RenderPacket& packet, RenderFlags flags, void* glfwWindowHandle)
+    void RenderSystem::executePasses(const RenderPacket& packet,
+                                     RenderFlags flags,
+                                     void* glfwWindowHandle,
+                                     const std::shared_ptr<Framebuffer>& framebuffer)
     {
         const bool needs_forward = HasFlag(flags, RenderFlags::Forward) ||
                                    HasFlag(flags, RenderFlags::PickingID) ||
                                    HasFlag(flags, RenderFlags::SelectionOutline);
         if (needs_forward)
         {
-            executeForwardPass(packet, glfwWindowHandle);
+            executeForwardPass(packet, glfwWindowHandle, framebuffer);
         }
 
         if (HasFlag(flags, RenderFlags::PickingID))
@@ -655,40 +583,23 @@ void main()
             executeDebugNormalsPass(packet, glfwWindowHandle);
     }
 
-    void RenderSystem::executeForwardPass(const RenderPacket &packet, void *glfwWindowHandle)
+    void RenderSystem::executeForwardPass(const RenderPacket &packet,
+                                          void *glfwWindowHandle,
+                                          const std::shared_ptr<Framebuffer>& framebuffer)
     {
-        const bool assetPathReady = (m_AssetManager != nullptr) && (m_MeshShader != nullptr);
+        if (!framebuffer)
+            return;
 
         // 1) begin pass
-        m_SceneFB->bind();
-        RenderCommand::setViewport(0, 0, m_SceneFB->getWidth(), m_SceneFB->getHeight());
+        framebuffer->bind();
+        RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
         Renderer::beginFrame({0.1f, 0.1f, 0.12f, 1.0f});
         // Clear color to black and EntityID to 0 for picking/outline.
         uint32_t zero = 0;
         glClearBufferuiv(GL_COLOR, 1, &zero);
 
-        // 2) fallback path
-        if (!assetPathReady)
+        if (m_AssetManager && m_MeshShader)
         {
-            if (m_CubeShader && m_CubeVAO)
-            {
-                m_CubeShader->bind();
-                m_CubeShader->setMat4("u_ViewProjection", packet.frame.viewProj);
-
-                for (const auto &item : packet.items)
-                {
-                    if (item.primitive != 0)
-                        continue;
-                    m_CubeShader->setMat4("u_Model", item.model);
-                    m_CubeShader->setInt("u_EntityID", item.entityID);
-                    m_CubeShader->setInt("u_Selected", item.selected ? 1 : 0);
-                    Renderer::submit(m_CubeVAO, m_CubeShader);
-                }
-            }
-        }
-        else
-        {
-            // 3) global shader data (once)
             m_MeshShader->bind();
             m_MeshShader->setMat4("u_ViewProjection", packet.frame.viewProj);
             m_MeshShader->setVec3("u_CameraPos", packet.frame.cameraPos);
@@ -713,7 +624,6 @@ void main()
             m_MeshShader->setInt("u_AOMap", 3);
             m_MeshShader->setInt("u_EmissiveMap", 4);
 
-            // 4) draw items
             for (const auto &item : packet.items)
             {
                 AssetID meshId = item.meshId;
@@ -772,7 +682,7 @@ void main()
 
         // 5) end pass
         Renderer::endFrame();
-        m_SceneFB->unbind();
+        framebuffer->unbind();
 
         GLFWwindow *window = static_cast<GLFWwindow *>(glfwWindowHandle);
         int display_w = 0, display_h = 0;
@@ -891,16 +801,62 @@ void main()
         if (!m_Initialized)
             initialize(window_handle);
 
-        if (frame_context.viewport_size.x <= 0.0f || frame_context.viewport_size.y <= 0.0f)
-            return;
-
-        ensureFramebufferSize((uint32_t)frame_context.viewport_size.x, (uint32_t)frame_context.viewport_size.y);
-
         if (flags == RenderFlags::None)
             return;
 
-        auto packet = buildRenderPacket(frame_context, flags, editor_ext);
-        executePasses(packet, flags, window_handle);
+        if (editor_ext && (editor_ext->render_scene_view || editor_ext->render_game_view))
+        {
+            bool rendered_any = false;
+
+            if (editor_ext->render_scene_view &&
+                editor_ext->scene_viewport_size.x > 0.0f &&
+                editor_ext->scene_viewport_size.y > 0.0f)
+            {
+                FrameContext scene_frame = frame_context;
+                scene_frame.viewport_size = editor_ext->scene_viewport_size;
+                ensureFramebufferSize(m_SceneFB,
+                                      static_cast<uint32_t>(scene_frame.viewport_size.x),
+                                      static_cast<uint32_t>(scene_frame.viewport_size.y));
+
+                EditorRenderExt scene_ext = *editor_ext;
+                scene_ext.use_game_camera = false;
+                auto scene_packet = buildRenderPacket(scene_frame, flags, &scene_ext, true);
+                executePasses(scene_packet, flags, window_handle, m_SceneFB);
+                rendered_any = true;
+            }
+
+            if (editor_ext->render_game_view &&
+                editor_ext->game_viewport_size.x > 0.0f &&
+                editor_ext->game_viewport_size.y > 0.0f)
+            {
+                FrameContext game_frame = frame_context;
+                game_frame.viewport_size = editor_ext->game_viewport_size;
+                ensureFramebufferSize(m_GameFB,
+                                      static_cast<uint32_t>(game_frame.viewport_size.x),
+                                      static_cast<uint32_t>(game_frame.viewport_size.y));
+
+                EditorRenderExt game_ext = *editor_ext;
+                game_ext.use_game_camera = true;
+                game_ext.has_editor_camera = false;
+                const RenderFlags game_flags = RenderFlags::Forward;
+                auto game_packet = buildRenderPacket(game_frame, game_flags, &game_ext, false);
+                executePasses(game_packet, game_flags, window_handle, m_GameFB);
+                rendered_any = true;
+            }
+
+            if (rendered_any)
+                return;
+        }
+
+        if (frame_context.viewport_size.x <= 0.0f || frame_context.viewport_size.y <= 0.0f)
+            return;
+
+        ensureFramebufferSize(m_SceneFB,
+                              static_cast<uint32_t>(frame_context.viewport_size.x),
+                              static_cast<uint32_t>(frame_context.viewport_size.y));
+
+        auto packet = buildRenderPacket(frame_context, flags, editor_ext, true);
+        executePasses(packet, flags, window_handle, m_SceneFB);
     }
     uint32_t RenderSystem::readEntityID(int x, int y) const
     {

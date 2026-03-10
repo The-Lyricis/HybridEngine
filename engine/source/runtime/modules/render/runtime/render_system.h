@@ -40,6 +40,7 @@ namespace Hybrid
         void setScene(std::shared_ptr<Scene> scene) { m_Scene = std::move(scene); }
 
         uint32_t getSceneColorTexture() const;
+        uint32_t getGameColorTexture() const;
         void onWindowResize(uint32_t width, uint32_t height);
         uint32_t readEntityID(int x, int y) const;
 
@@ -51,8 +52,7 @@ namespace Hybrid
         const glm::mat4& getLastProj() const { return m_LastProj; }
 
     private:
-        void createCubeResources();
-        void ensureFramebufferSize(uint32_t w, uint32_t h);
+        void ensureFramebufferSize(std::shared_ptr<Framebuffer>& framebuffer, uint32_t w, uint32_t h);
         void createMeshShader();
         void createDebugBoxShader();
 
@@ -110,7 +110,6 @@ namespace Hybrid
         {
             AssetID meshId{};
             AssetID materialId{};
-            int primitive = 0;
             glm::mat4 model{1.0f};
             glm::vec4 tint{1.0f};
             uint32_t entityID = 0;
@@ -130,11 +129,17 @@ namespace Hybrid
         // Extract ECS data + camera/light state into a draw packet.
         RenderPacket buildRenderPacket(const FrameContext& frame_context,
                                        RenderFlags flags,
-                                       const EditorRenderExt* editor_ext);
+                                       const EditorRenderExt* editor_ext,
+                                       bool cache_editor_camera_state = true);
         // Dispatch pass execution by RenderFlags.
-        void executePasses(const RenderPacket& packet, RenderFlags flags, void* glfwWindowHandle);
+        void executePasses(const RenderPacket& packet,
+                           RenderFlags flags,
+                           void* glfwWindowHandle,
+                           const std::shared_ptr<Framebuffer>& framebuffer);
         // Execute the main forward pass and resolve color/id targets.
-        void executeForwardPass(const RenderPacket &packet, void *glfwWindowHandle);
+        void executeForwardPass(const RenderPacket &packet,
+                                void *glfwWindowHandle,
+                                const std::shared_ptr<Framebuffer>& framebuffer);
         void executePickingPass(const RenderPacket& packet, void* glfwWindowHandle);
         void executeSelectionOutlinePass(const RenderPacket& packet, void* glfwWindowHandle);
         void executeGizmoPass(const RenderPacket& packet, void* glfwWindowHandle);
@@ -152,8 +157,7 @@ namespace Hybrid
         std::shared_ptr<Scene> m_Scene; // Fallback scene source when frame context has no scene.
 
         std::shared_ptr<Framebuffer> m_SceneFB;
-        std::shared_ptr<VertexArray> m_CubeVAO;
-        std::shared_ptr<Shader> m_CubeShader;
+        std::shared_ptr<Framebuffer> m_GameFB;
         std::shared_ptr<Shader> m_MeshShader;
         std::shared_ptr<Shader> m_DebugBoxShader;
 

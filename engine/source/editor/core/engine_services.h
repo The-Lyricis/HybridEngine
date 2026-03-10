@@ -2,12 +2,14 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 
 namespace Hybrid
 {
     class WindowSystem;
     class RenderSystem;
     class SceneManager;
+    class Scene;
     class RuntimeResourceSystem;
     class EditorResourceSystem;
     class InputLayer;
@@ -28,5 +30,6 @@ namespace Hybrid
         RenderFlags* render_flags = nullptr;             // Per-frame pass mask.
         EditorRenderExt* editor_ext = nullptr;           // Editor-only render extension payload.
         std::function<bool(uint32_t&)> consume_pick_result; // Callback to read pick result from engine.
+        std::function<bool(std::shared_ptr<Scene>)> set_editor_scene; // Replace the authoritative editor scene.
     };
 } // namespace Hybrid

@@ -396,6 +396,87 @@ namespace Hybrid
         return roots;
     }
 
+    std::shared_ptr<Scene> Scene::cloneRuntime() const
+    {
+        auto dst = std::make_shared<Scene>();
+        dst->setName(m_Name);
+
+        const auto& srcReg = m_Registry;
+        auto& dstReg = dst->getRegistry();
+
+        std::unordered_map<entt::entity, entt::entity> entityMap;
+
+        auto srcView = srcReg.view<const IDComponent, const TagComponent, const TransformComponent>();
+        for (auto srcEntity : srcView)
+        {
+            const auto& srcID = srcView.get<const IDComponent>(srcEntity);
+            const auto& srcTag = srcView.get<const TagComponent>(srcEntity);
+
+            Entity dstEntity = dst->createEntityWithUUID(srcID.ID, srcTag.Tag);
+            entityMap[srcEntity] = dstEntity.GetHandle();
+        }
+
+        for (const auto& [srcEntity, dstEntity] : entityMap)
+        {
+            const auto& srcTc = srcReg.get<TransformComponent>(srcEntity);
+            auto& dstTc = dstReg.get<TransformComponent>(dstEntity);
+
+            dstTc.Position = srcTc.Position;
+            dstTc.Rotation = srcTc.Rotation;
+            dstTc.Scale = srcTc.Scale;
+            dstTc.LocalMatrix = glm::mat4(1.0f);
+            dstTc.WorldMatrix = glm::mat4(1.0f);
+            dstTc.DirtyLocal = true;
+            dstTc.DirtyWorld = true;
+            dstTc.Parent = entt::null;
+            dstTc.FirstChild = entt::null;
+            dstTc.NextSibling = entt::null;
+            dstTc.PrevSibling = entt::null;
+        }
+
+        for (const auto& [srcEntity, dstEntity] : entityMap)
+        {
+            if (srcReg.all_of<CameraComponent>(srcEntity))
+                dstReg.emplace_or_replace<CameraComponent>(dstEntity, srcReg.get<CameraComponent>(srcEntity));
+
+            if (srcReg.all_of<MeshRendererComponent>(srcEntity))
+                dstReg.emplace_or_replace<MeshRendererComponent>(dstEntity, srcReg.get<MeshRendererComponent>(srcEntity));
+
+            if (srcReg.all_of<DirectionalLightComponent>(srcEntity))
+                dstReg.emplace_or_replace<DirectionalLightComponent>(dstEntity, srcReg.get<DirectionalLightComponent>(srcEntity));
+
+            if (srcReg.all_of<PointLightComponent>(srcEntity))
+                dstReg.emplace_or_replace<PointLightComponent>(dstEntity, srcReg.get<PointLightComponent>(srcEntity));
+
+            if (srcReg.all_of<RigidbodyComponent>(srcEntity))
+                dstReg.emplace_or_replace<RigidbodyComponent>(dstEntity, srcReg.get<RigidbodyComponent>(srcEntity));
+        }
+
+        auto remapEntity = [&entityMap](entt::entity e) -> entt::entity
+        {
+            if (e == entt::null)
+                return entt::null;
+
+            auto it = entityMap.find(e);
+            return (it == entityMap.end()) ? entt::null : it->second;
+        };
+
+        for (const auto& [srcEntity, dstEntity] : entityMap)
+        {
+            const auto& srcTc = srcReg.get<TransformComponent>(srcEntity);
+            auto& dstTc = dstReg.get<TransformComponent>(dstEntity);
+
+            dstTc.Parent = remapEntity(srcTc.Parent);
+            dstTc.FirstChild = remapEntity(srcTc.FirstChild);
+            dstTc.NextSibling = remapEntity(srcTc.NextSibling);
+            dstTc.PrevSibling = remapEntity(srcTc.PrevSibling);
+            dstTc.DirtyWorld = true;
+        }
+
+        dst->onUpdate(0.0f);
+        return dst;
+    }
+
     void Scene::updateTransformHierarchy()
     {
         auto view = m_Registry.view<TransformComponent>();

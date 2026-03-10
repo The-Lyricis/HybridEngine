@@ -5,6 +5,31 @@
 
 namespace Hybrid
 {
+    std::shared_ptr<Scene> SceneLoader::loadFromLogicalPath(const std::string& logical, IVirtualFileSystem& vfs, const AssetRegistry* registry)
+    {
+        if (logical.empty())
+        {
+            HBD_CORE_ERROR("SceneLoader: empty logical path");
+            return nullptr;
+        }
+
+        auto native = vfs.resolve(logical);
+        if (!native)
+        {
+            HBD_CORE_ERROR("SceneLoader: resolve failed {}", logical);
+            return nullptr;
+        }
+
+        auto scene = std::make_shared<Scene>();
+        if (!SceneSerializer::DeserializeFromFile(*scene, *native, registry))
+        {
+            HBD_CORE_ERROR("SceneLoader: deserialize failed {}", native->string());
+            return nullptr;
+        }
+
+        return scene;
+    }
+
     std::shared_ptr<Scene> SceneLoader::load(const AssetMetadata& meta, IVirtualFileSystem& vfs)
     {
         if (!meta.is_valid || meta.type != AssetType::Scene)
@@ -21,20 +46,6 @@ namespace Hybrid
             return nullptr;
         }
 
-        auto native = vfs.resolve(logical);
-        if (!native)
-        {
-            HBD_CORE_ERROR("SceneLoader: resolve failed {}", logical);
-            return nullptr;
-        }
-
-        auto scene = std::make_shared<Scene>();
-        if (!SceneSerializer::DeserializeFromFile(*scene, *native))
-        {
-            HBD_CORE_ERROR("SceneLoader: deserialize failed {}", native->string());
-            return nullptr;
-        }
-
-        return scene;
+        return loadFromLogicalPath(logical, vfs, nullptr);
     }
 } // namespace Hybrid
