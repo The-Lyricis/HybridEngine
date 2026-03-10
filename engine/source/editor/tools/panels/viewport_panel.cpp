@@ -273,6 +273,11 @@ namespace Hybrid
             g_ToolIcons.loaded = (g_ToolIcons.hand && g_ToolIcons.move && g_ToolIcons.rotate && g_ToolIcons.scale);
         }
 
+        
+            ImGui::Checkbox("Show Colliders", &ctx.show_collider_debug);
+            ImGui::Separator();
+        
+
         // Viewport canvas region.
         ImVec2 canvasMin = ImGui::GetCursorScreenPos();
         ImVec2 canvasSize = ImGui::GetContentRegionAvail();

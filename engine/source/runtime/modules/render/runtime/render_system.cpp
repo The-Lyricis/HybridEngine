@@ -1,4 +1,4 @@
-﻿#include "render_system.h"
+#include "render_system.h"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -26,6 +26,7 @@
 #include "runtime/modules/asset/asset_manager.h"
 #include "runtime/modules/asset/material.h"
 #include "runtime/modules/asset/mesh.h"
+#include <runtime/modules/physics/components/collider_component.h>
 
 
 namespace Hybrid
@@ -98,6 +99,7 @@ namespace Hybrid
 
         Renderer::initialize();
         createMeshShader();
+        createDebugBoxShader();
 
         GLFWwindow *window = static_cast<GLFWwindow *>(glfwWindowHandle);
         int w = 0, h = 0;
@@ -360,6 +362,35 @@ void main() {
 
         m_MeshShader = Shader::Create(vs, fs);
     }
+    void RenderSystem::createDebugBoxShader()
+    {
+        const std::string vs = R"(
+#version 330 core
+layout(location = 0) in vec3 aPos;
+
+uniform mat4 u_ViewProjection;
+uniform mat4 u_Model;
+
+void main()
+{
+    gl_Position = u_ViewProjection * u_Model * vec4(aPos, 1.0);
+}
+)";
+
+        const std::string fs = R"(
+#version 330 core
+layout(location = 0) out vec4 FragColor;
+
+uniform vec4 u_Color;
+
+void main()
+{
+    FragColor = u_Color;
+}
+)";
+
+        m_DebugBoxShader = Shader::Create(vs, fs);
+    }
 
     void RenderSystem::ensureFramebufferSize(std::shared_ptr<Framebuffer>& framebuffer, uint32_t w, uint32_t h)
     {
@@ -404,6 +435,7 @@ void main() {
         RenderPacket pkt;
 
         const glm::vec2 viewport_size = frame_context.viewport_size;
+
         std::shared_ptr<Scene> scene = frame_context.scene ? frame_context.scene : m_Scene;
 
         bool use_game_camera = true;
@@ -446,6 +478,9 @@ void main() {
             projM = glm::mat4(1.0f);
             cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
         }
+
+        pkt.scene = scene;
+        pkt.showColliderDebug = editor_ext ? editor_ext->show_collider_debug : false;
 
         // B) write packet
         pkt.frame.viewProj = projM * viewM;
@@ -537,7 +572,7 @@ void main() {
         if (HasFlag(flags, RenderFlags::SelectionOutline))
             executeSelectionOutlinePass(packet, glfwWindowHandle);
         if (HasFlag(flags, RenderFlags::Gizmos))
-            executeGizmoPass(packet, glfwWindowHandle);
+            executeGizmoPass(packet, glfwWindowHandle, framebuffer);
         if (HasFlag(flags, RenderFlags::Grid))
             executeGridPass(packet, glfwWindowHandle);
         if (HasFlag(flags, RenderFlags::Shadows))
@@ -672,11 +707,90 @@ void main() {
         (void)glfwWindowHandle;
     }
 
-    void RenderSystem::executeGizmoPass(const RenderPacket& packet, void* glfwWindowHandle)
+    void RenderSystem::executeGizmoPass(const RenderPacket& packet,
+        void* glfwWindowHandle,
+        const std::shared_ptr<Framebuffer>& framebuffer)
     {
-        // TODO: editor gizmo render pass.
-        (void)packet;
         (void)glfwWindowHandle;
+
+        if (!packet.showColliderDebug)
+            return;
+
+        if (!framebuffer)
+            return;
+
+        std::shared_ptr<Scene> scene = packet.scene;
+        if (!scene)
+            return;
+
+        if (!m_DebugBoxShader)
+            return;
+
+        auto* debugBoxMeshGPU = getOrCreateDebugBoxMeshGPU();
+        if (!debugBoxMeshGPU)
+            return;
+
+        auto& registry = scene->getRegistry();
+        auto view = registry.view<TransformComponent, ColliderComponent>();
+
+        framebuffer->bind();
+        RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
+
+        glEnable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glLineWidth(2.0f);
+
+        m_DebugBoxShader->bind();
+        m_DebugBoxShader->setMat4("u_ViewProjection", packet.frame.viewProj);
+
+        for (auto e : view)
+        {
+            const auto& tr = view.get<TransformComponent>(e);
+            const auto& col = view.get<ColliderComponent>(e);
+
+            if (!col.Enabled || col.Type != ColliderType::Box)
+                continue;
+
+            glm::vec4 color = glm::vec4(0.2f, 0.95f, 0.35f, 1.0f);
+            if (col.IsTrigger)
+                color = glm::vec4(1.0f, 0.85f, 0.2f, 1.0f);
+
+            glm::mat4 colliderLocal =
+                glm::translate(glm::mat4(1.0f), col.Center) *
+                glm::scale(glm::mat4(1.0f), col.Box.HalfExtents * 2.0f);
+
+            glm::mat4 model = tr.WorldMatrix * colliderLocal;
+
+            m_DebugBoxShader->setMat4("u_Model", model);
+            m_DebugBoxShader->setVec4("u_Color", color);
+
+            for (const auto& sm : debugBoxMeshGPU->submeshes)
+            {
+                debugBoxMeshGPU->vao->bind();
+                RenderCommand::drawIndexed(sm.index_count, sm.index_offset);
+            }
+        }
+
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        glEnable(GL_CULL_FACE);
+
+        framebuffer->unbind();
+    }
+
+    RenderSystem::MeshGPU* RenderSystem::getOrCreateDebugBoxMeshGPU()
+    {
+        static constexpr uint64_t kDebugBoxMeshRawID = 0xFFFFFFF1ull;
+        const AssetID debugBoxId = AssetID::FromRaw(kDebugBoxMeshRawID);
+
+        if (auto it = m_MeshCache.find(debugBoxId); it != m_MeshCache.end())
+            return &it->second;
+
+        auto cubeMesh = Mesh::CreateCube();
+        if (!cubeMesh)
+            return nullptr;
+
+        return getOrCreateMeshGPU(debugBoxId, cubeMesh);
     }
 
     void RenderSystem::executeGridPass(const RenderPacket& packet, void* glfwWindowHandle)

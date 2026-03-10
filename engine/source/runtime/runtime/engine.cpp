@@ -11,6 +11,7 @@
 #include <fstream>
 #include "runtime/modules/project/project_loader.h"
 #include "runtime/modules/project/project_context.h"
+#include "runtime/modules/scene/scene_serializer.h"
 
 namespace Hybrid
 {

@@ -5,6 +5,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 
 #include "runtime/core/base/math_util.h"
+#include <runtime/modules/physics/components/rigidbody_component.h>
 
 namespace Hybrid
 {
