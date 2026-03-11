@@ -89,6 +89,7 @@ namespace Hybrid
             {
                 const auto& c = reg.get<CameraComponent>(e);
                 je["camera"] = {
+                    {"enabled", c.Enabled},
                     {"primary", c.Primary},
                     {"fovY", c.FovY},
                     {"near", c.Near},
@@ -103,6 +104,7 @@ namespace Hybrid
             {
                 const auto& mr = reg.get<MeshRendererComponent>(e);
                 je["meshRenderer"] = {
+                    {"enabled", mr.Enabled},
                     {"mesh", mr.Mesh.value},
                     {"material", mr.Material.value},
                     {"tint", toJson(mr.Tint)}
@@ -122,6 +124,7 @@ namespace Hybrid
             {
                 const auto& dl = reg.get<DirectionalLightComponent>(e);
                 je["dirLight"] = {
+                    {"enabled", dl.Enabled},
                     {"color", toJson(dl.Color)},
                     {"intensity", dl.Intensity}
                 };
@@ -132,6 +135,7 @@ namespace Hybrid
             {
                 const auto& pl = reg.get<PointLightComponent>(e);
                 je["pointLight"] = {
+                    {"enabled", pl.Enabled},
                     {"color", toJson(pl.Color)},
                     {"intensity", pl.Intensity},
                     {"range", pl.Range}
@@ -160,6 +164,7 @@ namespace Hybrid
             {
                 const auto& rb = reg.get<RigidbodyComponent>(e);
                 je["rigidbody"] = {
+                    {"enabled", rb.Enabled},
                     {"velocity", toJson(rb.Velocity)},
                     {"force", toJson(rb.Force)},
                     {"mass", rb.Mass},
@@ -176,6 +181,7 @@ namespace Hybrid
             {
                 const auto& jc = je["camera"];
                 auto& c = reg.all_of<CameraComponent>(e) ? reg.get<CameraComponent>(e) : reg.emplace<CameraComponent>(e);
+                c.Enabled = jc.value("enabled", true);
                 c.Primary = jc.value("primary", false);
                 c.FovY = jc.value("fovY", 45.0f);
                 c.Near = jc.value("near", 0.1f);
@@ -192,6 +198,7 @@ namespace Hybrid
                 const auto& jm = je["meshRenderer"];
                 auto& mr = reg.all_of<MeshRendererComponent>(e) ? reg.get<MeshRendererComponent>(e)
                     : reg.emplace<MeshRendererComponent>(e);
+                mr.Enabled = jm.value("enabled", true);
                 mr.Mesh = resolveAsset(jm, "mesh", "meshPath", registry);
                 mr.Material = resolveAsset(jm, "material", "materialPath", registry);
 
@@ -205,6 +212,7 @@ namespace Hybrid
                 const auto& jl = je["dirLight"];
                 auto& dl = reg.all_of<DirectionalLightComponent>(e) ? reg.get<DirectionalLightComponent>(e)
                     : reg.emplace<DirectionalLightComponent>(e);
+                dl.Enabled = jl.value("enabled", true);
                 if (jl.contains("color") && jl["color"].is_array() && jl["color"].size() == 3)
                     dl.Color = vec3From(jl["color"]);
                 dl.Intensity = jl.value("intensity", 1.0f);
@@ -216,6 +224,7 @@ namespace Hybrid
                 const auto& jl = je["pointLight"];
                 auto& pl = reg.all_of<PointLightComponent>(e) ? reg.get<PointLightComponent>(e)
                     : reg.emplace<PointLightComponent>(e);
+                pl.Enabled = jl.value("enabled", true);
                 if (jl.contains("color") && jl["color"].is_array() && jl["color"].size() == 3)
                     pl.Color = vec3From(jl["color"]);
                 pl.Intensity = jl.value("intensity", 1.0f);
@@ -251,6 +260,7 @@ namespace Hybrid
                 auto& rb = reg.all_of<RigidbodyComponent>(e) ? reg.get<RigidbodyComponent>(e)
                     : reg.emplace<RigidbodyComponent>(e);
 
+                rb.Enabled = jr.value("enabled", true);
                 if (jr.contains("velocity") && jr["velocity"].is_array() && jr["velocity"].size() == 3)
                     rb.Velocity = vec3From(jr["velocity"]);
                 if (jr.contains("force") && jr["force"].is_array() && jr["force"].size() == 3)

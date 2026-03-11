@@ -65,6 +65,14 @@ namespace Hybrid
             std::vector<Submesh> submeshes;
         };
 
+        struct DebugLineMeshGPU
+        {
+            std::shared_ptr<VertexArray> vao;
+            std::shared_ptr<VertexBuffer> vb;
+            std::shared_ptr<IndexBuffer> ib;
+            uint32_t index_count = 0;
+        };
+
         struct MaterialGPU
         {
             MaterialData data;
@@ -156,7 +164,7 @@ namespace Hybrid
         MeshGPU *getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh);
         MaterialGPU *getOrCreateMaterialGPU(AssetID id, const std::shared_ptr<Material> &mat);
         TexturePtr createSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
-        MeshGPU* getOrCreateDebugBoxMeshGPU();
+        DebugLineMeshGPU* getOrCreateDebugBoxMeshGPU();
         
 
     private:
@@ -166,6 +174,8 @@ namespace Hybrid
         std::shared_ptr<Framebuffer> m_GameFB;
         std::shared_ptr<Shader> m_MeshShader;
         std::shared_ptr<Shader> m_DebugBoxShader;
+        DebugLineMeshGPU m_DebugBoxMeshGPU;
+        bool m_HasDebugBoxMeshGPU = false;
 
         std::shared_ptr<AssetManager> m_AssetManager;
         std::unordered_map<AssetID, MeshGPU, AssetID::Hasher> m_MeshCache;

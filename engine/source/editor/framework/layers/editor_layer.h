@@ -4,6 +4,8 @@
 #include <functional>
 #include <memory>
 
+#include <entt/entity/fwd.hpp>
+
 #include "editor/framework/camera/editor_camera.h"
 #include "editor/framework/controllers/editor_asset_hot_reload_controller.h"
 #include "editor/framework/ui/editor_ui.h"
@@ -43,6 +45,7 @@ namespace Hybrid
         bool instantiateSceneAsset(AssetID asset_id, const ImVec2& drop_mouse_pos);
         bool instantiateSceneProjectPath(const std::string& rel_path, const ImVec2& drop_mouse_pos);
         bool tryGetSceneDropPosition(const ImVec2& drop_mouse_pos, glm::vec3& out_position);
+        bool fitBoxColliderToMesh(entt::entity entity_handle);
 
     private:
         EngineServices m_services{};       // Injected runtime/editor services.

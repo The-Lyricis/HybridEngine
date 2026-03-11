@@ -8,6 +8,7 @@ namespace Hybrid
 {
     struct MeshRendererComponent
     {
+        bool Enabled = true;
         AssetID Mesh{};
         AssetID Material{};
         glm::vec4 Tint{1.0f};

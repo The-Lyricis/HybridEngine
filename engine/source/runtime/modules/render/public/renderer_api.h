@@ -21,6 +21,7 @@ namespace Hybrid {
         virtual void setClearColor(const glm::vec4& color) = 0;
         virtual void clear() = 0;
         virtual void drawIndexed(uint32_t indexCount, uint32_t indexOffset = 0) = 0;
+        virtual void drawLinesIndexed(uint32_t indexCount, uint32_t indexOffset = 0) = 0;
 
         static API getAPI();
         static std::unique_ptr<RendererAPI> Create();

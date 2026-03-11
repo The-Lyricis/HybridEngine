@@ -54,6 +54,8 @@ namespace Hybrid
         {
             auto& transform = view.get<TransformComponent>(entity);
             auto& rigidbody = view.get<RigidbodyComponent>(entity);
+            if (!rigidbody.Enabled)
+                continue;
             if (rigidbody.IsKinematic)
                 continue;
             if (rigidbody.UseGravity)
@@ -100,6 +102,8 @@ namespace Hybrid
             auto& dynamicBody = dynamicView.get<RigidbodyComponent>(dynamicEntity);
             auto& dynamicCollider = dynamicView.get<ColliderComponent>(dynamicEntity);
 
+            if (!dynamicBody.Enabled)
+                continue;
             if (!dynamicCollider.Enabled || dynamicCollider.Type != ColliderType::Box)
                 continue;
 
@@ -111,7 +115,11 @@ namespace Hybrid
                     continue;
 
                 if (registry.all_of<RigidbodyComponent>(staticEntity))
-                    continue;
+                {
+                    const auto& staticBody = registry.get<RigidbodyComponent>(staticEntity);
+                    if (staticBody.Enabled)
+                        continue;
+                }
 
                 auto& staticTransform = staticView.get<TransformComponent>(staticEntity);
                 auto& staticCollider = staticView.get<ColliderComponent>(staticEntity);

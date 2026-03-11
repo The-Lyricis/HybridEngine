@@ -13,6 +13,7 @@
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/asset/asset_registry.h"
 #include "runtime/modules/asset/asset_type.h"
+#include "runtime/modules/asset/mesh.h"
 #include "runtime/modules/asset/runtime_resource_system.h"
 #include "runtime/modules/input/input_layer.h"
 #include "runtime/modules/render/runtime/editor_render_ext.h"
@@ -140,6 +141,12 @@ namespace Hybrid
                 syncContextDocumentState();
                 return instantiated;
             };
+        ctx.fit_box_collider_to_mesh = [this](entt::entity entity_handle) -> bool
+            {
+                const bool fitted = fitBoxColliderToMesh(entity_handle);
+                syncContextDocumentState();
+                return fitted;
+            };
         ctx.get_builtin_mesh_id = [this](BuiltinMesh mesh) -> AssetID
             {
                 if (!m_services.resources)
@@ -169,6 +176,7 @@ namespace Hybrid
         ctx.find_asset_by_vpath = {};
         ctx.instantiate_scene_asset = {};
         ctx.instantiate_scene_project_path = {};
+        ctx.fit_box_collider_to_mesh = {};
         ctx.get_builtin_mesh_id = {};
         ctx.enter_play_mode = {};
         ctx.exit_play_mode = {};
@@ -461,6 +469,96 @@ namespace Hybrid
         ctx.selected = entity.GetHandle();
         ctx.markSceneDirty();
         ctx.setStatusMessage("Instantiated mesh into scene.");
+        return true;
+    }
+
+    bool EditorLayer::fitBoxColliderToMesh(entt::entity entity_handle)
+    {
+        auto& ctx = m_editor_ui.context();
+        if (!ctx.active_scene || entity_handle == entt::null)
+            return false;
+
+        auto& registry = ctx.active_scene->getRegistry();
+        if (!registry.valid(entity_handle))
+            return false;
+
+        Entity entity(entity_handle, &registry, ctx.active_scene);
+        if (!entity.HasComponent<ColliderComponent>() || !entity.HasComponent<MeshRendererComponent>())
+            return false;
+        if (!m_services.resources)
+            return false;
+
+        const auto& mesh_renderer = entity.GetComponent<MeshRendererComponent>();
+        if (mesh_renderer.Mesh.value == 0)
+        {
+            ctx.setStatusMessage("Fit To Mesh requires a valid mesh.");
+            return false;
+        }
+
+        auto manager = m_services.resources->getManager();
+        if (!manager)
+            return false;
+
+        auto mesh = manager->loadSync<Mesh>(mesh_renderer.Mesh);
+        if (!mesh)
+        {
+            ctx.setStatusMessage("Failed to load mesh for collider fitting.");
+            return false;
+        }
+
+        bool has_bounds = false;
+        glm::vec3 aabb_min(0.0f);
+        glm::vec3 aabb_max(0.0f);
+
+        const auto& submeshes = mesh->getSubmeshes();
+        for (const auto& submesh : submeshes)
+        {
+            if (!has_bounds)
+            {
+                aabb_min = submesh.aabb_min;
+                aabb_max = submesh.aabb_max;
+                has_bounds = true;
+            }
+            else
+            {
+                    aabb_min = (glm::min)(aabb_min, submesh.aabb_min);
+                    aabb_max = (glm::max)(aabb_max, submesh.aabb_max);
+            }
+        }
+
+        if (!has_bounds)
+        {
+            const auto& vertices = mesh->getVertices();
+            for (const auto& vertex : vertices)
+            {
+                if (!has_bounds)
+                {
+                    aabb_min = vertex.position;
+                    aabb_max = vertex.position;
+                    has_bounds = true;
+                }
+                else
+                {
+                    aabb_min = (glm::min)(aabb_min, vertex.position);
+                    aabb_max = (glm::max)(aabb_max, vertex.position);
+                }
+            }
+        }
+
+        if (!has_bounds)
+        {
+            ctx.setStatusMessage("Mesh has no bounds to fit collider.");
+            return false;
+        }
+
+        auto& collider = entity.GetComponent<ColliderComponent>();
+        collider.Type = ColliderType::Box;
+        collider.Center = (aabb_min + aabb_max) * 0.5f;
+        collider.Box.HalfExtents = (glm::max)((aabb_max - aabb_min) * 0.5f, glm::vec3(0.0f));
+
+        ctx.active_scene->MarkDirtyRecursive(entity);
+        ctx.markSceneDirty();
+        ctx.setStatusMessage("Box collider fitted to mesh.");
         return true;
     }
 

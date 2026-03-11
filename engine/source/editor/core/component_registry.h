@@ -83,6 +83,7 @@ namespace Hybrid
     using ComponentAddFn = bool (*)(Entity entity);
     using ComponentGetFn = void* (*)(Entity entity);
     using ComponentRemoveFn = void (*)(Entity entity);
+    using ComponentEnabledFn = bool* (*)(void* componentPtr);
     using ComponentCustomDrawFn = bool (*)(EditorContext& ctx, Entity entity, void* componentPtr);
 
     struct PropertyDesc
@@ -110,6 +111,7 @@ namespace Hybrid
         ComponentAddFn add = nullptr;
         ComponentGetFn get = nullptr;
         ComponentRemoveFn remove = nullptr;
+        ComponentEnabledFn enabled = nullptr;
 
         std::vector<PropertyDesc> properties;
         ComponentCustomDrawFn draw_custom = nullptr;

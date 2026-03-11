@@ -26,4 +26,9 @@ namespace Hybrid {
         glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indexCount), GL_UNSIGNED_INT, offsetPtr);
     }
 
+    void GLRendererAPI::drawLinesIndexed(uint32_t indexCount, uint32_t indexOffset) {
+        const void* offsetPtr = reinterpret_cast<const void*>(static_cast<uintptr_t>(indexOffset) * sizeof(uint32_t));
+        glDrawElements(GL_LINES, static_cast<GLsizei>(indexCount), GL_UNSIGNED_INT, offsetPtr);
+    }
+
 } // namespace Hybrid

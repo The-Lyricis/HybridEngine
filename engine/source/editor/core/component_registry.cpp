@@ -62,6 +62,14 @@ namespace Hybrid
                 entity.RemoveComponent<T>();
         }
 
+        template<typename T>
+        bool* GetEnabledPtr(void* componentPtr)
+        {
+            if (componentPtr == nullptr)
+                return nullptr;
+            return &static_cast<T*>(componentPtr)->Enabled;
+        }
+
         bool DrawVec3Control(const char* label, glm::vec3& value, float speed)
         {
             ImGui::PushID(label);
@@ -215,7 +223,7 @@ namespace Hybrid
             return changed;
         }
 
-        bool DrawColliderComponent(EditorContext&, Entity, void* componentPtr)
+        bool DrawColliderComponent(EditorContext& ctx, Entity entity, void* componentPtr)
         {
             if (componentPtr == nullptr)
                 return false;
@@ -223,7 +231,6 @@ namespace Hybrid
             auto* collider = static_cast<ColliderComponent*>(componentPtr);
             bool changed = false;
 
-            changed |= ImGui::Checkbox("Enabled", &collider->Enabled);
             changed |= ImGui::Checkbox("Is Trigger", &collider->IsTrigger);
 
             int type_index = static_cast<int>(collider->Type);
@@ -259,6 +266,22 @@ namespace Hybrid
             default:
                 break;
             }
+
+            const bool can_fit =
+                collider->Type == ColliderType::Box &&
+                entity.HasComponent<MeshRendererComponent>() &&
+                entity.GetComponent<MeshRendererComponent>().Mesh.value != 0 &&
+                static_cast<bool>(ctx.fit_box_collider_to_mesh);
+
+            if (!can_fit)
+                ImGui::BeginDisabled();
+            if (ImGui::Button("Fit To Mesh"))
+            {
+                if (ctx.fit_box_collider_to_mesh && ctx.fit_box_collider_to_mesh(entity.GetHandle()))
+                    changed = true;
+            }
+            if (!can_fit)
+                ImGui::EndDisabled();
 
             return changed;
         }
@@ -302,21 +325,23 @@ namespace Hybrid
 
             ComponentDesc camera_desc;
             camera_desc.name = "Camera";
-            camera_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
+            camera_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
             camera_desc.has = &HasComponent<CameraComponent>;
             camera_desc.add = &AddComponent<CameraComponent>;
             camera_desc.get = &GetComponentPtr<CameraComponent>;
             camera_desc.remove = &RemoveComponent<CameraComponent>;
+            camera_desc.enabled = &GetEnabledPtr<CameraComponent>;
             camera_desc.draw_custom = &DrawCameraComponent;
             descriptors.push_back(camera_desc);
 
             ComponentDesc directional_light_desc;
             directional_light_desc.name = "Directional Light";
-            directional_light_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
+            directional_light_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
             directional_light_desc.has = &HasComponent<DirectionalLightComponent>;
             directional_light_desc.add = &AddComponent<DirectionalLightComponent>;
             directional_light_desc.get = &GetComponentPtr<DirectionalLightComponent>;
             directional_light_desc.remove = &RemoveComponent<DirectionalLightComponent>;
+            directional_light_desc.enabled = &GetEnabledPtr<DirectionalLightComponent>;
             directional_light_desc.properties = {
                 PropertyDesc{
                     "Color",
@@ -344,11 +369,12 @@ namespace Hybrid
 
             ComponentDesc point_light_desc;
             point_light_desc.name = "Point Light";
-            point_light_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
+            point_light_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
             point_light_desc.has = &HasComponent<PointLightComponent>;
             point_light_desc.add = &AddComponent<PointLightComponent>;
             point_light_desc.get = &GetComponentPtr<PointLightComponent>;
             point_light_desc.remove = &RemoveComponent<PointLightComponent>;
+            point_light_desc.enabled = &GetEnabledPtr<PointLightComponent>;
             point_light_desc.properties = {
                 PropertyDesc{
                     "Color",
@@ -386,21 +412,23 @@ namespace Hybrid
 
             ComponentDesc collider_desc;
             collider_desc.name = "Collider";
-            collider_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
+            collider_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
             collider_desc.has = &HasComponent<ColliderComponent>;
             collider_desc.add = &AddComponent<ColliderComponent>;
             collider_desc.get = &GetComponentPtr<ColliderComponent>;
             collider_desc.remove = &RemoveComponent<ColliderComponent>;
+            collider_desc.enabled = &GetEnabledPtr<ColliderComponent>;
             collider_desc.draw_custom = &DrawColliderComponent;
             descriptors.push_back(collider_desc);
 
             ComponentDesc rigidbody_desc;
             rigidbody_desc.name = "Rigidbody";
-            rigidbody_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
+            rigidbody_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
             rigidbody_desc.has = &HasComponent<RigidbodyComponent>;
             rigidbody_desc.add = &AddComponent<RigidbodyComponent>;
             rigidbody_desc.get = &GetComponentPtr<RigidbodyComponent>;
             rigidbody_desc.remove = &RemoveComponent<RigidbodyComponent>;
+            rigidbody_desc.enabled = &GetEnabledPtr<RigidbodyComponent>;
             rigidbody_desc.properties = {
                 PropertyDesc{
                     "Velocity",
@@ -457,11 +485,12 @@ namespace Hybrid
 
             ComponentDesc mesh_renderer_desc;
             mesh_renderer_desc.name = "Mesh Renderer";
-            mesh_renderer_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable;
+            mesh_renderer_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
             mesh_renderer_desc.has = &HasComponent<MeshRendererComponent>;
             mesh_renderer_desc.add = &AddComponent<MeshRendererComponent>;
             mesh_renderer_desc.get = &GetComponentPtr<MeshRendererComponent>;
             mesh_renderer_desc.remove = &RemoveComponent<MeshRendererComponent>;
+            mesh_renderer_desc.enabled = &GetEnabledPtr<MeshRendererComponent>;
             mesh_renderer_desc.draw_custom = &DrawMeshRendererComponent;
             descriptors.push_back(mesh_renderer_desc);
 

@@ -14,6 +14,7 @@ namespace Hybrid
 
     struct CameraComponent
     {
+        bool Enabled = true;
         bool Primary = false;
 
         float FovY = 45.0f;

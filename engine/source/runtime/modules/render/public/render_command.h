@@ -14,6 +14,7 @@ namespace Hybrid {
         static void clear();
 
         static void drawIndexed(unsigned int indexCount, unsigned int indexOffset = 0);
+        static void drawLinesIndexed(unsigned int indexCount, unsigned int indexOffset = 0);
 
     private:
         static std::unique_ptr<RendererAPI> s_API;

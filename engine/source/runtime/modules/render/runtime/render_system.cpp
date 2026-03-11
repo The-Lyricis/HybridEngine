@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <array>
 #include <string>
 
 #include <glm/glm.hpp>
@@ -82,7 +83,21 @@ namespace Hybrid
             for (auto e : view)
             {
                 auto& cam = view.get<Hybrid::CameraComponent>(e);
+                if (!cam.Enabled)
+                    continue;
                 if (cam.Primary) { mainCam = e; break; }
+            }
+            if (mainCam == entt::null)
+            {
+                for (auto e : view)
+                {
+                    auto& cam = view.get<Hybrid::CameraComponent>(e);
+                    if (cam.Enabled)
+                    {
+                        mainCam = e;
+                        break;
+                    }
+                }
             }
             if (mainCam == entt::null) return false;
 
@@ -566,6 +581,8 @@ void main()
             {
                 const auto &tc = dirView.get<Hybrid::TransformComponent>(e);
                 const auto &dl = dirView.get<Hybrid::DirectionalLightComponent>(e);
+                if (!dl.Enabled)
+                    continue;
                 pkt.lights.dir.color = dl.Color;
                 pkt.lights.dir.intensity = dl.Intensity;
                 pkt.lights.dir.direction = lightDirectionFromTransform(tc);
@@ -579,6 +596,8 @@ void main()
                     break;
                 const auto &tc = ptView.get<Hybrid::TransformComponent>(e);
                 const auto &pl = ptView.get<Hybrid::PointLightComponent>(e);
+                if (!pl.Enabled)
+                    continue;
 
                 PointLightData p;
                 p.color = pl.Color;
@@ -600,6 +619,8 @@ void main()
             {
                 const auto &tr = renderView.get<Hybrid::TransformComponent>(e);
                 const auto &mr = renderView.get<Hybrid::MeshRendererComponent>(e);
+                if (!mr.Enabled)
+                    continue;
 
                 DrawItem item;
                 item.meshId = mr.Mesh;
@@ -802,7 +823,6 @@ void main()
 
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         glLineWidth(2.0f);
 
         m_DebugBoxShader->bind();
@@ -829,33 +849,55 @@ void main()
             m_DebugBoxShader->setMat4("u_Model", model);
             m_DebugBoxShader->setVec4("u_Color", color);
 
-            for (const auto& sm : debugBoxMeshGPU->submeshes)
-            {
-                debugBoxMeshGPU->vao->bind();
-                RenderCommand::drawIndexed(sm.index_count, sm.index_offset);
-            }
+            debugBoxMeshGPU->vao->bind();
+            RenderCommand::drawLinesIndexed(debugBoxMeshGPU->index_count);
         }
 
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         glEnable(GL_CULL_FACE);
         setSceneFramebufferDrawBuffers(true);
 
         framebuffer->unbind();
     }
 
-    RenderSystem::MeshGPU* RenderSystem::getOrCreateDebugBoxMeshGPU()
+    RenderSystem::DebugLineMeshGPU* RenderSystem::getOrCreateDebugBoxMeshGPU()
     {
-        static constexpr uint64_t kDebugBoxMeshRawID = 0xFFFFFFF1ull;
-        const AssetID debugBoxId = AssetID::FromRaw(kDebugBoxMeshRawID);
+        if (m_HasDebugBoxMeshGPU)
+            return &m_DebugBoxMeshGPU;
 
-        if (auto it = m_MeshCache.find(debugBoxId); it != m_MeshCache.end())
-            return &it->second;
+        static constexpr std::array<glm::vec3, 8> kBoxVertices = {
+            glm::vec3{-0.5f, -0.5f, -0.5f},
+            glm::vec3{ 0.5f, -0.5f, -0.5f},
+            glm::vec3{ 0.5f,  0.5f, -0.5f},
+            glm::vec3{-0.5f,  0.5f, -0.5f},
+            glm::vec3{-0.5f, -0.5f,  0.5f},
+            glm::vec3{ 0.5f, -0.5f,  0.5f},
+            glm::vec3{ 0.5f,  0.5f,  0.5f},
+            glm::vec3{-0.5f,  0.5f,  0.5f},
+        };
 
-        auto cubeMesh = Mesh::CreateCube();
-        if (!cubeMesh)
-            return nullptr;
+        static constexpr std::array<uint32_t, 24> kBoxLineIndices = {
+            0, 1, 1, 2, 2, 3, 3, 0,
+            4, 5, 5, 6, 6, 7, 7, 4,
+            0, 4, 1, 5, 2, 6, 3, 7,
+        };
 
-        return getOrCreateMeshGPU(debugBoxId, cubeMesh);
+        m_DebugBoxMeshGPU.vb =
+            VertexBuffer::Create(kBoxVertices.data(), static_cast<uint32_t>(kBoxVertices.size() * sizeof(glm::vec3)));
+        m_DebugBoxMeshGPU.ib =
+            IndexBuffer::Create(kBoxLineIndices.data(), static_cast<uint32_t>(kBoxLineIndices.size()));
+        m_DebugBoxMeshGPU.vao = VertexArray::Create();
+
+        VertexLayout layout;
+        layout.stride = sizeof(glm::vec3);
+        layout.attributes = {
+            {0, 3, 0, false},
+        };
+
+        m_DebugBoxMeshGPU.vao->setVertexBuffer(m_DebugBoxMeshGPU.vb, layout);
+        m_DebugBoxMeshGPU.vao->setIndexBuffer(m_DebugBoxMeshGPU.ib);
+        m_DebugBoxMeshGPU.index_count = static_cast<uint32_t>(kBoxLineIndices.size());
+        m_HasDebugBoxMeshGPU = true;
+        return &m_DebugBoxMeshGPU;
     }
 
     void RenderSystem::executeGridPass(const RenderPacket& packet, void* glfwWindowHandle)
