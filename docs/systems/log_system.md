@@ -67,6 +67,18 @@ The current implementation already includes:
 - Core / Client dual logger creation
 - macro wrappers
 
+The current default output patterns are:
+
+- console: `[%T] [tid=%t] %n: %v`
+- file: `[%Y-%m-%d %T.%e] [%l] [tid=%t] %n: %v`
+
+This means the standard log output already carries:
+
+- timestamp
+- logger name
+- log level in file output
+- thread id
+
 ## Logging Policy
 
 ### 1. Use the existing logging entry points
@@ -162,6 +174,8 @@ Recommended field names:
 - `count`
 - `elapsed_ms`
 
+The thread id is already provided by the logger pattern. Do not repeat it in message text unless a specific correlation workflow requires it.
+
 ### 5. Keep wording stable and searchable
 
 Logs are operational data, not UI copy.
@@ -171,6 +185,8 @@ Use:
 - short, repeatable wording
 - stable event names
 - consistent field names
+
+When multiple worker threads can emit related events, use the existing timestamp plus `tid` in the log prefix to reconstruct interleaving instead of inventing ad-hoc thread labels in message bodies.
 
 Avoid:
 
