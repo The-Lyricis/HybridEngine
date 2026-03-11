@@ -1,5 +1,6 @@
 # Hybrid Engine
-[简体中文](README_zh-CN.md)
+中文版:[简体中文](README_zh-CN.md)
+
 A personal engine project for studying modern engine architecture, system implementation, and technical exploration.
 
 ## Overview
