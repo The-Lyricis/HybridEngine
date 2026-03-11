@@ -166,7 +166,7 @@ namespace Hybrid
                 je["rigidbody"] = {
                     {"enabled", rb.Enabled},
                     {"velocity", toJson(rb.Velocity)},
-                    {"force", toJson(rb.Force)},
+                    {"constantForce", toJson(rb.ConstantForce)},
                     {"mass", rb.Mass},
                     {"useGravity", rb.UseGravity},
                     {"isKinematic", rb.IsKinematic}
@@ -263,8 +263,11 @@ namespace Hybrid
                 rb.Enabled = jr.value("enabled", true);
                 if (jr.contains("velocity") && jr["velocity"].is_array() && jr["velocity"].size() == 3)
                     rb.Velocity = vec3From(jr["velocity"]);
-                if (jr.contains("force") && jr["force"].is_array() && jr["force"].size() == 3)
-                    rb.Force = vec3From(jr["force"]);
+                rb.Force = glm::vec3(0.0f);
+                if (jr.contains("constantForce") && jr["constantForce"].is_array() && jr["constantForce"].size() == 3)
+                    rb.ConstantForce = vec3From(jr["constantForce"]);
+                else
+                    rb.ConstantForce = glm::vec3(0.0f);
 
                 rb.Mass = std::max(0.0f, jr.value("mass", 1.0f));
                 rb.UseGravity = jr.value("useGravity", true);

@@ -451,14 +451,14 @@ namespace Hybrid
                     "Linear velocity in world space."
                 },
                 PropertyDesc{
-                    "Force",
+                    "Constant Force",
                     PropertyType::Vec3,
-                    offsetof(RigidbodyComponent, Force),
+                    offsetof(RigidbodyComponent, ConstantForce),
                     0.05f,
                     0.0f,
                     0.0f,
                     false,
-                    "Accumulated force in world space."
+                    "Continuous force applied every physics step in world space."
                 },
                 PropertyDesc{
                     "Mass",

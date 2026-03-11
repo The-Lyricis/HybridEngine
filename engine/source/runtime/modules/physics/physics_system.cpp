@@ -58,12 +58,14 @@ namespace Hybrid
                 continue;
             if (rigidbody.IsKinematic)
                 continue;
+
+            glm::vec3 total_force = rigidbody.Force + rigidbody.ConstantForce;
             if (rigidbody.UseGravity)
             {
-                rigidbody.Force += glm::vec3(0.0f, -9.8f * rigidbody.Mass, 0.0f);
+                total_force += glm::vec3(0.0f, -9.8f * rigidbody.Mass, 0.0f);
             }
             const glm::vec3 acceleration = rigidbody.Mass > 0.0f
-                ? rigidbody.Force / rigidbody.Mass
+                ? total_force / rigidbody.Mass
                 : glm::vec3(0.0f);
             rigidbody.Velocity += acceleration * dt;
             transform.Position += rigidbody.Velocity * dt;
