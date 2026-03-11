@@ -27,6 +27,7 @@ namespace Hybrid
             CreateRootCube,
             CreateRootCamera,
             CreateRootDirectionalLight,
+            CreateRootPointLight,
         };
 
         void drawWindowContextMenu(EditorContext& ctx) override;

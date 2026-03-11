@@ -73,6 +73,13 @@ namespace Hybrid
             return entity;
         }
 
+        Entity createPointLight(Scene& scene, const char* name)
+        {
+            Entity entity = scene.createEntity(name);
+            entity.AddComponent<PointLightComponent>();
+            return entity;
+        }
+
         Entity createBuiltinCube(Scene& scene, AssetID cube_mesh_id)
         {
             Entity entity = scene.createEntity("Cube");
@@ -184,6 +191,8 @@ namespace Hybrid
         {
             if (ImGui::MenuItem("Directional Light"))
                 queueAction(PendingActionType::CreateRootDirectionalLight, target);
+            if (ImGui::MenuItem("Point Light"))
+                queueAction(PendingActionType::CreateRootPointLight, target);
             ImGui::EndMenu();
         }
 
@@ -280,6 +289,21 @@ namespace Hybrid
         case PendingActionType::CreateRootDirectionalLight:
         {
             Entity created = createDirectionalLight(*ctx.active_scene, "Directional Light");
+            if (!hasTransform(registry, m_pendingTarget))
+            {
+                ctx.selection.setSingle(created.GetHandle());
+                ctx.markSceneDirty();
+                break;
+            }
+
+            if (ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true))
+                ctx.selection.setSingle(created.GetHandle());
+            ctx.markSceneDirty();
+            break;
+        }
+        case PendingActionType::CreateRootPointLight:
+        {
+            Entity created = createPointLight(*ctx.active_scene, "Point Light");
             if (!hasTransform(registry, m_pendingTarget))
             {
                 ctx.selection.setSingle(created.GetHandle());
