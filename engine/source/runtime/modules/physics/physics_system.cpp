@@ -141,7 +141,7 @@ namespace Hybrid
                 dynamicTransform.DirtyWorld = true;
 
                 const float normal_velocity = glm::dot(dynamicBody.Velocity, hit.Normal);
-                if (normal_velocity < 0.0f)
+                if (normal_velocity > 0.0f)
                     dynamicBody.Velocity -= hit.Normal * normal_velocity;
 
                 dynamicAABB = buildAABB(dynamicTransform, dynamicCollider);
