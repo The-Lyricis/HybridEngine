@@ -140,10 +140,9 @@ namespace Hybrid
                 dynamicTransform.DirtyLocal = true;
                 dynamicTransform.DirtyWorld = true;
 
-                if (std::abs(hit.Normal.y) > 0.5f && dynamicBody.Velocity.y < 0.0f)
-                {
-                    dynamicBody.Velocity.y = 0.0f;
-                }
+                const float normal_velocity = glm::dot(dynamicBody.Velocity, hit.Normal);
+                if (normal_velocity < 0.0f)
+                    dynamicBody.Velocity -= hit.Normal * normal_velocity;
 
                 dynamicAABB = buildAABB(dynamicTransform, dynamicCollider);
             }
