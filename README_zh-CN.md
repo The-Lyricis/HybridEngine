@@ -127,4 +127,4 @@ Hybrid Engine 目前主要作为我的长期个人学习与研究项目持续开
 联系方式：
 
 - 主页：[Portfolio](https://the-lyricis.github.io/)
-- Gmail：picchick1623@gmail.com
+- Gmail：pigchick1623@gmail.com

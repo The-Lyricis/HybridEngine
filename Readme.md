@@ -127,4 +127,4 @@ Special thanks to [@SaluteBEE](https://github.com/SaluteBEE) for support, collab
 Contact:
 
 - Portfolio: [Portfolio](https://the-lyricis.github.io/)
-- Gmail: picchick1623@gmail.com
+- Gmail: pigchick1623@gmail.com
