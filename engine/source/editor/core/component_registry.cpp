@@ -411,7 +411,7 @@ namespace Hybrid
             descriptors.push_back(point_light_desc);
 
             ComponentDesc collider_desc;
-            collider_desc.name = "Collider";
+            collider_desc.name = "BoxColider";
             collider_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
             collider_desc.has = &HasComponent<ColliderComponent>;
             collider_desc.add = &AddComponent<ColliderComponent>;

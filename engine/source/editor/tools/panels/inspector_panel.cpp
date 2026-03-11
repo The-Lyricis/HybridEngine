@@ -156,13 +156,19 @@ namespace Hybrid
         }
 
         auto& reg = ctx.active_scene->getRegistry();
-        Entity selected_entity(ctx.selected, &reg, ctx.active_scene);
+        Entity selected_entity(ctx.activeEntity(), &reg, ctx.active_scene);
 
-        if (ctx.selected == entt::null || !reg.valid(ctx.selected))
+        if (ctx.activeEntity() == entt::null || !reg.valid(ctx.activeEntity()))
         {
             ImGui::TextDisabled("Nothing selected.");
             ImGui::End();
             return;
+        }
+
+        if (ctx.selection.size() > 1)
+        {
+            ImGui::TextDisabled("%zu objects selected. Showing active object.", ctx.selection.size());
+            ImGui::Separator();
         }
 
         const ComponentDesc* pending_remove_desc = nullptr;
@@ -250,7 +256,7 @@ namespace Hybrid
                 {
                     if (!already_has_component && desc.add(selected_entity))
                     {
-                        if (std::strcmp(desc.name, "Collider") == 0 && ctx.fit_box_collider_to_mesh)
+                        if (std::strcmp(desc.name, "BoxColider") == 0 && ctx.fit_box_collider_to_mesh)
                             (void)ctx.fit_box_collider_to_mesh(selected_entity.GetHandle());
                         ctx.markSceneDirty();
                     }

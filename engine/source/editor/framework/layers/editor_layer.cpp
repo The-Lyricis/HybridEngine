@@ -64,7 +64,7 @@ namespace Hybrid
                     if (m_mode_callbacks.enter_play_mode_from_scene(document->scene))
                     {
                         auto& local_ctx = m_editor_ui.context();
-                        local_ctx.selected = entt::null;
+                        local_ctx.selection.clear();
                         local_ctx.request_pick = false;
                         syncContextDocumentState();
                     }
@@ -76,7 +76,7 @@ namespace Hybrid
                 {
                     m_mode_callbacks.exit_play_mode();
                     auto& local_ctx = m_editor_ui.context();
-                    local_ctx.selected = entt::null;
+                    local_ctx.selection.clear();
                     local_ctx.request_pick = false;
                     syncContextDocumentState();
                 }
@@ -98,7 +98,7 @@ namespace Hybrid
             {
                 const bool opened = m_scene_io.open(scene_vpath);
                 if (opened)
-                    m_editor_ui.context().selected = entt::null;
+                    m_editor_ui.context().selection.clear();
                 syncContextDocumentState();
             };
         ctx.request_reimport_asset = [this](const std::string& asset_vpath) -> bool
@@ -183,7 +183,7 @@ namespace Hybrid
         ctx.toggle_pause_mode = {};
         ctx.is_play_mode = {};
         ctx.is_pause_mode = {};
-        ctx.selected = entt::null;
+        ctx.selection.clear();
         ctx.clearActiveDocument();
         m_asset_hot_reload_controller.unbindContext(ctx);
 
@@ -209,11 +209,19 @@ namespace Hybrid
             ctx.active_scene = m_services.scene->getActiveScene().get();
         }
 
-        if (ctx.active_scene && ctx.selected != entt::null)
+        if (ctx.active_scene && ctx.activeEntity() != entt::null)
         {
             auto& reg = ctx.active_scene->getRegistry();
-            if (!reg.valid(ctx.selected))
-                ctx.selected = entt::null;
+            for (auto it = ctx.selection.items.begin(); it != ctx.selection.items.end();)
+            {
+                if (!reg.valid(*it))
+                    it = ctx.selection.items.erase(it);
+                else
+                    ++it;
+            }
+
+            if (ctx.selection.active != entt::null && !reg.valid(ctx.selection.active))
+                ctx.selection.active = ctx.selection.items.empty() ? entt::null : ctx.selection.items.back();
         }
 
         ctx.setStatusMessage(m_scene_io.getStatusMessage());
@@ -227,7 +235,7 @@ namespace Hybrid
             return;
 
         auto& ctx = m_editor_ui.context();
-        ctx.selected = entt::null;
+        ctx.selection.clear();
         ctx.request_pick = false;
 
         if (m_active_scene_view_document)
@@ -261,14 +269,24 @@ namespace Hybrid
                 auto& ctx = m_editor_ui.context();
                 if (picked == kInvalidEntityID || !ctx.active_scene)
                 {
-                    ctx.selected = entt::null;
+                    if (!ctx.pick_toggle)
+                        ctx.selection.clear();
                 }
                 else
                 {
                     const entt::entity entity = static_cast<entt::entity>(picked);
                     auto& reg = ctx.active_scene->getRegistry();
-                    ctx.selected = reg.valid(entity) ? entity : entt::null;
+                    const entt::entity resolved = reg.valid(entity) ? entity : entt::null;
+                    if (!ctx.pick_toggle)
+                    {
+                        ctx.selection.setSingle(resolved);
+                    }
+                    else if (resolved != entt::null)
+                    {
+                        ctx.selection.toggle(resolved);
+                    }
                 }
+                ctx.pick_toggle = false;
             }
         }
 
@@ -307,7 +325,7 @@ namespace Hybrid
         editor_ext->scene_viewport_size = {ctx.scene_viewport_size.x, ctx.scene_viewport_size.y};
         editor_ext->game_viewport_size = {ctx.game_viewport_size.x, ctx.game_viewport_size.y};
         editor_ext->selected_entity_id =
-            (ctx.selected == entt::null) ? kInvalidEntityID : static_cast<uint32_t>(entt::to_integral(ctx.selected));
+            (ctx.activeEntity() == entt::null) ? kInvalidEntityID : static_cast<uint32_t>(entt::to_integral(ctx.activeEntity()));
         editor_ext->pan_tool = ctx.pan_tool;
         editor_ext->show_collider_debug = ctx.show_collider_debug;
 
@@ -466,7 +484,7 @@ namespace Hybrid
         renderer.Mesh = asset_id;
 
         ctx.active_scene->MarkDirtyRecursive(entity);
-        ctx.selected = entity.GetHandle();
+        ctx.selection.setSingle(entity.GetHandle());
         ctx.markSceneDirty();
         ctx.setStatusMessage("Instantiated mesh into scene.");
         return true;

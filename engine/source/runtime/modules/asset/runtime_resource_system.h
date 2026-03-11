@@ -33,7 +33,7 @@ namespace Hybrid
         
         // Default runtime fallback assets.
         void createDefaultTexture();
-        void createDefaultMaterial();
+        void createHybridDefaultMaterial();
         void createBuiltinMesh(BuiltinMesh mesh);
 
     private:
@@ -42,7 +42,7 @@ namespace Hybrid
         std::shared_ptr<AssetManager>       m_manager;  // Runtime load/cache/state machine.
         std::unique_ptr<AssetMetaStore>     m_metaStore; // Meta file read path at startup.
         std::shared_ptr<Texture>            m_defaultTexture; // 1x1 white fallback texture.
-        std::shared_ptr<Material>           m_defaultMaterial; // Fallback material.
+        std::shared_ptr<Material>           m_hybridDefaultMaterial; // Fallback material.
         AssetID                             m_builtinCubeMeshId{}; // Built-in mesh ids, starting with cube.
         ProjectContext m_project; // Project context for path resolution and info.
     };

@@ -4,6 +4,7 @@
 #include <entt/entt.hpp>
 
 #include <cstdint>
+#include <vector>
 #include <unordered_set>
 
 namespace Hybrid
@@ -38,9 +39,13 @@ namespace Hybrid
         void queueAction(PendingActionType type, entt::entity target = entt::null);
         void flushPendingAction(EditorContext& ctx, entt::registry& registry);
         void drawCommonContextMenu(EditorContext& ctx, entt::registry& registry, entt::entity target);
+        void collectEntityOrder(entt::registry& registry, entt::entity entity, std::vector<entt::entity>& order) const;
+        void applySelectionClick(EditorContext& ctx, entt::entity entity);
 
     private:
         PendingActionType m_pendingAction = PendingActionType::None;
         entt::entity m_pendingTarget = entt::null;
+        std::vector<entt::entity> m_visibleOrder;
+        entt::entity m_rangeAnchor = entt::null;
     };
 }

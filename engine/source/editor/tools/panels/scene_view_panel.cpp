@@ -260,12 +260,12 @@ namespace Hybrid
         const bool want_gizmo =
             (s_Tool == ToolMode::Move || s_Tool == ToolMode::Rotate || s_Tool == ToolMode::Scale);
 
-        if (want_gizmo && ctx.active_scene && ctx.selected != entt::null)
+        if (want_gizmo && ctx.active_scene && ctx.activeEntity() != entt::null)
         {
             auto& reg = ctx.active_scene->getRegistry();
-            if (reg.valid(ctx.selected) && reg.all_of<TransformComponent>(ctx.selected))
+            if (reg.valid(ctx.activeEntity()) && reg.all_of<TransformComponent>(ctx.activeEntity()))
             {
-                auto& tr = reg.get<TransformComponent>(ctx.selected);
+                auto& tr = reg.get<TransformComponent>(ctx.activeEntity());
                 glm::mat4 model = BuildModel(tr);
 
                 ImGuizmo::SetOrthographic(false);
@@ -317,7 +317,7 @@ namespace Hybrid
                             tr.Scale = scale;
 
                         tr.DirtyLocal = true;
-                        ctx.active_scene->MarkDirtyRecursive(Entity(ctx.selected, &reg, ctx.active_scene));
+                        ctx.active_scene->MarkDirtyRecursive(Entity(ctx.activeEntity(), &reg, ctx.active_scene));
                         ctx.markSceneDirty();
                     }
                 }
@@ -339,6 +339,7 @@ namespace Hybrid
                 ctx.request_pick = true;
                 ctx.pick_x = px;
                 ctx.pick_y = py;
+                ctx.pick_toggle = ImGui::GetIO().KeyCtrl;
             }
         }
 

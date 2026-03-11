@@ -171,100 +171,6 @@ namespace Hybrid
         m_FrameContext.scene = scene;
         m_FrameContext.window_handle = window;
 
-        // ===== Optional Demo Scene Setup =====
-#if defined(HYBRID_DEV_BUILD)
-        {
-            auto cam = scene->createEntity("Game Camera");
-            cam.AddComponent<Hybrid::CameraComponent>(Hybrid::CameraComponent{true, 45.0f, 0.1f, 500.0f});
-
-            auto &tr = cam.GetComponent<Hybrid::TransformComponent>();
-            tr.Position = {0.0f, 12.0f, 12.0f};
-            tr.Rotation = MathUtil::quatFromEulerRadians({glm::radians(-45.0f), 0.0f, 0.0f});
-            tr.Scale = {1.0f, 1.0f, 1.0f};
-
-            auto sun = scene->createEntity("Sun");
-            auto &dl = sun.AddComponent<Hybrid::DirectionalLightComponent>();
-            dl.Color = {1.0f, 1.0f, 1.0f};
-            dl.Intensity = 1.0f;
-            auto &sunTr = sun.GetComponent<Hybrid::TransformComponent>();
-            sunTr.Rotation = MathUtil::quatFromEulerRadians({glm::radians(-70.5f), glm::radians(-123.7f), 0.0f});
-
-            const int gridX = 5;
-            const int gridZ = 5;
-            const float spacing = 2.0f;
-            const float startX = -0.5f * (gridX - 1) * spacing;
-            const float startZ = -0.5f * (gridZ - 1) * spacing;
-
-                        if (m_RuntimeResourceSystem && m_RuntimeResourceSystem->getRegistry())
-{
-            const auto* mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/rock-a.obj");
-            if (mesh_meta)
-            {
-                auto rock = scene->createEntity("ROCK-A");
-                auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
-                mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
-
-                auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
-                tr.Position = {0.0f, 4.0f, 0.0f};
-                tr.Scale = {1.0f, 1.0f, 1.0f};
-            }
-            else
-            {
-                HBD_CORE_WARN("rock-a.obj meta not found in registry");
-            }
-            mesh_meta = m_RuntimeResourceSystem->getRegistry()->findByPath("asset:Model/tree.obj");
-            if (mesh_meta)
-            {
-                auto rock = scene->createEntity("Tree");
-                auto& mr = rock.AddComponent<Hybrid::MeshRendererComponent>();
-                mr.Mesh = mesh_meta->id;   // 关键：绑定导入出来的 Mesh 资产
-
-                auto& tr = rock.GetComponent<Hybrid::TransformComponent>();
-                tr.Position = { 2.0f, 4.0f, 2.0f };
-                tr.Scale = { 1.0f, 1.0f, 1.0f };
-            }
-            else
-            {
-                HBD_CORE_WARN("rock-a.obj meta not found in registry");
-            }
-
-            //物理测试物体
-            auto fallingCube = scene->createEntity("FallingCube");
-
-            auto& mr = fallingCube.AddComponent<Hybrid::MeshRendererComponent>();
-            mr.Mesh = m_RuntimeResourceSystem->getBuiltinMeshID(BuiltinMesh::Cube);
-
-            auto& tr = fallingCube.GetComponent<Hybrid::TransformComponent>();
-            tr.Position = { 0.0f, 5.0f, 0.0f };
-            tr.Scale = { 1.0f, 1.0f, 1.0f };
-
-            auto& rb = fallingCube.AddComponent<Hybrid::RigidbodyComponent>();
-            rb.Mass = 1.0f;
-            rb.UseGravity = true;
-            rb.IsKinematic = false;
-
-            for (int z = 0; z < gridZ; ++z)
-            {
-                for (int x = 0; x < gridX; ++x)
-                {
-                    std::string name = "Cube_" + std::to_string(z) + "_" + std::to_string(x);
-                    auto cube = scene->createEntity(name);
-
-                    auto& mr = cube.AddComponent<Hybrid::MeshRendererComponent>();
-                    mr.Mesh = m_RuntimeResourceSystem->getBuiltinMeshID(BuiltinMesh::Cube);
-
-                    auto& tr = cube.GetComponent<Hybrid::TransformComponent>();
-                    tr.Position = { startX + x * spacing, 0.0f, startZ + z * spacing };
-                    tr.Rotation = glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f };
-                    tr.Scale = { 1.0f, 1.0f, 1.0f };
-                }
-            }
-
-
-}
-        }
-#endif
-
         // 绑定到系统
         setEditorScene(scene);
         m_FrameContext.window_handle = window;
@@ -342,6 +248,7 @@ namespace Hybrid
             m_FrameContext.dt = dt;
             m_FrameContext.input = &m_InputLayer->getState();
             m_FrameContext.scene = getActiveGameScene();
+            m_RenderSystem.update(dt);
 
             glm::vec2 viewport_size = m_FrameContext.viewport_size;
             if (viewport_size.x <= 0.0f || viewport_size.y <= 0.0f)

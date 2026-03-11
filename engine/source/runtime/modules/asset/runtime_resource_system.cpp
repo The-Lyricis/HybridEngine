@@ -96,7 +96,7 @@ namespace Hybrid
 
         registerDefaultLoaders();
         createDefaultTexture();
-        createDefaultMaterial();
+        createHybridDefaultMaterial();
         createBuiltinMesh(BuiltinMesh::Cube);
 
         HBD_CORE_TRACE("RuntimeResourceSystem initialized (project-based)");
@@ -132,7 +132,7 @@ namespace Hybrid
         }
     }
 
-    void RuntimeResourceSystem::createDefaultMaterial()
+    void RuntimeResourceSystem::createHybridDefaultMaterial()
     {
         MaterialData data;
         data.albedo_color = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -140,10 +140,11 @@ namespace Hybrid
         data.roughness = 1.0f;
         data.ao = 1.0f;
 
-        m_defaultMaterial = std::make_shared<Material>(data);
-        if (m_manager && m_defaultMaterial)
+        m_hybridDefaultMaterial = std::make_shared<Material>(data);
+        if (m_manager && m_hybridDefaultMaterial)
         {
-            m_manager->setDefault<Material>(m_defaultMaterial);
+            m_manager->setDefault<Material>(m_hybridDefaultMaterial);
+            HBD_CORE_INFO("RuntimeResourceSystem: registered default material HybridDefault");
         }
     }
 

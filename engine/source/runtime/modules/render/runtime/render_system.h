@@ -16,6 +16,7 @@
 #include "runtime/modules/render/runtime/editor_render_ext.h"
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/render_flags.h"
+#include "runtime/modules/render/runtime/shader_library.h"
 #include "runtime/modules/render/public/texture.h"
 
 namespace Hybrid
@@ -36,6 +37,7 @@ namespace Hybrid
         ~RenderSystem() = default;
 
         void initialize(void *glfwWindowHandle);
+        void update(float dt);
         void setAssetManager(std::shared_ptr<AssetManager> mgr) { m_AssetManager = std::move(mgr); }
         void setScene(std::shared_ptr<Scene> scene) { m_Scene = std::move(scene); }
 
@@ -54,8 +56,7 @@ namespace Hybrid
 
     private:
         void ensureFramebufferSize(std::shared_ptr<Framebuffer>& framebuffer, uint32_t w, uint32_t h);
-        void createMeshShader();
-        void createDebugBoxShader();
+        bool loadBuiltinShaders();
 
         struct MeshGPU
         {
@@ -134,6 +135,7 @@ namespace Hybrid
             LightData lights;
             std::vector<DrawItem> items;
             bool showColliderDebug = false;
+            uint32_t selectedEntityID = kInvalidEntityID;
             std::shared_ptr<Scene> scene;
         };
 
@@ -174,6 +176,7 @@ namespace Hybrid
         std::shared_ptr<Framebuffer> m_GameFB;
         std::shared_ptr<Shader> m_MeshShader;
         std::shared_ptr<Shader> m_DebugBoxShader;
+        ShaderLibrary m_ShaderLibrary;
         DebugLineMeshGPU m_DebugBoxMeshGPU;
         bool m_HasDebugBoxMeshGPU = false;
 
@@ -188,6 +191,8 @@ namespace Hybrid
         TexturePtr m_DefaultEmissiveTex;
 
         bool m_Initialized = false; // Render backend init state.
+        float m_ShaderReloadTimer = 0.0f;
+        float m_ShaderReloadInterval = 0.5f;
 
         glm::mat4 m_LastView = glm::mat4(1.0f);
         glm::mat4 m_LastProj = glm::mat4(1.0f);

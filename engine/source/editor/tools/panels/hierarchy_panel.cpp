@@ -88,6 +88,72 @@ namespace Hybrid
         m_pendingTarget = target;
     }
 
+    void HierarchyPanel::collectEntityOrder(entt::registry& registry,
+                                            entt::entity entity,
+                                            std::vector<entt::entity>& order) const
+    {
+        if (!hasTransform(registry, entity))
+            return;
+
+        order.push_back(entity);
+
+        const auto& transform = registry.get<TransformComponent>(entity);
+        for (entt::entity child = transform.FirstChild; child != entt::null;)
+        {
+            if (!hasTransform(registry, child))
+                break;
+
+            const entt::entity next = registry.get<TransformComponent>(child).NextSibling;
+            collectEntityOrder(registry, child, order);
+            child = next;
+        }
+    }
+
+    void HierarchyPanel::applySelectionClick(EditorContext& ctx, entt::entity entity)
+    {
+        if (entity == entt::null)
+        {
+            ctx.selection.clear();
+            m_rangeAnchor = entt::null;
+            return;
+        }
+
+        const ImGuiIO& io = ImGui::GetIO();
+        const bool ctrl = io.KeyCtrl;
+        const bool shift = io.KeyShift;
+
+        if (shift && m_rangeAnchor != entt::null && !m_visibleOrder.empty())
+        {
+            auto anchor_it = std::find(m_visibleOrder.begin(), m_visibleOrder.end(), m_rangeAnchor);
+            auto target_it = std::find(m_visibleOrder.begin(), m_visibleOrder.end(), entity);
+            if (anchor_it != m_visibleOrder.end() && target_it != m_visibleOrder.end())
+            {
+                if (!ctrl)
+                    ctx.selection.clear();
+
+                if (anchor_it > target_it)
+                    std::swap(anchor_it, target_it);
+
+                for (auto it = anchor_it; it != target_it + 1; ++it)
+                    ctx.selection.add(*it);
+
+                ctx.selection.active = entity;
+                return;
+            }
+        }
+
+        if (ctrl)
+        {
+            ctx.selection.toggle(entity);
+            if (!ctx.selection.empty())
+                m_rangeAnchor = ctx.selection.active;
+            return;
+        }
+
+        ctx.selection.setSingle(entity);
+        m_rangeAnchor = entity;
+    }
+
     void HierarchyPanel::drawCommonContextMenu(EditorContext& ctx, entt::registry& registry, entt::entity target)
     {
         const bool has_target = hasTransform(registry, target);
@@ -122,7 +188,7 @@ namespace Hybrid
         }
 
         if (has_target)
-            ctx.selected = target;
+            ctx.selection.setSingle(target);
     }
 
     void HierarchyPanel::drawWindowContextMenu(EditorContext& ctx)
@@ -162,8 +228,7 @@ namespace Hybrid
                 break;
 
             ctx.active_scene->DestroyEntityRecursive(Entity{m_pendingTarget, &registry, ctx.active_scene});
-            if (ctx.selected == m_pendingTarget)
-                ctx.selected = entt::null;
+            ctx.selection.remove(m_pendingTarget);
             ctx.markSceneDirty();
             break;
         }
@@ -175,7 +240,7 @@ namespace Hybrid
             Entity child{m_pendingTarget, &registry, ctx.active_scene};
             if (ctx.active_scene->Detach(child, true))
             {
-                ctx.selected = m_pendingTarget;
+                ctx.selection.setSingle(m_pendingTarget);
                 ctx.markSceneDirty();
             }
             break;
@@ -185,7 +250,7 @@ namespace Hybrid
             Entity created = ctx.active_scene->createEntity("Empty");
             if (hasTransform(registry, m_pendingTarget))
                 ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
-            ctx.selected = created.GetHandle();
+            ctx.selection.setSingle(created.GetHandle());
             ctx.markSceneDirty();
             break;
         }
@@ -199,7 +264,7 @@ namespace Hybrid
             Entity created = createBuiltinCube(*ctx.active_scene, cube_mesh_id);
             if (hasTransform(registry, m_pendingTarget))
                 ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
-            ctx.selected = created.GetHandle();
+            ctx.selection.setSingle(created.GetHandle());
             ctx.markSceneDirty();
             break;
         }
@@ -208,7 +273,7 @@ namespace Hybrid
             Entity created = ctx.active_scene->createCameraEntity("Camera", false);
             if (hasTransform(registry, m_pendingTarget))
                 ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
-            ctx.selected = created.GetHandle();
+            ctx.selection.setSingle(created.GetHandle());
             ctx.markSceneDirty();
             break;
         }
@@ -217,13 +282,13 @@ namespace Hybrid
             Entity created = createDirectionalLight(*ctx.active_scene, "Directional Light");
             if (!hasTransform(registry, m_pendingTarget))
             {
-                ctx.selected = created.GetHandle();
+                ctx.selection.setSingle(created.GetHandle());
                 ctx.markSceneDirty();
                 break;
             }
 
             if (ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true))
-                ctx.selected = created.GetHandle();
+                ctx.selection.setSingle(created.GetHandle());
             ctx.markSceneDirty();
             break;
         }
@@ -249,7 +314,7 @@ namespace Hybrid
         const auto& transform = registry.get<TransformComponent>(entity);
 
         const bool hasChildren = transform.FirstChild != entt::null && hasTransform(registry, transform.FirstChild);
-        const bool selected = (ctx.selected == entity);
+        const bool selected = ctx.selection.contains(entity);
 
         ImGuiTreeNodeFlags flags =
             ImGuiTreeNodeFlags_OpenOnArrow |
@@ -263,7 +328,7 @@ namespace Hybrid
         const bool opened = ImGui::TreeNodeEx(id, flags, "%s", getEntityLabel(registry, entity));
 
         if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
-            ctx.selected = entity;
+            applySelectionClick(ctx, entity);
 
         drawEntityContextMenu(ctx, registry, entity);
 
@@ -307,7 +372,7 @@ namespace Hybrid
 
                         if (ok)
                         {
-                            ctx.selected = dropped;
+                            ctx.selection.setSingle(dropped);
                             ctx.markSceneDirty();
                         }
                     }
@@ -348,7 +413,7 @@ namespace Hybrid
                 Entity child{dropped, &registry, ctx.active_scene};
                 if (ctx.active_scene->Detach(child, true))
                 {
-                    ctx.selected = dropped;
+                    ctx.selection.setSingle(dropped);
                     ctx.markSceneDirty();
                 }
             }
@@ -373,9 +438,12 @@ namespace Hybrid
         auto& registry = ctx.active_scene->getRegistry();
 
         if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered())
-            ctx.selected = entt::null;
+            applySelectionClick(ctx, entt::null);
 
         const auto roots = ctx.active_scene->getRootEntities();
+        m_visibleOrder.clear();
+        for (const Entity& root : roots)
+            collectEntityOrder(registry, root.GetHandle(), m_visibleOrder);
 
         std::unordered_set<uint32_t> visited;
         visited.reserve(static_cast<size_t>(registry.view<TransformComponent>().size() + 8));

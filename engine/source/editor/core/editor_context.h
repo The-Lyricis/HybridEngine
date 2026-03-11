@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <entt/entt.hpp>
 #include <glm/mat4x4.hpp>
@@ -17,12 +18,96 @@ namespace Hybrid
 {
     class Scene;
 
+    struct EditorSelection
+    {
+        std::vector<entt::entity> items;
+        entt::entity active = entt::null;
+
+        void clear()
+        {
+            items.clear();
+            active = entt::null;
+        }
+
+        bool empty() const
+        {
+            return items.empty();
+        }
+
+        size_t size() const
+        {
+            return items.size();
+        }
+
+        bool contains(entt::entity entity) const
+        {
+            for (entt::entity item : items)
+            {
+                if (item == entity)
+                    return true;
+            }
+            return false;
+        }
+
+        void setSingle(entt::entity entity)
+        {
+            if (entity == entt::null)
+            {
+                clear();
+                return;
+            }
+
+            items.clear();
+            items.push_back(entity);
+            active = entity;
+        }
+
+        void add(entt::entity entity)
+        {
+            if (entity == entt::null || contains(entity))
+                return;
+            items.push_back(entity);
+            active = entity;
+        }
+
+        void remove(entt::entity entity)
+        {
+            if (entity == entt::null)
+                return;
+
+            for (auto it = items.begin(); it != items.end(); ++it)
+            {
+                if (*it != entity)
+                    continue;
+
+                items.erase(it);
+                if (active == entity)
+                    active = items.empty() ? entt::null : items.back();
+                return;
+            }
+        }
+
+        void toggle(entt::entity entity)
+        {
+            if (entity == entt::null)
+                return;
+
+            if (contains(entity))
+            {
+                remove(entity);
+                return;
+            }
+
+            add(entity);
+        }
+    };
+
     struct EditorContext
     {
         Scene* active_scene = nullptr;
         std::shared_ptr<SceneDocument> active_document;
 
-        entt::entity selected = entt::null;
+        EditorSelection selection;
         std::string status_message;
 
         bool scene_viewport_hovered = false;
@@ -42,6 +127,7 @@ namespace Hybrid
         bool request_pick = false;
         int pick_x = 0;
         int pick_y = 0;
+        bool pick_toggle = false;
 
         glm::mat4 gizmo_view = glm::mat4(1.0f);
         glm::mat4 gizmo_proj = glm::mat4(1.0f);
@@ -80,6 +166,11 @@ namespace Hybrid
         {
             active_document.reset();
             active_scene = nullptr;
+        }
+
+        entt::entity activeEntity() const
+        {
+            return selection.active;
         }
 
         void markSceneDirty()
