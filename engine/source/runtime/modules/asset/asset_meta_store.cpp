@@ -18,6 +18,11 @@ namespace Hybrid
     {
         constexpr const char* kAssetMetaStoreLogTag = "[AssetMetaStore]";
 
+        std::string pathOrPlaceholder(const std::filesystem::path& path)
+        {
+            return path.empty() ? std::string("<empty>") : path.generic_string();
+        }
+
         bool hasParentTraversal(const std::filesystem::path& p)
         {
             for (const auto& part : p)
@@ -145,7 +150,7 @@ namespace Hybrid
         {
             HBD_CORE_WARN("{} meta_parse_failed path={} reason={}",
                           kAssetMetaStoreLogTag,
-                          file.string(),
+                          pathOrPlaceholder(file),
                           reason);
         }
     } // namespace
@@ -165,7 +170,7 @@ namespace Hybrid
         {
             HBD_CORE_ERROR("{} scan_failed root={} reason=iterator_create_failed error={}",
                            kAssetMetaStoreLogTag,
-                           assets_root.string(),
+                           pathOrPlaceholder(assets_root),
                            ec.message());
             return result;
         }
@@ -176,7 +181,7 @@ namespace Hybrid
             {
                 HBD_CORE_WARN("{} scan_entry_skipped root={} reason=iterator_increment_failed error={}",
                               kAssetMetaStoreLogTag,
-                              assets_root.string(),
+                              pathOrPlaceholder(assets_root),
                               ec.message());
                 ec.clear();
                 continue;
@@ -312,7 +317,7 @@ namespace Hybrid
             HBD_CORE_WARN("{} meta_remove_failed source_path={} path={} error={}",
                           kAssetMetaStoreLogTag,
                           source_path,
-                          meta_file.string(),
+                          pathOrPlaceholder(meta_file),
                           ec.message());
         }
         return !ec && removed;
@@ -360,7 +365,7 @@ namespace Hybrid
         {
             HBD_CORE_WARN("{} meta_parse_failed path={} reason=unsupported_version version={}",
                           kAssetMetaStoreLogTag,
-                          file.string(),
+                          pathOrPlaceholder(file),
                           j["version"].get<int>());
             return false;
         }
@@ -383,7 +388,7 @@ namespace Hybrid
         {
             HBD_CORE_WARN("{} meta_parse_failed path={} reason=unknown_type type={}",
                           kAssetMetaStoreLogTag,
-                          file.string(),
+                          pathOrPlaceholder(file),
                           j["type"].get<std::string>());
             return false;
         }
@@ -398,7 +403,7 @@ namespace Hybrid
         {
             HBD_CORE_WARN("{} meta_parse_failed path={} reason=invalid_source_path source_path={}",
                           kAssetMetaStoreLogTag,
-                          file.string(),
+                          pathOrPlaceholder(file),
                           meta.source_path);
             return false;
         }
@@ -407,7 +412,7 @@ namespace Hybrid
         {
             HBD_CORE_WARN("{} meta_parse_failed path={} reason=invalid_source_alias source_path={}",
                           kAssetMetaStoreLogTag,
-                          file.string(),
+                          pathOrPlaceholder(file),
                           meta.source_path);
             return false;
         }
@@ -420,7 +425,7 @@ namespace Hybrid
             {
                 HBD_CORE_WARN("{} meta_parse_failed path={} reason=invalid_cooked_path cooked_path={}",
                               kAssetMetaStoreLogTag,
-                              file.string(),
+                              pathOrPlaceholder(file),
                               meta.cooked_path);
                 return false;
             }
@@ -431,7 +436,7 @@ namespace Hybrid
                 {
                     HBD_CORE_WARN("{} meta_parse_failed path={} reason=normalize_cooked_path_failed cooked_path={}",
                                   kAssetMetaStoreLogTag,
-                                  file.string(),
+                                  pathOrPlaceholder(file),
                                   meta.cooked_path);
                     return false;
                 }
@@ -522,7 +527,7 @@ namespace Hybrid
         {
             HBD_CORE_ERROR("{} meta_write_failed path={} reason=create_parent_directory_failed error={}",
                            kAssetMetaStoreLogTag,
-                           file.string(),
+                           pathOrPlaceholder(file),
                            ec.message());
             return false;
         }
@@ -536,8 +541,8 @@ namespace Hybrid
             {
                 HBD_CORE_ERROR("{} meta_write_failed path={} temp_path={} reason=open_temp_file_failed",
                                kAssetMetaStoreLogTag,
-                               file.string(),
-                               tmp.string());
+                               pathOrPlaceholder(file),
+                               pathOrPlaceholder(tmp));
                 return false;
             }
             out << j.dump(2);
@@ -545,8 +550,8 @@ namespace Hybrid
             {
                 HBD_CORE_ERROR("{} meta_write_failed path={} temp_path={} reason=write_temp_file_failed",
                                kAssetMetaStoreLogTag,
-                               file.string(),
-                               tmp.string());
+                               pathOrPlaceholder(file),
+                               pathOrPlaceholder(tmp));
                 return false;
             }
         }
@@ -561,8 +566,8 @@ namespace Hybrid
             std::filesystem::remove(tmp, rm_ec);
             HBD_CORE_ERROR("{} meta_write_failed path={} temp_path={} reason=atomic_rename_failed error={}",
                            kAssetMetaStoreLogTag,
-                           file.string(),
-                           tmp.string(),
+                           pathOrPlaceholder(file),
+                           pathOrPlaceholder(tmp),
                            mv_ec.message());
             return false;
         }

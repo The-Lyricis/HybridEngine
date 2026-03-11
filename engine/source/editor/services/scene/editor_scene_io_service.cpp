@@ -31,6 +31,11 @@ namespace Hybrid
         using json = nlohmann::json;
         constexpr const char* kEditorSceneIOLogTag = "[EditorSceneIOService]";
 
+        std::string pathOrPlaceholder(const std::filesystem::path& path)
+        {
+            return path.empty() ? std::string("<empty>") : path.generic_string();
+        }
+
         std::filesystem::path GetEditorUserSettingsPath()
         {
             const auto& project = ProjectService::Get();
@@ -152,7 +157,7 @@ namespace Hybrid
 
         HBD_CORE_INFO("{} initialize_completed assets_root={}",
                       kEditorSceneIOLogTag,
-                      m_assets_root.empty() ? "<empty>" : m_assets_root.string());
+                      pathOrPlaceholder(m_assets_root));
     }
 
     void EditorSceneIOService::shutdown()
@@ -368,7 +373,7 @@ namespace Hybrid
             HBD_CORE_WARN("{} save_failed scene_vpath={} native_path={} reason=create_scene_directory_failed error={}",
                           kEditorSceneIOLogTag,
                           normalized_vpath,
-                          native->string(),
+                          pathOrPlaceholder(*native),
                           ec.message());
             return false;
         }
@@ -381,7 +386,7 @@ namespace Hybrid
             HBD_CORE_WARN("{} save_failed scene_vpath={} native_path={} reason=serialize_failed",
                           kEditorSceneIOLogTag,
                           normalized_vpath,
-                          native->string());
+                          pathOrPlaceholder(*native));
             return false;
         }
 
@@ -408,7 +413,7 @@ namespace Hybrid
         HBD_CORE_INFO("{} save_completed scene_vpath={} native_path={} existed_before={} asset_id={}",
                       kEditorSceneIOLogTag,
                       normalized_vpath,
-                      native->string(),
+                      pathOrPlaceholder(*native),
                       existed ? "true" : "false",
                       m_active_document->scene_asset_id.value);
         return true;
@@ -430,7 +435,7 @@ namespace Hybrid
         {
             HBD_CORE_WARN("{} restore_default_scene_skipped settings_path={} reason=parse_project_settings_failed error={}",
                           kEditorSceneIOLogTag,
-                          settings_path.string(),
+                          pathOrPlaceholder(settings_path),
                           e.what());
             return false;
         }
@@ -626,7 +631,7 @@ namespace Hybrid
         {
             HBD_CORE_WARN("{} session_state_save_failed path={} reason=create_session_directory_failed error={}",
                           kEditorSceneIOLogTag,
-                          session_path.string(),
+                          pathOrPlaceholder(session_path),
                           ec.message());
             return;
         }
@@ -639,7 +644,7 @@ namespace Hybrid
         {
             HBD_CORE_WARN("{} session_state_save_failed path={} reason=open_file_failed",
                           kEditorSceneIOLogTag,
-                          session_path.string());
+                          pathOrPlaceholder(session_path));
             return;
         }
 
@@ -662,7 +667,7 @@ namespace Hybrid
         {
             HBD_CORE_WARN("{} session_state_load_failed path={} reason=parse_failed error={}",
                           kEditorSceneIOLogTag,
-                          session_path.string(),
+                          pathOrPlaceholder(session_path),
                           e.what());
             return {};
         }

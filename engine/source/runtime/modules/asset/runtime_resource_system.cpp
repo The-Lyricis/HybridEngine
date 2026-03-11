@@ -19,7 +19,7 @@ namespace Hybrid
 
         std::string pathOrPlaceholder(const std::filesystem::path& path)
         {
-            return path.empty() ? std::string("<empty>") : path.string();
+            return path.empty() ? std::string("<empty>") : path.generic_string();
         }
     } // namespace
 
@@ -78,7 +78,7 @@ namespace Hybrid
             {
                 HBD_CORE_WARN("{} mount_prepare_failed alias=cache path={} reason=create_directory_failed error={}",
                               kRuntimeResourceLogTag,
-                              cacheRoot.string(),
+                              pathOrPlaceholder(cacheRoot),
                               ec.message());
             }
             m_vfs->mount("cache", cacheRoot, 0);
@@ -97,7 +97,7 @@ namespace Hybrid
             {
                 HBD_CORE_WARN("{} mount_prepare_failed alias=build path={} reason=create_directory_failed error={}",
                               kRuntimeResourceLogTag,
-                              buildRoot.string(),
+                              pathOrPlaceholder(buildRoot),
                               ec.message());
             }
             m_vfs->mount("build", buildRoot, 0);
@@ -119,7 +119,7 @@ namespace Hybrid
             meta_load_result = m_metaStore->loadAll(assetsRoot);
             HBD_CORE_INFO("{} meta_load_completed assets_root={} total={} loaded={} failed={}",
                           kRuntimeResourceLogTag,
-                          assetsRoot.string(),
+                          pathOrPlaceholder(assetsRoot),
                           meta_load_result.total_files,
                           meta_load_result.loaded,
                           meta_load_result.failed);

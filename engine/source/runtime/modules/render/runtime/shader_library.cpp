@@ -13,6 +13,11 @@ namespace Hybrid
     {
         constexpr const char* kShaderLibraryLogTag = "[ShaderLibrary]";
 
+        std::string pathOrPlaceholder(const std::filesystem::path& path)
+        {
+            return path.empty() ? std::string("<empty>") : path.generic_string();
+        }
+
         bool queryWriteTime(const std::filesystem::path& path, std::filesystem::file_time_type& out_time)
         {
             std::error_code ec;
@@ -96,7 +101,7 @@ namespace Hybrid
             HBD_CORE_ERROR("{} reload_failed shader={} reason=read_vertex_failed vertex_path={}",
                            kShaderLibraryLogTag,
                            entry.name,
-                           entry.vertex_path.string());
+                           pathOrPlaceholder(entry.vertex_path));
             return false;
         }
 
@@ -105,7 +110,7 @@ namespace Hybrid
             HBD_CORE_ERROR("{} reload_failed shader={} reason=read_fragment_failed fragment_path={}",
                            kShaderLibraryLogTag,
                            entry.name,
-                           entry.fragment_path.string());
+                           pathOrPlaceholder(entry.fragment_path));
             return false;
         }
 
@@ -124,12 +129,12 @@ namespace Hybrid
             HBD_CORE_WARN("{} timestamp_query_failed shader={} stage=vertex path={}",
                           kShaderLibraryLogTag,
                           entry.name,
-                          entry.vertex_path.string());
+                          pathOrPlaceholder(entry.vertex_path));
         if (!queryWriteTime(entry.fragment_path, fragment_time))
             HBD_CORE_WARN("{} timestamp_query_failed shader={} stage=fragment path={}",
                           kShaderLibraryLogTag,
                           entry.name,
-                          entry.fragment_path.string());
+                          pathOrPlaceholder(entry.fragment_path));
 
         entry.shader = std::move(shader);
         entry.vertex_write_time = vertex_time;
@@ -138,8 +143,8 @@ namespace Hybrid
         HBD_CORE_INFO("{} reload_completed shader={} vertex_path={} fragment_path={}",
                       kShaderLibraryLogTag,
                       entry.name,
-                      entry.vertex_path.string(),
-                      entry.fragment_path.string());
+                      pathOrPlaceholder(entry.vertex_path),
+                      pathOrPlaceholder(entry.fragment_path));
         return true;
     }
 

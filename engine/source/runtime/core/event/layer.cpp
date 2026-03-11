@@ -51,14 +51,28 @@ namespace Hybrid
 
     void LayerStack::clear()
     {
-        for (auto it = m_Layers.rbegin(); it != m_Layers.rend(); ++it)
+        for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(m_LayerInsertIndex) - 1; i >= 0; --i)
         {
-            if (*it)
+            Layer* layer = m_Layers[static_cast<size_t>(i)];
+            if (layer)
             {
-                (*it)->onDetach();
-                delete *it;
+                layer->onDetach();
+                delete layer;
             }
         }
+
+        for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(m_Layers.size()) - 1;
+             i >= static_cast<std::ptrdiff_t>(m_LayerInsertIndex);
+             --i)
+        {
+            Layer* overlay = m_Layers[static_cast<size_t>(i)];
+            if (overlay)
+            {
+                overlay->onDetach();
+                delete overlay;
+            }
+        }
+
         m_Layers.clear();
         m_LayerInsertIndex = 0;
     }

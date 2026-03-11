@@ -19,6 +19,11 @@ namespace Hybrid
     {
         constexpr const char* kEngineLogTag = "[Engine]";
 
+        std::string pathOrPlaceholder(const std::filesystem::path& path)
+        {
+            return path.empty() ? std::string("<empty>") : path.generic_string();
+        }
+
         const char* sceneNameOrPlaceholder(const std::shared_ptr<Scene>& scene)
         {
             if (!scene)
@@ -48,15 +53,15 @@ namespace Hybrid
         std::error_code ec;
         HBD_CORE_INFO("{} initialize_started cwd={} project_root={}",
                       kEngineLogTag,
-                      outputDir.string(),
-                      projectRoot.string());
+                      pathOrPlaceholder(outputDir),
+                      pathOrPlaceholder(projectRoot));
 
         const auto logDirectoryCreateFailure = [](const char* target, const fs::path& path, const std::error_code& error)
         {
             HBD_CORE_ERROR("{} project_bootstrap_failed target={} path={} reason=create_directory_failed error={}",
                            kEngineLogTag,
                            target,
-                           path.string(),
+                           pathOrPlaceholder(path),
                            error.message());
         };
 
@@ -113,7 +118,7 @@ namespace Hybrid
             {
                 HBD_CORE_ERROR("{} project_file_create_failed path={} reason=open_failed",
                                kEngineLogTag,
-                               hyprojPath.string());
+                               pathOrPlaceholder(hyprojPath));
                 LogSystem::shutdown();
                 return;
             }
@@ -128,7 +133,7 @@ namespace Hybrid
 
             HBD_CORE_INFO("{} project_file_created path={}",
                           kEngineLogTag,
-                          fs::absolute(hyprojPath).string());
+                          pathOrPlaceholder(fs::absolute(hyprojPath)));
         }
 
         // 3) Load hyproj into ProjectContext and publish ProjectService.
@@ -138,7 +143,7 @@ namespace Hybrid
         {
             HBD_CORE_ERROR("{} project_load_failed hyproj={} reason={}",
                            kEngineLogTag,
-                           fs::absolute(hyprojPath).string(),
+                           pathOrPlaceholder(fs::absolute(hyprojPath)),
                            perr);
             LogSystem::shutdown();
             return;
@@ -147,12 +152,12 @@ namespace Hybrid
         Hybrid::ProjectService::Set(pctx);
         HBD_CORE_INFO("{} project_loaded hyproj={} project_root={} assets_root={} cache_root={} build_root={} settings_root={}",
                       kEngineLogTag,
-                      fs::absolute(hyprojPath).string(),
-                      pctx.root.string(),
-                      pctx.assets.string(),
-                      pctx.cache.string(),
-                      pctx.build.string(),
-                      pctx.settings.string());
+                      pathOrPlaceholder(fs::absolute(hyprojPath)),
+                      pathOrPlaceholder(pctx.root),
+                      pathOrPlaceholder(pctx.assets),
+                      pathOrPlaceholder(pctx.cache),
+                      pathOrPlaceholder(pctx.build),
+                      pathOrPlaceholder(pctx.settings));
         // =============================================
 
         // ===== Window / Graphics =====
