@@ -67,6 +67,11 @@ namespace Hybrid
 
         if (ImGui::BeginMenu("Create"))
         {
+            if (ImGui::MenuItem("Scene"))
+            {
+                if (ctx.request_new_scene)
+                    (void)ctx.request_new_scene();
+            }
             if (ImGui::MenuItem("Folder", nullptr, false, can_new_folder_here))
                 openCreateFolderPopup(has_target ? target->physical : m_currentDir);
             ImGui::EndMenu();

@@ -133,6 +133,14 @@ namespace Hybrid
                 syncContextDocumentState();
                 return ok;
             };
+        ctx.request_new_scene = [this]() -> bool
+            {
+                const bool created = m_scene_io.createUntitled();
+                if (created)
+                    m_editor_ui.context().selection.clear();
+                syncContextDocumentState();
+                return created;
+            };
         ctx.request_save_scene = [this]() -> bool
             {
                 const bool saved = m_scene_io.requestSave();
@@ -195,6 +203,7 @@ namespace Hybrid
         ctx.open_scene = {};
         ctx.request_reimport_asset = {};
         ctx.request_rename_folder = {};
+        ctx.request_new_scene = {};
         ctx.request_save_scene = {};
         ctx.request_save_scene_as = {};
         ctx.find_asset_by_vpath = {};
