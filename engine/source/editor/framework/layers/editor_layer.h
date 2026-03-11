@@ -42,6 +42,7 @@ namespace Hybrid
         void updateFrameContext();         // Push current editor state into FrameContext/Flags/Ext.
         void updateEditorCamera(float dt);
         AssetID findAssetByVPath(const std::string& asset_vpath) const;
+        std::string describeMeshRendererMaterial(entt::entity entity_handle) const;
         bool instantiateSceneAsset(AssetID asset_id, const ImVec2& drop_mouse_pos);
         bool instantiateSceneProjectPath(const std::string& rel_path, const ImVec2& drop_mouse_pos);
         bool tryGetSceneDropPosition(const ImVec2& drop_mouse_pos, glm::vec3& out_position);

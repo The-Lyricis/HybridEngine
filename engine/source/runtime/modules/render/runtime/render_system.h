@@ -14,9 +14,22 @@
 #include "runtime/modules/asset/material.h"
 #include "runtime/modules/asset/mesh.h"
 #include "runtime/modules/render/runtime/editor_render_ext.h"
+#include "runtime/modules/render/runtime/passes/grid_pass.h"
+#include "runtime/modules/render/runtime/passes/forward_pass.h"
+#include "runtime/modules/render/runtime/passes/gizmo_pass.h"
+#include "runtime/modules/render/runtime/passes/picking_pass.h"
+#include "runtime/modules/render/runtime/passes/post_process_pass.h"
+#include "runtime/modules/render/runtime/render_context.h"
 #include "runtime/modules/render/runtime/frame_context.h"
+#include "runtime/modules/render/runtime/material_system.h"
+#include "runtime/modules/render/runtime/mesh_gpu.h"
+#include "runtime/modules/render/runtime/render_packet.h"
+#include "runtime/modules/render/runtime/render_pipeline.h"
 #include "runtime/modules/render/runtime/render_flags.h"
+#include "runtime/modules/render/runtime/passes/selection_outline_pass.h"
 #include "runtime/modules/render/runtime/shader_library.h"
+#include "runtime/modules/render/runtime/passes/shadow_pass.h"
+#include "runtime/modules/render/runtime/passes/debug_normals_pass.h"
 #include "runtime/modules/render/public/texture.h"
 
 namespace Hybrid
@@ -38,7 +51,7 @@ namespace Hybrid
 
         void initialize(void *glfwWindowHandle);
         void update(float dt);
-        void setAssetManager(std::shared_ptr<AssetManager> mgr) { m_AssetManager = std::move(mgr); }
+        void setAssetManager(std::shared_ptr<AssetManager> mgr);
         void setScene(std::shared_ptr<Scene> scene) { m_Scene = std::move(scene); }
 
         uint32_t getSceneColorTexture() const;
@@ -58,115 +71,14 @@ namespace Hybrid
         void ensureFramebufferSize(std::shared_ptr<Framebuffer>& framebuffer, uint32_t w, uint32_t h);
         bool loadBuiltinShaders();
 
-        struct MeshGPU
-        {
-            std::shared_ptr<VertexArray> vao;
-            std::shared_ptr<VertexBuffer> vb;
-            std::shared_ptr<IndexBuffer> ib;
-            std::vector<Submesh> submeshes;
-        };
-
-        struct DebugLineMeshGPU
-        {
-            std::shared_ptr<VertexArray> vao;
-            std::shared_ptr<VertexBuffer> vb;
-            std::shared_ptr<IndexBuffer> ib;
-            uint32_t index_count = 0;
-        };
-
-        struct MaterialGPU
-        {
-            MaterialData data;
-            TexturePtr albedo;
-            TexturePtr normal;
-            TexturePtr mr;
-            TexturePtr ao;
-            TexturePtr emissive;
-            void bind(Shader &shader) const;
-        };
-
-        struct FrameData
-        {
-            glm::mat4 viewProj{1.0f};
-            glm::vec3 cameraPos{0.0f};
-            glm::vec4 clearColor{0.1f, 0.1f, 0.12f, 1.0f};
-            bool useSkyboxClear = false;
-            float time = 0.0f;
-        };
-
-        struct DirLightData
-        {
-            glm::vec3 color{1.0f};
-            float intensity = 0.0f;
-            glm::vec3 direction{0.0f, -1.0f, 0.0f};
-            float pad = 0.0f;
-        };
-
-        struct PointLightData
-        {
-            glm::vec3 color{1.0f};
-            float intensity = 0.0f;
-            glm::vec3 position{0.0f};
-            float range = 1.0f;
-        };
-
         static constexpr int kMaxPointLights = 16;
-
-        struct LightData
-        {
-            DirLightData dir;
-            std::vector<PointLightData> points;
-        };
-
-        struct DrawItem
-        {
-            AssetID meshId{};
-            AssetID materialId{};
-            glm::mat4 model{1.0f};
-            glm::vec4 tint{1.0f};
-            uint32_t entityID = 0;
-            bool selected = false;
-        };
-
-        
-        struct RenderPacket
-        {
-            FrameData frame;
-            LightData lights;
-            std::vector<DrawItem> items;
-            bool showColliderDebug = false;
-            uint32_t selectedEntityID = kInvalidEntityID;
-            std::shared_ptr<Scene> scene;
-        };
 
         // Extract ECS data + camera/light state into a draw packet.
         RenderPacket buildRenderPacket(const FrameContext& frame_context,
                                        RenderFlags flags,
                                        const EditorRenderExt* editor_ext,
                                        bool cache_editor_camera_state = true);
-        // Dispatch pass execution by RenderFlags.
-        void executePasses(const RenderPacket& packet,
-                           RenderFlags flags,
-                           void* glfwWindowHandle,
-                           const std::shared_ptr<Framebuffer>& framebuffer);
-        // Execute the main forward pass and resolve color/id targets.
-        void executeForwardPass(const RenderPacket &packet,
-                                void *glfwWindowHandle,
-                                const std::shared_ptr<Framebuffer>& framebuffer);
-        void executePickingPass(const RenderPacket& packet, void* glfwWindowHandle);
-        void executeSelectionOutlinePass(const RenderPacket& packet, void* glfwWindowHandle);
-        void executeGizmoPass(const RenderPacket& packet,
-            void* glfwWindowHandle,
-            const std::shared_ptr<Framebuffer>& framebuffer);
-        void executeGridPass(const RenderPacket& packet, void* glfwWindowHandle);
-        void executeShadowPass(const RenderPacket& packet, void* glfwWindowHandle);
-        void executePostProcessPass(const RenderPacket& packet, void* glfwWindowHandle);
-        void executeDebugNormalsPass(const RenderPacket& packet, void* glfwWindowHandle);
-
         MeshGPU *getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh);
-        MaterialGPU *getOrCreateMaterialGPU(AssetID id, const std::shared_ptr<Material> &mat);
-        TexturePtr createSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
-        DebugLineMeshGPU* getOrCreateDebugBoxMeshGPU();
         
 
     private:
@@ -177,18 +89,19 @@ namespace Hybrid
         std::shared_ptr<Shader> m_MeshShader;
         std::shared_ptr<Shader> m_DebugBoxShader;
         ShaderLibrary m_ShaderLibrary;
-        DebugLineMeshGPU m_DebugBoxMeshGPU;
-        bool m_HasDebugBoxMeshGPU = false;
+        MaterialSystem m_MaterialSystem;
+        RenderPipeline m_RenderPipeline;
+        ForwardPass m_ForwardPass;
+        PickingPass m_PickingPass;
+        GizmoPass m_GizmoPass;
+        GridPass m_GridPass;
+        ShadowPass m_ShadowPass;
+        PostProcessPass m_PostProcessPass;
+        DebugNormalsPass m_DebugNormalsPass;
+        SelectionOutlinePass m_SelectionOutlinePass;
 
         std::shared_ptr<AssetManager> m_AssetManager;
         std::unordered_map<AssetID, MeshGPU, AssetID::Hasher> m_MeshCache;
-        std::unordered_map<AssetID, MaterialGPU, AssetID::Hasher> m_MatCache;
-
-        TexturePtr m_DefaultAlbedoTex;
-        TexturePtr m_DefaultNormalTex;
-        TexturePtr m_DefaultMRTex;
-        TexturePtr m_DefaultAOTex;
-        TexturePtr m_DefaultEmissiveTex;
 
         bool m_Initialized = false; // Render backend init state.
         float m_ShaderReloadTimer = 0.0f;

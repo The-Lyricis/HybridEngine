@@ -24,8 +24,6 @@ layout(location=0) out vec4 FragColor;
 layout(location=1) out uint EntityID;
 
 uniform uint u_EntityID;
-uniform int u_Selected;
-
 uniform vec3 u_CameraPos;
 uniform DirLight u_DirLight;
 uniform PointLight u_PointLights[MAX_POINT_LIGHTS];
@@ -105,11 +103,6 @@ void main() {
     }
 
     color += emissiveColor;
-    vec3 finalColor = color;
-    if (u_Selected == 1) {
-        finalColor = min(finalColor * 1.25 + vec3(0.10), vec3(1.0));
-    }
-
-    FragColor = vec4(finalColor, u_AlbedoColor.a * u_TintColor.a);
+    FragColor = vec4(color, u_AlbedoColor.a * u_TintColor.a);
     EntityID  = u_EntityID;
 }

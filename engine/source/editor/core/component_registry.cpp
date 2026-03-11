@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <string>
 
 #include <glm/glm.hpp>
 #include <imgui.h>
@@ -129,7 +130,7 @@ namespace Hybrid
             return transform_changed;
         }
 
-        bool DrawAssetSlot(const char* label, AssetID& assetId)
+        bool DrawAssetSlot(const char* label, AssetID& assetId, const char* displayText = nullptr)
         {
             bool changed = false;
 
@@ -140,7 +141,11 @@ namespace Hybrid
             ImGui::NextColumn();
 
             char buffer[64]{};
-            if (assetId.value == 0)
+            if (displayText != nullptr && displayText[0] != '\0')
+            {
+                std::snprintf(buffer, sizeof(buffer), "%s", displayText);
+            }
+            else if (assetId.value == 0)
                 std::snprintf(buffer, sizeof(buffer), "None");
             else
                 std::snprintf(buffer, sizeof(buffer), "%llu", static_cast<unsigned long long>(assetId.value));
@@ -200,7 +205,7 @@ namespace Hybrid
             return changed;
         }
 
-        bool DrawMeshRendererComponent(EditorContext&, Entity, void* componentPtr)
+        bool DrawMeshRendererComponent(EditorContext& ctx, Entity entity, void* componentPtr)
         {
             if (componentPtr == nullptr)
                 return false;
@@ -208,8 +213,13 @@ namespace Hybrid
             auto* mr = static_cast<MeshRendererComponent*>(componentPtr);
             bool changed = false;
 
+            const std::string effective_material =
+                ctx.describe_mesh_renderer_material
+                    ? ctx.describe_mesh_renderer_material(entity.GetHandle())
+                    : std::string("None");
+
             changed |= DrawAssetSlot("Mesh", mr->Mesh);
-            changed |= DrawAssetSlot("Material", mr->Material);
+            changed |= DrawAssetSlot("Material", mr->Material, effective_material.c_str());
 
             ImGui::PushID("Tint");
             ImGui::Columns(2);

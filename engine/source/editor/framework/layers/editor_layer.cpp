@@ -27,6 +27,26 @@
 
 namespace Hybrid
 {
+    namespace
+    {
+        std::string displayNameForAssetMeta(const AssetMetadata* meta)
+        {
+            if (meta == nullptr)
+                return "None";
+
+            if (!meta->source_path.empty())
+            {
+                const std::filesystem::path source_path(meta->source_path);
+                const std::string filename = source_path.filename().string();
+                if (!filename.empty())
+                    return filename;
+                return meta->source_path;
+            }
+
+            return std::to_string(meta->id.value);
+        }
+    }
+
     EditorLayer::EditorLayer(EngineServices services)
         : Layer("EditorLayer")
         , m_services(services)
@@ -129,6 +149,10 @@ namespace Hybrid
             {
                 return findAssetByVPath(asset_vpath);
             };
+        ctx.describe_mesh_renderer_material = [this](entt::entity entity_handle) -> std::string
+            {
+                return describeMeshRendererMaterial(entity_handle);
+            };
         ctx.instantiate_scene_asset = [this](AssetID asset_id, const ImVec2& drop_mouse_pos) -> bool
             {
                 const bool instantiated = instantiateSceneAsset(asset_id, drop_mouse_pos);
@@ -174,6 +198,7 @@ namespace Hybrid
         ctx.request_save_scene = {};
         ctx.request_save_scene_as = {};
         ctx.find_asset_by_vpath = {};
+        ctx.describe_mesh_renderer_material = {};
         ctx.instantiate_scene_asset = {};
         ctx.instantiate_scene_project_path = {};
         ctx.fit_box_collider_to_mesh = {};
@@ -371,6 +396,74 @@ namespace Hybrid
             return meta->id;
 
         return {};
+    }
+
+    std::string EditorLayer::describeMeshRendererMaterial(entt::entity entity_handle) const
+    {
+        std::shared_ptr<Scene> scene;
+        if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode() &&
+            m_services.scene && m_services.scene->hasActiveScene())
+        {
+            scene = m_services.scene->getActiveScene();
+        }
+        else if (m_scene_io.getActiveDocument())
+        {
+            scene = m_scene_io.getActiveDocument()->scene;
+        }
+
+        if (!scene || entity_handle == entt::null)
+            return "None";
+
+        auto& registry = scene->getRegistry();
+        if (!registry.valid(entity_handle) || !registry.all_of<MeshRendererComponent>(entity_handle))
+            return "None";
+
+        const auto& mr = registry.get<MeshRendererComponent>(entity_handle);
+        auto registry_ptr = m_services.resources ? m_services.resources->getRegistry() : nullptr;
+        auto manager = m_services.resources ? m_services.resources->getManager() : nullptr;
+
+        if (mr.Material.value != 0)
+        {
+            const AssetMetadata* meta = registry_ptr ? registry_ptr->find(mr.Material) : nullptr;
+            return displayNameForAssetMeta(meta);
+        }
+
+        if (mr.Mesh.value != 0 && manager)
+        {
+            if (auto mesh = manager->loadSync<Mesh>(mr.Mesh))
+            {
+                AssetID first_material{};
+                bool multiple_materials = false;
+                for (const auto& submesh : mesh->getSubmeshes())
+                {
+                    if (submesh.material.value == 0)
+                        continue;
+
+                    if (first_material.value == 0)
+                    {
+                        first_material = submesh.material;
+                        continue;
+                    }
+
+                    if (first_material != submesh.material)
+                    {
+                        multiple_materials = true;
+                        break;
+                    }
+                }
+
+                if (multiple_materials)
+                    return "Multiple submesh materials";
+
+                if (first_material.value != 0)
+                {
+                    const AssetMetadata* meta = registry_ptr ? registry_ptr->find(first_material) : nullptr;
+                    return displayNameForAssetMeta(meta) + " (Mesh)";
+                }
+            }
+        }
+
+        return "HybridDefault";
     }
 
     bool EditorLayer::instantiateSceneProjectPath(const std::string& rel_path, const ImVec2& drop_mouse_pos)
