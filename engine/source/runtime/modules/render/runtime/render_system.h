@@ -94,10 +94,10 @@ namespace Hybrid
         ForwardPass m_ForwardPass;
         PickingPass m_PickingPass;
         GizmoPass m_GizmoPass;
-        GridPass m_GridPass;
+        //GridPass m_GridPass;
         ShadowPass m_ShadowPass;
         PostProcessPass m_PostProcessPass;
-        DebugNormalsPass m_DebugNormalsPass;
+        //DebugNormalsPass m_DebugNormalsPass;
         SelectionOutlinePass m_SelectionOutlinePass;
 
         std::shared_ptr<AssetManager> m_AssetManager;

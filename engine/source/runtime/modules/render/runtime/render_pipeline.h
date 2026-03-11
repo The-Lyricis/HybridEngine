@@ -14,10 +14,10 @@ namespace Hybrid
         Picking,
         SelectionOutline,
         Gizmos,
-        Grid,
+        // Grid,
         Shadows,
         PostProcess,
-        DebugNormals
+        //DebugNormals
     };
 
     struct RenderPipelineCallbacks
@@ -26,10 +26,10 @@ namespace Hybrid
         std::function<void(RenderContext&)> picking;
         std::function<void(RenderContext&)> selection_outline;
         std::function<void(RenderContext&)> gizmos;
-        std::function<void(RenderContext&)> grid;
+        // std::function<void(RenderContext&)> grid;
         std::function<void(RenderContext&)> shadows;
         std::function<void(RenderContext&)> post_process;
-        std::function<void(RenderContext&)> debug_normals;
+        //std::function<void(RenderContext&)> debug_normals;
     };
 
     // Stage-1 pipeline extraction: owns pass order and flag-based dispatch only.

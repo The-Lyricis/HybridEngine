@@ -10,6 +10,8 @@ uniform float u_TexelWidth;
 uniform float u_TexelHeight;
 uniform vec4 u_OutlineColor;
 
+const float OUTLINE_WIDTH = 4.0;
+
 uint sample_id(vec2 uv)
 {
     return texture(u_EntityIDTex, uv).r;
@@ -17,10 +19,10 @@ uint sample_id(vec2 uv)
 
 void main()
 {
-    if (v_UV.x <= 2.0 * u_TexelWidth ||
-        v_UV.x >= 1.0 - 2.0 * u_TexelWidth ||
-        v_UV.y <= 2.0 * u_TexelHeight ||
-        v_UV.y >= 1.0 - 2.0 * u_TexelHeight)
+    if (v_UV.x <= OUTLINE_WIDTH * u_TexelWidth ||
+        v_UV.x >= 1.0 - OUTLINE_WIDTH * u_TexelWidth ||
+        v_UV.y <= OUTLINE_WIDTH * u_TexelHeight ||
+        v_UV.y >= 1.0 - OUTLINE_WIDTH * u_TexelHeight)
     {
         discard;
     }
@@ -37,14 +39,14 @@ void main()
         vec2( u_TexelWidth, -u_TexelHeight),
         vec2(-u_TexelWidth,  u_TexelHeight),
         vec2( u_TexelWidth,  u_TexelHeight),
-        vec2(-2.0 * u_TexelWidth, 0.0),
-        vec2( 2.0 * u_TexelWidth, 0.0),
-        vec2(0.0, -2.0 * u_TexelHeight),
-        vec2(0.0,  2.0 * u_TexelHeight),
-        vec2(-2.0 * u_TexelWidth, -2.0 * u_TexelHeight),
-        vec2( 2.0 * u_TexelWidth, -2.0 * u_TexelHeight),
-        vec2(-2.0 * u_TexelWidth,  2.0 * u_TexelHeight),
-        vec2( 2.0 * u_TexelWidth,  2.0 * u_TexelHeight)
+        vec2(-OUTLINE_WIDTH * u_TexelWidth, 0.0),
+        vec2( OUTLINE_WIDTH * u_TexelWidth, 0.0),
+        vec2(0.0, -OUTLINE_WIDTH * u_TexelHeight),
+        vec2(0.0,  OUTLINE_WIDTH * u_TexelHeight),
+        vec2(-OUTLINE_WIDTH * u_TexelWidth, -OUTLINE_WIDTH * u_TexelHeight),
+        vec2( OUTLINE_WIDTH * u_TexelWidth, -OUTLINE_WIDTH * u_TexelHeight),
+        vec2(-OUTLINE_WIDTH * u_TexelWidth,  OUTLINE_WIDTH * u_TexelHeight),
+        vec2( OUTLINE_WIDTH * u_TexelWidth,  OUTLINE_WIDTH * u_TexelHeight)
     );
 
     bool neighbor_selected = false;

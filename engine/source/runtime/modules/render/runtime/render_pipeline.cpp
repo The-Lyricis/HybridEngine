@@ -3,15 +3,17 @@
 namespace Hybrid
 {
     RenderPipeline::RenderPipeline()
-        : m_pass_order{
+        : m_pass_order
+        {
             RenderPassType::Forward,
             RenderPassType::Picking,
             RenderPassType::SelectionOutline,
             RenderPassType::Gizmos,
-            RenderPassType::Grid,
+            //RenderPassType::Grid,
             RenderPassType::Shadows,
             RenderPassType::PostProcess,
-            RenderPassType::DebugNormals}
+            //RenderPassType::DebugNormals
+        }
     {
     }
 
@@ -39,14 +41,14 @@ namespace Hybrid
             return HasFlag(flags, RenderFlags::SelectionOutline);
         case RenderPassType::Gizmos:
             return HasFlag(flags, RenderFlags::Gizmos);
-        case RenderPassType::Grid:
-            return HasFlag(flags, RenderFlags::Grid);
+        // case RenderPassType::Grid:
+        //     return HasFlag(flags, RenderFlags::Grid);
         case RenderPassType::Shadows:
             return HasFlag(flags, RenderFlags::Shadows);
         case RenderPassType::PostProcess:
             return HasFlag(flags, RenderFlags::PostProcess);
-        case RenderPassType::DebugNormals:
-            return HasFlag(flags, RenderFlags::DebugNormals);
+        // case RenderPassType::DebugNormals:
+        //     return HasFlag(flags, RenderFlags::DebugNormals);
         default:
             return false;
         }
@@ -72,10 +74,10 @@ namespace Hybrid
             if (callbacks.gizmos)
                 callbacks.gizmos(context);
             break;
-        case RenderPassType::Grid:
-            if (callbacks.grid)
-                callbacks.grid(context);
-            break;
+        // case RenderPassType::Grid:
+        //     if (callbacks.grid)
+        //         callbacks.grid(context);
+        //     break;
         case RenderPassType::Shadows:
             if (callbacks.shadows)
                 callbacks.shadows(context);
@@ -84,10 +86,10 @@ namespace Hybrid
             if (callbacks.post_process)
                 callbacks.post_process(context);
             break;
-        case RenderPassType::DebugNormals:
-            if (callbacks.debug_normals)
-                callbacks.debug_normals(context);
-            break;
+        // case RenderPassType::DebugNormals:
+        //     if (callbacks.debug_normals)
+        //         callbacks.debug_normals(context);
+        //     break;
         default:
             break;
         }

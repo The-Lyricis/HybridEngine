@@ -80,7 +80,7 @@ namespace Hybrid
         shader->setUInt("u_SelectedEntityID", packet.selectedEntityID + 1u);
         shader->setFloat("u_TexelWidth", width > 0 ? 1.0f / static_cast<float>(width) : 0.0f);
         shader->setFloat("u_TexelHeight", height > 0 ? 1.0f / static_cast<float>(height) : 0.0f);
-        shader->setVec4("u_OutlineColor", glm::vec4(1.0f, 0.62f, 0.18f, 0.95f));
+        shader->setVec4("u_OutlineColor", glm::vec4(0.836f, 0.292f, 0.312f, 0.95f));
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, copy_id);

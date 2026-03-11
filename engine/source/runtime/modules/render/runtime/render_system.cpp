@@ -68,7 +68,7 @@ namespace Hybrid
                 return glm::vec3(0.0f, -1.0f, 0.0f);
             return dir / len;
         }
-        // 鍖垮悕鍛藉悕绌洪棿閲屾柊澧烇細杈撳嚭 view/proj/camPos
+        // Returns false if no valid camera found.
         static bool getSceneCameraMatrices(Hybrid::Scene& scene,
             float aspect,
             glm::mat4& outView,
@@ -445,10 +445,10 @@ namespace Hybrid
             {
                 m_GizmoPass.execute(context);
             };
-            callbacks.grid = [this](RenderContext& context)
-            {
-                m_GridPass.execute(context);
-            };
+            // callbacks.grid = [this](RenderContext& context)
+            // {
+            //     m_GridPass.execute(context);
+            // };
             callbacks.shadows = [this](RenderContext& context)
             {
                 m_ShadowPass.execute(context);
@@ -457,10 +457,10 @@ namespace Hybrid
             {
                 m_PostProcessPass.execute(context);
             };
-            callbacks.debug_normals = [this](RenderContext& context)
-            {
-                m_DebugNormalsPass.execute(context);
-            };
+            // callbacks.debug_normals = [this](RenderContext& context)
+            // {
+            //     m_DebugNormalsPass.execute(context);
+            // };
             return callbacks;
         };
 
@@ -585,7 +585,7 @@ namespace Hybrid
 
         m_SceneFB->bind();
 
-        // 璇?COLOR1
+        // Ensure the picking pass writes to the second color attachment (entity ID buffer).Q
         glReadBuffer(GL_COLOR_ATTACHMENT1);
 
         uint32_t encoded_id = 0;
