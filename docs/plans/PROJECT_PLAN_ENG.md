@@ -77,13 +77,13 @@ Hybrid Engine
 - [x] Logging system (spdlog)
 - [x] Event system (Event + Dispatcher + window events)
 - [x] Runtime window system (GLFW + GLAD + OpenGL context)
-- [ ] ImGui Layer (unified Runtime wrapper)
+- [x] ImGui Layer (unified Runtime wrapper)
 - [x] Engine main loop (run / update / render / exit)
 - Milestone: window display + log output + basic UI
 
 ### Phase 1.2: Initial Rendering
 
-- [ ] Shader management (compile/link/cache)
+- [x] Shader management (compile/link/cache)
 - [x] Buffer/VertexArray/Framebuffer
 - [ ] Texture loading
 - [ ] 2D renderer
@@ -97,21 +97,21 @@ Hybrid Engine
 
 ### Phase 2.1: Resource System
 
-- [ ] Asset Loader (textures/models/materials)
-- [ ] Resource path & cache policy
+- [x] Asset Loader (textures/models/materials)
+- [x] Resource path & cache policy
 - [ ] Hot reload (optional)
 
 ### Phase 2.2: Initial Scene
 
-- [ ] ECS basics
-- [ ] Transform/Renderer Component
-- [ ] Scene serialization (JSON)
-- [ ] Scene Hierarchy
+- [x] ECS basics
+- [x] Transform/Renderer Component
+- [x] Scene serialization (JSON)
+- [x] Scene Hierarchy
 
 ### Phase 3.1: Physics System
 
 - [ ] Bounding volumes / collision detection
-- [ ] Basic rigid body (optional)
+- [x] Basic rigid body (optional)
 
 ### Phase 3.2: Audio System
 
@@ -120,9 +120,9 @@ Hybrid Engine
 
 ### Phase 3.3: Advanced Rendering
 
-- [ ] Basic lighting/materials
+- [x] Basic lighting/materials
 - [ ] Texture sampling/management
-- [ ] RenderPass organization (optional)
+- [x] RenderPass organization (optional)
 
 ### Phase 4.1: Scripting System
 
@@ -134,6 +134,6 @@ Hybrid Engine
 ### Phase 4.2: Editor Polish
 
 - [ ] Gizmo system
-- [ ] Inspector panel
-- [ ] Asset browser
-- [ ] Profiler panel
+- [x] Inspector panel
+- [x] Asset browser
+- [x] Profiler panel
