@@ -4,6 +4,10 @@
 #include <vector>
 
 namespace Hybrid {
+    namespace
+    {
+        constexpr const char* kOpenGLShaderLogTag = "[OpenGLShader]";
+    } // namespace
 
     static void checkCompile(uint32_t shader) {
         GLint compiled = GL_FALSE;
@@ -13,8 +17,10 @@ namespace Hybrid {
             glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
             std::vector<char> msg(static_cast<size_t>(len) + 1);
             glGetShaderInfoLog(shader, len, &len, msg.data());
-            // TODO: log message
-            HBD_CORE_ERROR("Shader compilation failed: {}", msg.data());
+            HBD_CORE_ERROR("{} compile_failed shader={} reason={}",
+                           kOpenGLShaderLogTag,
+                           shader,
+                           msg.data());
         }
     }
 
@@ -26,7 +32,10 @@ namespace Hybrid {
             glGetProgramiv(program, GL_INFO_LOG_LENGTH, &len);
             std::vector<char> msg(static_cast<size_t>(len) + 1);
             glGetProgramInfoLog(program, len, &len, msg.data());
-            // TODO: log message
+            HBD_CORE_ERROR("{} link_failed program={} reason={}",
+                           kOpenGLShaderLogTag,
+                           program,
+                           msg.data());
         }
     }
 

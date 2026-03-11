@@ -15,6 +15,20 @@
 
 namespace Hybrid
 {
+    namespace
+    {
+        constexpr const char* kEngineLogTag = "[Engine]";
+
+        const char* sceneNameOrPlaceholder(const std::shared_ptr<Scene>& scene)
+        {
+            if (!scene)
+                return "<null>";
+            if (scene->getName().empty())
+                return "<unnamed>";
+            return scene->getName().c_str();
+        }
+    } // namespace
+
     void HybridEngine::initialize()
     {
         LogSystem::initialize();
@@ -32,12 +46,25 @@ namespace Hybrid
         const fs::path settingsDir = projectRoot / "ProjectSettings";
 
         std::error_code ec;
+        HBD_CORE_INFO("{} initialize_started cwd={} project_root={}",
+                      kEngineLogTag,
+                      outputDir.string(),
+                      projectRoot.string());
+
+        const auto logDirectoryCreateFailure = [](const char* target, const fs::path& path, const std::error_code& error)
+        {
+            HBD_CORE_ERROR("{} project_bootstrap_failed target={} path={} reason=create_directory_failed error={}",
+                           kEngineLogTag,
+                           target,
+                           path.string(),
+                           error.message());
+        };
 
         // 1) Create required directories.
         fs::create_directories(projectRoot, ec);
         if (ec)
         {
-            HBD_CORE_ERROR("Failed to create ProjectRoot: {} ({})", projectRoot.string(), ec.message());
+            logDirectoryCreateFailure("project_root", projectRoot, ec);
             LogSystem::shutdown();
             return;
         }
@@ -46,7 +73,7 @@ namespace Hybrid
         fs::create_directories(assetsDir, ec);
         if (ec)
         {
-            HBD_CORE_ERROR("Failed to create Assets dir: {} ({})", assetsDir.string(), ec.message());
+            logDirectoryCreateFailure("assets_root", assetsDir, ec);
             LogSystem::shutdown();
             return;
         }
@@ -55,7 +82,7 @@ namespace Hybrid
         fs::create_directories(cacheDir, ec);
         if (ec)
         {
-            HBD_CORE_ERROR("Failed to create Cache dir: {} ({})", cacheDir.string(), ec.message());
+            logDirectoryCreateFailure("cache_root", cacheDir, ec);
             LogSystem::shutdown();
             return;
         }
@@ -64,7 +91,7 @@ namespace Hybrid
         fs::create_directories(buildDir, ec);
         if (ec)
         {
-            HBD_CORE_ERROR("Failed to create Build dir: {} ({})", buildDir.string(), ec.message());
+            logDirectoryCreateFailure("build_root", buildDir, ec);
             LogSystem::shutdown();
             return;
         }
@@ -73,7 +100,7 @@ namespace Hybrid
         fs::create_directories(settingsDir, ec);
         if (ec)
         {
-            HBD_CORE_ERROR("Failed to create ProjectSettings dir: {} ({})", settingsDir.string(), ec.message());
+            logDirectoryCreateFailure("settings_root", settingsDir, ec);
             LogSystem::shutdown();
             return;
         }
@@ -84,7 +111,9 @@ namespace Hybrid
             std::ofstream ofs(hyprojPath, std::ios::out | std::ios::binary);
             if (!ofs)
             {
-                HBD_CORE_ERROR("Failed to create hyproj: {}", hyprojPath.string());
+                HBD_CORE_ERROR("{} project_file_create_failed path={} reason=open_failed",
+                               kEngineLogTag,
+                               hyprojPath.string());
                 LogSystem::shutdown();
                 return;
             }
@@ -97,7 +126,9 @@ namespace Hybrid
             ofs << "settings=ProjectSettings\n";
             ofs.close();
 
-            HBD_CORE_INFO("Created default hyproj: {}", fs::absolute(hyprojPath).string());
+            HBD_CORE_INFO("{} project_file_created path={}",
+                          kEngineLogTag,
+                          fs::absolute(hyprojPath).string());
         }
 
         // 3) Load hyproj into ProjectContext and publish ProjectService.
@@ -105,19 +136,23 @@ namespace Hybrid
         std::string perr;
         if (!Hybrid::ProjectLoader::LoadFromFile(hyprojPath, pctx, perr))
         {
-            HBD_CORE_ERROR("Project load failed: {}", perr);
-            HBD_CORE_ERROR("hyproj: {}", fs::absolute(hyprojPath).string());
+            HBD_CORE_ERROR("{} project_load_failed hyproj={} reason={}",
+                           kEngineLogTag,
+                           fs::absolute(hyprojPath).string(),
+                           perr);
             LogSystem::shutdown();
             return;
         }
 
         Hybrid::ProjectService::Set(pctx);
-        HBD_CORE_INFO("Project loaded: {}", fs::absolute(hyprojPath).string());
-        HBD_CORE_INFO("Project Root   : {}", pctx.root.string());
-        HBD_CORE_INFO("Assets         : {}", pctx.assets.string());
-        HBD_CORE_INFO("Cache          : {}", pctx.cache.string());
-        HBD_CORE_INFO("Build          : {}", pctx.build.string());
-        HBD_CORE_INFO("ProjectSettings: {}", pctx.settings.string());
+        HBD_CORE_INFO("{} project_loaded hyproj={} project_root={} assets_root={} cache_root={} build_root={} settings_root={}",
+                      kEngineLogTag,
+                      fs::absolute(hyprojPath).string(),
+                      pctx.root.string(),
+                      pctx.assets.string(),
+                      pctx.cache.string(),
+                      pctx.build.string(),
+                      pctx.settings.string());
         // =============================================
 
         // ===== Window / Graphics =====
@@ -127,7 +162,8 @@ namespace Hybrid
         GLFWwindow *window = m_Window->getNativeWindow();
         if (!window)
         {
-            HBD_CORE_ERROR("GLFW window is null.");
+            HBD_CORE_ERROR("{} initialize_failed step=window_create reason=native_window_null",
+                           kEngineLogTag);
             m_Window->cleanup();
             LogSystem::shutdown();
             return;
@@ -136,7 +172,8 @@ namespace Hybrid
         m_GraphicsContext = GraphicsContext::Create(window);
         if (!m_GraphicsContext)
         {
-            HBD_CORE_ERROR("GraphicsContext creation failed.");
+            HBD_CORE_ERROR("{} initialize_failed step=graphics_context_create reason=create_failed",
+                           kEngineLogTag);
             m_Window->cleanup();
             LogSystem::shutdown();
             return;
@@ -172,7 +209,15 @@ namespace Hybrid
         m_FrameContext.window_handle = window;
 
         // 绑定到系统
-        setEditorScene(scene);
+        if (!setEditorScene(scene))
+        {
+            HBD_CORE_ERROR("{} initialize_failed step=editor_scene_bind scene={} reason=set_editor_scene_failed",
+                           kEngineLogTag,
+                           sceneNameOrPlaceholder(scene));
+            m_Window->cleanup();
+            LogSystem::shutdown();
+            return;
+        }
         m_FrameContext.window_handle = window;
 
         int fbw = 0, fbh = 0;
@@ -184,12 +229,20 @@ namespace Hybrid
 
         //物理系统初始化
         m_PhysicsSystem.initialize();
+        HBD_CORE_INFO("{} initialize_completed scene={} viewport={}x{} mode=edit",
+                      kEngineLogTag,
+                      sceneNameOrPlaceholder(m_EditorScene),
+                      static_cast<int>(m_FrameContext.viewport_size.x),
+                      static_cast<int>(m_FrameContext.viewport_size.y));
     }
 
     bool HybridEngine::setEditorScene(std::shared_ptr<Scene> scene)
     {
         if (!scene)
+        {
+            HBD_CORE_WARN("{} editor_scene_set_rejected reason=null_scene", kEngineLogTag);
             return false;
+        }
 
         if (isPlayMode())
             exitPlayMode();
@@ -206,11 +259,27 @@ namespace Hybrid
         if (m_SceneRunState == SceneRunState::Edit)
             m_FrameContext.scene = m_EditorScene;
 
-        return (m_EditorScene != nullptr) && (m_SceneManager.getActiveScene() == m_EditorScene);
+        const bool success = (m_EditorScene != nullptr) && (m_SceneManager.getActiveScene() == m_EditorScene);
+        if (success)
+        {
+            HBD_CORE_DEBUG("{} editor_scene_set scene={} mode={}",
+                           kEngineLogTag,
+                           sceneNameOrPlaceholder(m_EditorScene),
+                           isPlayMode() ? "play" : "edit");
+        }
+        else
+        {
+            HBD_CORE_ERROR("{} editor_scene_set_failed scene={} reason=activation_mismatch",
+                           kEngineLogTag,
+                           sceneNameOrPlaceholder(m_EditorScene));
+        }
+
+        return success;
     }
 
     void HybridEngine::run()
     {
+        HBD_CORE_INFO("{} run_started mode={}", kEngineLogTag, isPlayMode() ? "play" : "edit");
         while (m_Running && !m_Window->shouldClose())
         {
             const float dt = calculateDeltaTime();
@@ -281,6 +350,10 @@ namespace Hybrid
 
             m_GraphicsContext->swapBuffers();
         }
+
+        HBD_CORE_INFO("{} run_stopped reason={}",
+                      kEngineLogTag,
+                      (m_Window && m_Window->shouldClose()) ? "window_should_close" : "running_flag_false");
     }
 
     void HybridEngine::onEvent(Event &e)
@@ -293,21 +366,30 @@ namespace Hybrid
         EventDispatcher dispatcher(e);
         dispatcher.dispatch<WindowCloseEvent>([this](WindowCloseEvent &)
                                               {
+            HBD_CORE_INFO("{} window_close_requested", kEngineLogTag);
             m_Running = false;
             return true; });
 
         dispatcher.dispatch<WindowResizeEvent>([this](WindowResizeEvent &ev)
                                                {
-            if (ev.getWidth() == 0 || ev.getHeight() == 0)
-            {
-                m_Minimized = true;
-                return false;
-            }
+             if (ev.getWidth() == 0 || ev.getHeight() == 0)
+             {
+                 if (!m_Minimized)
+                 {
+                     HBD_CORE_DEBUG("{} window_minimized", kEngineLogTag);
+                 }
+                 m_Minimized = true;
+                 return false;
+             }
 
-            m_Minimized = false;
-            m_RenderSystem.onWindowResize(static_cast<uint32_t>(ev.getWidth()), static_cast<uint32_t>(ev.getHeight()));
-            m_FrameContext.viewport_size = {static_cast<float>(ev.getWidth()), static_cast<float>(ev.getHeight())};
-            return false; });
+             m_Minimized = false;
+             m_RenderSystem.onWindowResize(static_cast<uint32_t>(ev.getWidth()), static_cast<uint32_t>(ev.getHeight()));
+             m_FrameContext.viewport_size = {static_cast<float>(ev.getWidth()), static_cast<float>(ev.getHeight())};
+             HBD_CORE_DEBUG("{} window_resized width={} height={}",
+                            kEngineLogTag,
+                            ev.getWidth(),
+                            ev.getHeight());
+             return false; });
 
         for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
         {
@@ -347,6 +429,7 @@ namespace Hybrid
 
     void HybridEngine::shutdown()
     {
+        HBD_CORE_INFO("{} shutdown_started mode={}", kEngineLogTag, isPlayMode() ? "play" : "edit");
         if (isPlayMode())
             exitPlayMode();
 
@@ -359,6 +442,7 @@ namespace Hybrid
             m_Window->cleanup();
         }
 
+        HBD_CORE_INFO("{} shutdown_completed", kEngineLogTag);
         LogSystem::shutdown();
     }
 
@@ -399,20 +483,22 @@ namespace Hybrid
     {
         if (isPlayMode())
         {
-            HBD_CORE_WARN("Already in Play mode.");
+            HBD_CORE_DEBUG("{} play_mode_enter_skipped reason=already_in_play_mode", kEngineLogTag);
             return false;
         }
 
         if (!source_scene)
         {
-            HBD_CORE_WARN("Cannot enter Play mode: source scene is null.");
+            HBD_CORE_WARN("{} play_mode_enter_rejected reason=null_source_scene", kEngineLogTag);
             return false;
         }
 
         m_RuntimeScene = source_scene->cloneRuntime();
         if (!m_RuntimeScene)
         {
-            HBD_CORE_ERROR("Failed to clone scene for Play mode.");
+            HBD_CORE_ERROR("{} play_mode_enter_failed scene={} reason=clone_runtime_failed",
+                           kEngineLogTag,
+                           sceneNameOrPlaceholder(source_scene));
             return false;
         }
 
@@ -421,7 +507,10 @@ namespace Hybrid
         m_SceneManager.setActiveScene(m_RuntimeScene);
         m_RenderSystem.setScene(m_RuntimeScene);
         m_FrameContext.scene = m_RuntimeScene;
-        HBD_CORE_INFO("Entered Play mode.");
+        HBD_CORE_INFO("{} play_mode_entered source_scene={} runtime_scene={}",
+                      kEngineLogTag,
+                      sceneNameOrPlaceholder(source_scene),
+                      sceneNameOrPlaceholder(m_RuntimeScene));
         return true;
     }
 
@@ -429,17 +518,21 @@ namespace Hybrid
     {
         if (isEditMode())
         {
-            HBD_CORE_WARN("Already in Edit mode.");
+            HBD_CORE_DEBUG("{} play_mode_exit_skipped reason=already_in_edit_mode", kEngineLogTag);
             return;
         }
 
+        const std::string runtime_scene_name = sceneNameOrPlaceholder(m_RuntimeScene);
         m_RuntimeScene.reset();
         m_SceneRunState = SceneRunState::Edit;
         m_PlayPaused = false;
         m_SceneManager.setActiveScene(m_EditorScene);
         m_RenderSystem.setScene(m_EditorScene);
         m_FrameContext.scene = m_EditorScene;
-        HBD_CORE_INFO("Exited Play mode.");
+        HBD_CORE_INFO("{} play_mode_exited runtime_scene={} editor_scene={}",
+                      kEngineLogTag,
+                      runtime_scene_name,
+                      sceneNameOrPlaceholder(m_EditorScene));
     }
 
     void HybridEngine::togglePlayPause()
@@ -448,7 +541,10 @@ namespace Hybrid
             return;
 
         m_PlayPaused = !m_PlayPaused;
-        HBD_CORE_INFO(m_PlayPaused ? "Paused Play mode." : "Resumed Play mode.");
+        HBD_CORE_INFO("{} play_mode_pause_toggled paused={} scene={}",
+                      kEngineLogTag,
+                      m_PlayPaused ? "true" : "false",
+                      sceneNameOrPlaceholder(m_RuntimeScene));
     }
 
 } // namespace Hybrid

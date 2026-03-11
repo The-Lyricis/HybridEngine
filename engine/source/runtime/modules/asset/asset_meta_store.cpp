@@ -16,6 +16,8 @@ namespace Hybrid
 
     namespace
     {
+        constexpr const char* kAssetMetaStoreLogTag = "[AssetMetaStore]";
+
         bool hasParentTraversal(const std::filesystem::path& p)
         {
             for (const auto& part : p)
@@ -138,6 +140,14 @@ namespace Hybrid
             }
             return true;
         }
+
+        void logMetaParseFailed(const std::filesystem::path& file, const std::string& reason)
+        {
+            HBD_CORE_WARN("{} meta_parse_failed path={} reason={}",
+                          kAssetMetaStoreLogTag,
+                          file.string(),
+                          reason);
+        }
     } // namespace
 
     AssetMetaStore::AssetMetaStore(std::shared_ptr<AssetRegistry> registry) : m_registry(std::move(registry)) {}
@@ -153,7 +163,10 @@ namespace Hybrid
         std::filesystem::recursive_directory_iterator it(assets_root, ec), end;
         if (ec)
         {
-            HBD_CORE_ERROR("AssetMetaStore: cannot scan {} ({})", assets_root.string(), ec.message());
+            HBD_CORE_ERROR("{} scan_failed root={} reason=iterator_create_failed error={}",
+                           kAssetMetaStoreLogTag,
+                           assets_root.string(),
+                           ec.message());
             return result;
         }
 
@@ -161,7 +174,10 @@ namespace Hybrid
         {
             if (ec)
             {
-                HBD_CORE_WARN("AssetMetaStore: scan error under {} ({})", assets_root.string(), ec.message());
+                HBD_CORE_WARN("{} scan_entry_skipped root={} reason=iterator_increment_failed error={}",
+                              kAssetMetaStoreLogTag,
+                              assets_root.string(),
+                              ec.message());
                 ec.clear();
                 continue;
             }
@@ -196,31 +212,84 @@ namespace Hybrid
     bool AssetMetaStore::saveOne(const AssetMetadata& meta, const std::filesystem::path& assets_root)
     {
         if (!m_registry || assets_root.empty())
+        {
+            HBD_CORE_WARN("{} meta_save_rejected source_path={} reason=missing_registry_or_assets_root",
+                          kAssetMetaStoreLogTag,
+                          meta.source_path.empty() ? "<empty>" : meta.source_path);
             return false;
+        }
         if (meta.id.value == 0 || meta.type == AssetType::Unknown)
+        {
+            HBD_CORE_WARN("{} meta_save_rejected source_path={} reason=invalid_id_or_type",
+                          kAssetMetaStoreLogTag,
+                          meta.source_path.empty() ? "<empty>" : meta.source_path);
             return false;
+        }
         if (!isValidLogicalPath(meta.source_path))
+        {
+            HBD_CORE_WARN("{} meta_save_rejected source_path={} reason=invalid_source_path",
+                          kAssetMetaStoreLogTag,
+                          meta.source_path.empty() ? "<empty>" : meta.source_path);
             return false;
+        }
         if (!meta.cooked_path.empty() && !isValidLogicalPath(meta.cooked_path))
+        {
+            HBD_CORE_WARN("{} meta_save_rejected source_path={} cooked_path={} reason=invalid_cooked_path",
+                          kAssetMetaStoreLogTag,
+                          meta.source_path,
+                          meta.cooked_path);
             return false;
+        }
         if ((meta.parent_id.value == 0) != (meta.subasset_key.empty()))
+        {
+            HBD_CORE_WARN("{} meta_save_rejected source_path={} reason=parent_subasset_mismatch",
+                          kAssetMetaStoreLogTag,
+                          meta.source_path);
             return false;
+        }
 
         std::string source_alias, source_rel;
         if (!parseLogicalPath(meta.source_path, source_alias, source_rel))
+        {
+            HBD_CORE_WARN("{} meta_save_rejected source_path={} reason=parse_logical_path_failed",
+                          kAssetMetaStoreLogTag,
+                          meta.source_path);
             return false;
+        }
         if (source_alias != "asset")
+        {
+            HBD_CORE_WARN("{} meta_save_rejected source_path={} reason=unsupported_alias alias={}",
+                          kAssetMetaStoreLogTag,
+                          meta.source_path,
+                          source_alias);
             return false;
+        }
 
         AssetMetadata canonical = meta;
         if (!normalizeLogicalPath(meta.source_path, canonical.source_path))
+        {
+            HBD_CORE_WARN("{} meta_save_rejected source_path={} reason=normalize_source_path_failed",
+                          kAssetMetaStoreLogTag,
+                          meta.source_path);
             return false;
+        }
         if (!meta.cooked_path.empty() && !normalizeLogicalPath(meta.cooked_path, canonical.cooked_path))
+        {
+            HBD_CORE_WARN("{} meta_save_rejected source_path={} cooked_path={} reason=normalize_cooked_path_failed",
+                          kAssetMetaStoreLogTag,
+                          meta.source_path,
+                          meta.cooked_path);
             return false;
+        }
 
         const auto meta_file = metaPathFromSource(meta.source_path, assets_root);
         if (meta_file.empty())
+        {
+            HBD_CORE_WARN("{} meta_save_rejected source_path={} reason=meta_path_resolve_failed",
+                          kAssetMetaStoreLogTag,
+                          meta.source_path);
             return false;
+        }
 
         return writeMetaFileAtomic(meta_file, canonical);
     }
@@ -229,10 +298,23 @@ namespace Hybrid
     {
         const auto meta_file = metaPathFromSource(source_path, assets_root);
         if (meta_file.empty())
+        {
+            HBD_CORE_WARN("{} meta_remove_rejected source_path={} reason=meta_path_resolve_failed",
+                          kAssetMetaStoreLogTag,
+                          source_path.empty() ? "<empty>" : source_path);
             return false;
+        }
 
         std::error_code ec;
         const bool removed = std::filesystem::remove(meta_file, ec);
+        if (ec)
+        {
+            HBD_CORE_WARN("{} meta_remove_failed source_path={} path={} error={}",
+                          kAssetMetaStoreLogTag,
+                          source_path,
+                          meta_file.string(),
+                          ec.message());
+        }
         return !ec && removed;
     }
 
@@ -258,25 +340,28 @@ namespace Hybrid
         std::ifstream in(file, std::ios::binary);
         if (!in)
         {
-            HBD_CORE_WARN("AssetMetaStore: cannot open meta {}", file.string());
+            logMetaParseFailed(file, "open_failed");
             return false;
         }
 
         json j = json::parse(in, nullptr, false);
         if (j.is_discarded() || !j.is_object())
         {
-            HBD_CORE_WARN("AssetMetaStore: invalid json {}", file.string());
+            logMetaParseFailed(file, "invalid_json");
             return false;
         }
 
         if (!j.contains("version") || !j["version"].is_number_integer())
         {
-            HBD_CORE_WARN("AssetMetaStore: missing version {}", file.string());
+            logMetaParseFailed(file, "missing_version");
             return false;
         }
         if (j["version"].get<int>() != 1)
         {
-            HBD_CORE_WARN("AssetMetaStore: unsupported version {} in {}", j["version"].get<int>(), file.string());
+            HBD_CORE_WARN("{} meta_parse_failed path={} reason=unsupported_version version={}",
+                          kAssetMetaStoreLogTag,
+                          file.string(),
+                          j["version"].get<int>());
             return false;
         }
 
@@ -284,37 +369,46 @@ namespace Hybrid
 
         if (!j.contains("id") || !parseAssetId(j["id"], meta.id))
         {
-            HBD_CORE_WARN("AssetMetaStore: invalid id {}", file.string());
+            logMetaParseFailed(file, "invalid_id");
             return false;
         }
 
         if (!j.contains("type") || !j["type"].is_string())
         {
-            HBD_CORE_WARN("AssetMetaStore: missing type {}", file.string());
+            logMetaParseFailed(file, "missing_type");
             return false;
         }
         meta.type = AssetTypeFromString(j["type"].get<std::string>());
         if (meta.type == AssetType::Unknown)
         {
-            HBD_CORE_WARN("AssetMetaStore: unknown type in {}", file.string());
+            HBD_CORE_WARN("{} meta_parse_failed path={} reason=unknown_type type={}",
+                          kAssetMetaStoreLogTag,
+                          file.string(),
+                          j["type"].get<std::string>());
             return false;
         }
 
         if (!j.contains("source_path") || !j["source_path"].is_string())
         {
-            HBD_CORE_WARN("AssetMetaStore: missing source_path {}", file.string());
+            logMetaParseFailed(file, "missing_source_path");
             return false;
         }
         meta.source_path = j["source_path"].get<std::string>();
         if (!isValidLogicalPath(meta.source_path))
         {
-            HBD_CORE_WARN("AssetMetaStore: invalid source_path {} in {}", meta.source_path, file.string());
+            HBD_CORE_WARN("{} meta_parse_failed path={} reason=invalid_source_path source_path={}",
+                          kAssetMetaStoreLogTag,
+                          file.string(),
+                          meta.source_path);
             return false;
         }
         std::string source_alias, source_rel;
         if (!parseLogicalPath(meta.source_path, source_alias, source_rel) || source_alias != "asset")
         {
-            HBD_CORE_WARN("AssetMetaStore: source_path must use asset: alias in {}", file.string());
+            HBD_CORE_WARN("{} meta_parse_failed path={} reason=invalid_source_alias source_path={}",
+                          kAssetMetaStoreLogTag,
+                          file.string(),
+                          meta.source_path);
             return false;
         }
         meta.source_path = source_alias + ":" + source_rel;
@@ -324,14 +418,23 @@ namespace Hybrid
             meta.cooked_path = j["cooked_path"].get<std::string>();
             if (!meta.cooked_path.empty() && !isValidLogicalPath(meta.cooked_path))
             {
-                HBD_CORE_WARN("AssetMetaStore: invalid cooked_path {} in {}", meta.cooked_path, file.string());
+                HBD_CORE_WARN("{} meta_parse_failed path={} reason=invalid_cooked_path cooked_path={}",
+                              kAssetMetaStoreLogTag,
+                              file.string(),
+                              meta.cooked_path);
                 return false;
             }
             if (!meta.cooked_path.empty())
             {
                 std::string cooked_norm;
                 if (!normalizeLogicalPath(meta.cooked_path, cooked_norm))
+                {
+                    HBD_CORE_WARN("{} meta_parse_failed path={} reason=normalize_cooked_path_failed cooked_path={}",
+                                  kAssetMetaStoreLogTag,
+                                  file.string(),
+                                  meta.cooked_path);
                     return false;
+                }
                 meta.cooked_path = std::move(cooked_norm);
             }
         }
@@ -343,7 +446,7 @@ namespace Hybrid
         {
             if (!parseAssetId(j["parent_id"], meta.parent_id))
             {
-                HBD_CORE_WARN("AssetMetaStore: invalid parent_id {}", file.string());
+                logMetaParseFailed(file, "invalid_parent_id");
                 return false;
             }
         }
@@ -352,7 +455,7 @@ namespace Hybrid
         {
             if (!j["subasset_key"].is_string())
             {
-                HBD_CORE_WARN("AssetMetaStore: invalid subasset_key {}", file.string());
+                logMetaParseFailed(file, "invalid_subasset_key");
                 return false;
             }
             meta.subasset_key = j["subasset_key"].get<std::string>();
@@ -360,7 +463,7 @@ namespace Hybrid
 
         if ((meta.parent_id.value == 0) != (meta.subasset_key.empty()))
         {
-            HBD_CORE_WARN("AssetMetaStore: parent_id/subasset_key mismatch {}", file.string());
+            logMetaParseFailed(file, "parent_subasset_mismatch");
             return false;
         }
 
@@ -368,7 +471,7 @@ namespace Hybrid
         {
             if (!parseAssetIdArray(j["hard_deps"], meta.hard_deps))
             {
-                HBD_CORE_WARN("AssetMetaStore: invalid hard_deps {}", file.string());
+                logMetaParseFailed(file, "invalid_hard_deps");
                 return false;
             }
         }
@@ -377,7 +480,7 @@ namespace Hybrid
         {
             if (!parseAssetIdArray(j["soft_deps"], meta.soft_deps))
             {
-                HBD_CORE_WARN("AssetMetaStore: invalid soft_deps {}", file.string());
+                logMetaParseFailed(file, "invalid_soft_deps");
                 return false;
             }
         }
@@ -417,7 +520,10 @@ namespace Hybrid
         std::filesystem::create_directories(file.parent_path(), ec);
         if (ec)
         {
-            HBD_CORE_ERROR("AssetMetaStore: create directory failed {} ({})", file.parent_path().string(), ec.message());
+            HBD_CORE_ERROR("{} meta_write_failed path={} reason=create_parent_directory_failed error={}",
+                           kAssetMetaStoreLogTag,
+                           file.string(),
+                           ec.message());
             return false;
         }
 
@@ -427,10 +533,22 @@ namespace Hybrid
         {
             std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
             if (!out)
+            {
+                HBD_CORE_ERROR("{} meta_write_failed path={} temp_path={} reason=open_temp_file_failed",
+                               kAssetMetaStoreLogTag,
+                               file.string(),
+                               tmp.string());
                 return false;
+            }
             out << j.dump(2);
             if (!out.good())
+            {
+                HBD_CORE_ERROR("{} meta_write_failed path={} temp_path={} reason=write_temp_file_failed",
+                               kAssetMetaStoreLogTag,
+                               file.string(),
+                               tmp.string());
                 return false;
+            }
         }
 
         std::error_code rm_ec;
@@ -441,7 +559,11 @@ namespace Hybrid
         if (mv_ec)
         {
             std::filesystem::remove(tmp, rm_ec);
-            HBD_CORE_ERROR("AssetMetaStore: atomic rename failed {} ({})", file.string(), mv_ec.message());
+            HBD_CORE_ERROR("{} meta_write_failed path={} temp_path={} reason=atomic_rename_failed error={}",
+                           kAssetMetaStoreLogTag,
+                           file.string(),
+                           tmp.string(),
+                           mv_ec.message());
             return false;
         }
 

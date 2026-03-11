@@ -4,6 +4,11 @@
 
 namespace Hybrid
 {
+    namespace
+    {
+        constexpr const char* kAssetManagerLogTag = "[AssetManager]";
+    } // namespace
+
     AssetManager::AssetManager(std::shared_ptr<IVirtualFileSystem> vfs, std::shared_ptr<AssetRegistry> registry)
         : m_vfs(std::move(vfs)), m_registry(std::move(registry))
     {
@@ -30,7 +35,10 @@ namespace Hybrid
         // GPU 资源暂不支持异步创建，直接返回默认
         if (type == AssetType::Texture2D || type == AssetType::TextureCube)
         {
-            HBD_CORE_WARN("loadAsync not supported for GPU resource (AssetID={})", id.value);
+            HBD_CORE_WARN("{} load_async_rejected asset_id={} asset_type={} reason=gpu_resource_unsupported",
+                          kAssetManagerLogTag,
+                          id.value,
+                          static_cast<uint32_t>(type));
             std::promise<std::shared_ptr<void>> p;
             p.set_value(getDefaultByTypeIndex(ti));
             return p.get_future().share();
@@ -116,7 +124,11 @@ namespace Hybrid
         }
         catch (const std::exception& e)
         {
-            HBD_CORE_ERROR("Asset load exception: {}", e.what());
+            HBD_CORE_ERROR("{} load_exception asset_id={} asset_type={} reason={}",
+                           kAssetManagerLogTag,
+                           meta.id.value,
+                           static_cast<uint32_t>(type),
+                           e.what());
             return nullptr;
         }
     }
@@ -180,7 +192,9 @@ namespace Hybrid
             auto def = getDefaultByTypeIndex(ti);
             if (def)
             {
-                HBD_CORE_WARN("Asset {} load failed, fallback to default resource", id.value);
+                HBD_CORE_WARN("{} load_fallback_selected asset_id={} reason=load_failed",
+                              kAssetManagerLogTag,
+                              id.value);
                 return def;
             }
         }

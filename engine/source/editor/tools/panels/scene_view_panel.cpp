@@ -15,6 +15,7 @@
 #include <glad/gl.h>
 #include <stb_image.h>
 
+#include "runtime/core/base/macro.h"
 #include "runtime/core/base/math_util.h"
 #include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/entity.h"
@@ -24,6 +25,8 @@ namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kSceneViewPanelLogTag = "[SceneViewPanel]";
+
         static GLuint LoadTextureRGBA8(const std::string& path)
         {
             int w = 0, h = 0, comp = 0;
@@ -67,6 +70,24 @@ namespace Hybrid
 
         enum class ToolMode { Hand, Move, Rotate, Scale };
         static ToolMode s_Tool = ToolMode::Move;
+        static bool s_ToolIconsLoadFailedLogged = false;
+
+        const char* toolModeName(ToolMode mode)
+        {
+            switch (mode)
+            {
+            case ToolMode::Hand:
+                return "hand";
+            case ToolMode::Move:
+                return "move";
+            case ToolMode::Rotate:
+                return "rotate";
+            case ToolMode::Scale:
+                return "scale";
+            default:
+                return "unknown";
+            }
+        }
 
         static void PushActiveToolStyle(bool active)
         {
@@ -219,6 +240,25 @@ namespace Hybrid
             g_ToolIcons.rotate = LoadTextureRGBA8(base + "icon_editorTools_rotate.png");
             g_ToolIcons.scale = LoadTextureRGBA8(base + "icon_editorTools_scale.png");
             g_ToolIcons.loaded = (g_ToolIcons.hand && g_ToolIcons.move && g_ToolIcons.rotate && g_ToolIcons.scale);
+            if (!g_ToolIcons.loaded && !s_ToolIconsLoadFailedLogged)
+            {
+                HBD_CORE_WARN("{} toolbar_icon_load_failed", kSceneViewPanelLogTag);
+                s_ToolIconsLoadFailedLogged = true;
+            }
+        }
+
+        if (m_colorTextureID == 0)
+        {
+            if (!m_missingTextureLogged)
+            {
+                HBD_CORE_WARN("{} viewport_texture_missing", kSceneViewPanelLogTag);
+                m_missingTextureLogged = true;
+            }
+        }
+        else if (m_missingTextureLogged)
+        {
+            HBD_CORE_INFO("{} viewport_texture_ready texture_id={}", kSceneViewPanelLogTag, m_colorTextureID);
+            m_missingTextureLogged = false;
         }
 
         const ImVec2 canvas_min = ImGui::GetCursorScreenPos();
@@ -235,11 +275,25 @@ namespace Hybrid
             const ImVec2 drop_mouse_pos = ImGui::GetMousePos();
             AssetID dropped_asset{};
             if (ctx.instantiate_scene_asset && EditorDragDrop::AcceptAsset(dropped_asset))
+            {
+                HBD_CORE_INFO("{} asset_drop_requested asset_id={} x={} y={}",
+                              kSceneViewPanelLogTag,
+                              dropped_asset.value,
+                              drop_mouse_pos.x,
+                              drop_mouse_pos.y);
                 (void)ctx.instantiate_scene_asset(dropped_asset, drop_mouse_pos);
+            }
 
             std::string dropped_rel_path;
             if (ctx.instantiate_scene_project_path && EditorDragDrop::AcceptProjectPath(dropped_rel_path))
+            {
+                HBD_CORE_INFO("{} project_path_drop_requested path={} x={} y={}",
+                              kSceneViewPanelLogTag,
+                              dropped_rel_path,
+                              drop_mouse_pos.x,
+                              drop_mouse_pos.y);
                 (void)ctx.instantiate_scene_project_path(dropped_rel_path, drop_mouse_pos);
+            }
 
             ImGui::EndDragDropTarget();
         }
@@ -251,7 +305,10 @@ namespace Hybrid
         ctx.scene_viewport_min = canvas_min;
         ctx.scene_viewport_max = canvas_max;
 
+        const ToolMode previous_tool = s_Tool;
         const bool toolbar_interacted = DrawSceneToolbar(ctx, canvas_min);
+        if (previous_tool != s_Tool)
+            HBD_CORE_INFO("{} tool_changed tool={}", kSceneViewPanelLogTag, toolModeName(s_Tool));
         ctx.pan_tool = (s_Tool == ToolMode::Hand);
 
         bool gizmo_over = false;
@@ -340,6 +397,11 @@ namespace Hybrid
                 ctx.pick_x = px;
                 ctx.pick_y = py;
                 ctx.pick_toggle = ImGui::GetIO().KeyCtrl;
+                HBD_CORE_DEBUG("{} pick_requested x={} y={} toggle={}",
+                               kSceneViewPanelLogTag,
+                               px,
+                               py,
+                               ctx.pick_toggle);
             }
         }
 

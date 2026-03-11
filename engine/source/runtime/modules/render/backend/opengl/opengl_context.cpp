@@ -8,6 +8,10 @@
 #include "runtime/core/base/macro.h"
 
 namespace Hybrid {
+    namespace
+    {
+        constexpr const char* kOpenGLContextLogTag = "[OpenGLContext]";
+    } // namespace
 
     GLContext::GLContext(GLFWwindow* window)
         : m_Window(window) {}
@@ -16,10 +20,11 @@ namespace Hybrid {
         glfwMakeContextCurrent(m_Window);
         int status = gladLoadGL(glfwGetProcAddress);
         if (status == 0) {
-             HBD_CORE_ERROR("Failed to initialize OpenGL context");
+             HBD_CORE_ERROR("{} initialize_failed reason=glad_load_failed", kOpenGLContextLogTag);
             return;
         }
         glfwSwapInterval(1); // vsync on by default
+        HBD_CORE_INFO("{} initialize_completed vsync=1", kOpenGLContextLogTag);
     }
 
     void GLContext::swapBuffers() {

@@ -29,6 +29,8 @@ namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kEditorLayerLogTag = "[EditorLayer]";
+
         std::string displayNameForAssetMeta(const AssetMetadata* meta)
         {
             if (meta == nullptr)
@@ -60,7 +62,7 @@ namespace Hybrid
         if (!m_services.window || !m_services.render || !m_services.scene ||
             !m_services.frame_context || !m_services.render_flags || !m_services.editor_ext)
         {
-            HBD_CORE_ERROR("EditorLayer attach failed: missing required engine services");
+            HBD_CORE_ERROR("{} attach_failed reason=missing_required_engine_services", kEditorLayerLogTag);
             return;
         }
 
@@ -188,6 +190,7 @@ namespace Hybrid
 
         (void)m_scene_io.restoreStartupScene();
         syncContextDocumentState();
+        HBD_CORE_INFO("{} attach_completed", kEditorLayerLogTag);
     }
 
     void EditorLayer::onDetach()
@@ -229,6 +232,7 @@ namespace Hybrid
         m_editor_ui.shutdown();
         m_active_scene_view_document.reset();
         m_initialized = false;
+        HBD_CORE_INFO("{} detach_completed", kEditorLayerLogTag);
     }
 
     void EditorLayer::syncContextDocumentState()
@@ -478,7 +482,10 @@ namespace Hybrid
     bool EditorLayer::instantiateSceneProjectPath(const std::string& rel_path, const ImVec2& drop_mouse_pos)
     {
         if (rel_path.empty())
+        {
+            HBD_CORE_WARN("{} instantiate_project_path_rejected reason=empty_path", kEditorLayerLogTag);
             return false;
+        }
 
         const std::string vpath = std::string("asset:") + std::filesystem::path(rel_path).generic_string();
         AssetID asset_id = findAssetByVPath(vpath);
@@ -488,6 +495,9 @@ namespace Hybrid
             if (!m_services.editor_resources)
             {
                 m_editor_ui.context().setStatusMessage("Cannot import dropped asset.");
+                HBD_CORE_WARN("{} instantiate_project_path_failed path={} reason=editor_resources_unavailable",
+                              kEditorLayerLogTag,
+                              vpath);
                 return false;
             }
 
@@ -498,13 +508,25 @@ namespace Hybrid
             {
                 m_editor_ui.context().setStatusMessage(
                     result.message.empty() ? "Asset import failed." : result.message);
+                HBD_CORE_WARN("{} instantiate_project_path_failed path={} reason=import_failed message={}",
+                              kEditorLayerLogTag,
+                              vpath,
+                              result.message.empty() ? "<empty>" : result.message);
                 return false;
             }
 
             asset_id = result.primary_id;
         }
 
-        return instantiateSceneAsset(asset_id, drop_mouse_pos);
+        const bool instantiated = instantiateSceneAsset(asset_id, drop_mouse_pos);
+        if (instantiated)
+        {
+            HBD_CORE_INFO("{} instantiate_project_path_completed path={} asset_id={}",
+                          kEditorLayerLogTag,
+                          vpath,
+                          asset_id.value);
+        }
+        return instantiated;
     }
 
     bool EditorLayer::tryGetSceneDropPosition(const ImVec2& drop_mouse_pos, glm::vec3& out_position)
@@ -532,25 +554,47 @@ namespace Hybrid
     {
         auto& ctx = m_editor_ui.context();
         if (asset_id.value == 0 || !ctx.active_scene)
+        {
+            HBD_CORE_WARN("{} instantiate_asset_rejected asset_id={} active_scene_ready={}",
+                          kEditorLayerLogTag,
+                          asset_id.value,
+                          ctx.active_scene != nullptr);
             return false;
+        }
 
         if (ctx.is_play_mode && ctx.is_play_mode())
         {
             ctx.setStatusMessage("Cannot instantiate assets during Play Mode.");
+            HBD_CORE_WARN("{} instantiate_asset_rejected asset_id={} reason=play_mode",
+                          kEditorLayerLogTag,
+                          asset_id.value);
             return false;
         }
 
         if (!m_services.resources)
+        {
+            HBD_CORE_WARN("{} instantiate_asset_failed asset_id={} reason=resource_system_unavailable",
+                          kEditorLayerLogTag,
+                          asset_id.value);
             return false;
+        }
 
         auto registry = m_services.resources->getRegistry();
         if (!registry)
+        {
+            HBD_CORE_WARN("{} instantiate_asset_failed asset_id={} reason=asset_registry_unavailable",
+                          kEditorLayerLogTag,
+                          asset_id.value);
             return false;
+        }
 
         const auto* meta = registry->find(asset_id);
         if (!meta || !meta->is_valid)
         {
             ctx.setStatusMessage("Dropped asset is invalid.");
+            HBD_CORE_WARN("{} instantiate_asset_failed asset_id={} reason=invalid_asset_metadata",
+                          kEditorLayerLogTag,
+                          asset_id.value);
             return false;
         }
 
@@ -560,6 +604,10 @@ namespace Hybrid
                 ctx.setStatusMessage("Scene assets cannot be instantiated into Scene View.");
             else
                 ctx.setStatusMessage("Dropped asset type is not instantiable yet.");
+            HBD_CORE_WARN("{} instantiate_asset_failed asset_id={} asset_type={} reason=unsupported_asset_type",
+                          kEditorLayerLogTag,
+                          asset_id.value,
+                          static_cast<uint32_t>(meta->type));
             return false;
         }
 
@@ -573,6 +621,11 @@ namespace Hybrid
         if (!tryGetSceneDropPosition(drop_mouse_pos, drop_position))
         {
             ctx.setStatusMessage("Cannot resolve drop position on ground plane.");
+            HBD_CORE_WARN("{} instantiate_asset_failed asset_id={} reason=drop_position_unresolved x={} y={}",
+                          kEditorLayerLogTag,
+                          asset_id.value,
+                          drop_mouse_pos.x,
+                          drop_mouse_pos.y);
             return false;
         }
 
@@ -589,6 +642,13 @@ namespace Hybrid
         ctx.selection.setSingle(entity.GetHandle());
         ctx.markSceneDirty();
         ctx.setStatusMessage("Instantiated mesh into scene.");
+        HBD_CORE_INFO("{} instantiate_asset_completed asset_id={} entity={} x={} y={} z={}",
+                      kEditorLayerLogTag,
+                      asset_id.value,
+                      entt::to_integral(entity.GetHandle()),
+                      drop_position.x,
+                      drop_position.y,
+                      drop_position.z);
         return true;
     }
 
@@ -596,33 +656,66 @@ namespace Hybrid
     {
         auto& ctx = m_editor_ui.context();
         if (!ctx.active_scene || entity_handle == entt::null)
+        {
+            HBD_CORE_WARN("{} fit_box_collider_rejected entity={} active_scene_ready={}",
+                          kEditorLayerLogTag,
+                          entt::to_integral(entity_handle),
+                          ctx.active_scene != nullptr);
             return false;
+        }
 
         auto& registry = ctx.active_scene->getRegistry();
         if (!registry.valid(entity_handle))
+        {
+            HBD_CORE_WARN("{} fit_box_collider_rejected entity={} reason=invalid_entity",
+                          kEditorLayerLogTag,
+                          entt::to_integral(entity_handle));
             return false;
+        }
 
         Entity entity(entity_handle, &registry, ctx.active_scene);
         if (!entity.HasComponent<ColliderComponent>() || !entity.HasComponent<MeshRendererComponent>())
+        {
+            HBD_CORE_WARN("{} fit_box_collider_rejected entity={} reason=missing_required_components",
+                          kEditorLayerLogTag,
+                          entt::to_integral(entity_handle));
             return false;
+        }
         if (!m_services.resources)
+        {
+            HBD_CORE_WARN("{} fit_box_collider_failed entity={} reason=resource_system_unavailable",
+                          kEditorLayerLogTag,
+                          entt::to_integral(entity_handle));
             return false;
+        }
 
         const auto& mesh_renderer = entity.GetComponent<MeshRendererComponent>();
         if (mesh_renderer.Mesh.value == 0)
         {
             ctx.setStatusMessage("Fit To Mesh requires a valid mesh.");
+            HBD_CORE_WARN("{} fit_box_collider_failed entity={} reason=missing_mesh",
+                          kEditorLayerLogTag,
+                          entt::to_integral(entity_handle));
             return false;
         }
 
         auto manager = m_services.resources->getManager();
         if (!manager)
+        {
+            HBD_CORE_WARN("{} fit_box_collider_failed entity={} reason=asset_manager_unavailable",
+                          kEditorLayerLogTag,
+                          entt::to_integral(entity_handle));
             return false;
+        }
 
         auto mesh = manager->loadSync<Mesh>(mesh_renderer.Mesh);
         if (!mesh)
         {
             ctx.setStatusMessage("Failed to load mesh for collider fitting.");
+            HBD_CORE_WARN("{} fit_box_collider_failed entity={} mesh_id={} reason=mesh_load_failed",
+                          kEditorLayerLogTag,
+                          entt::to_integral(entity_handle),
+                          mesh_renderer.Mesh.value);
             return false;
         }
 
@@ -668,6 +761,10 @@ namespace Hybrid
         if (!has_bounds)
         {
             ctx.setStatusMessage("Mesh has no bounds to fit collider.");
+            HBD_CORE_WARN("{} fit_box_collider_failed entity={} mesh_id={} reason=missing_bounds",
+                          kEditorLayerLogTag,
+                          entt::to_integral(entity_handle),
+                          mesh_renderer.Mesh.value);
             return false;
         }
 
@@ -679,6 +776,10 @@ namespace Hybrid
         ctx.active_scene->MarkDirtyRecursive(entity);
         ctx.markSceneDirty();
         ctx.setStatusMessage("Box collider fitted to mesh.");
+        HBD_CORE_INFO("{} fit_box_collider_completed entity={} mesh_id={}",
+                      kEditorLayerLogTag,
+                      entt::to_integral(entity_handle),
+                      mesh_renderer.Mesh.value);
         return true;
     }
 

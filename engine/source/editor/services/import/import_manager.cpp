@@ -4,8 +4,15 @@
 #include <cctype>
 #include <filesystem>
 
+#include "runtime/core/base/macro.h"
+
 namespace Hybrid
 {
+    namespace
+    {
+        constexpr const char* kImportManagerLogTag = "[ImportManager]";
+    } // namespace
+
     ImportManager::ImportManager(std::shared_ptr<AssetRegistry> registry,
                                  std::shared_ptr<IVirtualFileSystem> vfs,
                                  SaveMetaFn save_meta_fn)
@@ -53,12 +60,31 @@ namespace Hybrid
         if (!importer)
         {
             result.message = "ImportManager: no importer for extension/type";
+            HBD_CORE_WARN("{} import_rejected source_path={} extension={} preferred_type={} reason=no_importer",
+                          kImportManagerLogTag,
+                          request.source_path,
+                          ext.empty() ? "<none>" : ext,
+                          static_cast<int>(request.preferred_type));
             return result;
         }
 
+        HBD_CORE_DEBUG("{} import_started source_path={} extension={} preferred_type={} importer_type={}",
+                       kImportManagerLogTag,
+                       request.source_path,
+                       ext.empty() ? "<none>" : ext,
+                       static_cast<int>(request.preferred_type),
+                       static_cast<int>(importer->primaryType()));
         result = importer->importAsset(request, *m_registry, *m_vfs);
         if (!result.success)
+        {
+            HBD_CORE_ERROR("{} import_failed source_path={} extension={} importer_type={} reason={}",
+                           kImportManagerLogTag,
+                           request.source_path,
+                           ext.empty() ? "<none>" : ext,
+                           static_cast<int>(importer->primaryType()),
+                           result.message);
             return result;
+        }
 
         if (m_save_meta_fn)
         {
@@ -68,6 +94,13 @@ namespace Hybrid
                 {
                     result.success = false;
                     result.message = "ImportManager: save meta failed";
+                    HBD_CORE_ERROR("{} import_failed source_path={} extension={} importer_type={} reason=save_meta_failed asset_id={} asset_source_path={}",
+                                   kImportManagerLogTag,
+                                   request.source_path,
+                                   ext.empty() ? "<none>" : ext,
+                                   static_cast<int>(importer->primaryType()),
+                                   meta.id.value,
+                                   meta.source_path);
                     return result;
                 }
             }
@@ -79,6 +112,13 @@ namespace Hybrid
                 m_registry->registerAsset(meta);
         }
 
+        HBD_CORE_INFO("{} import_completed source_path={} extension={} importer_type={} assets={} primary_id={}",
+                      kImportManagerLogTag,
+                      request.source_path,
+                      ext.empty() ? "<none>" : ext,
+                      static_cast<int>(importer->primaryType()),
+                      result.assets.size(),
+                      result.primary_id.value);
         return result;
     }
 

@@ -19,5 +19,6 @@ namespace Hybrid
 
     private:
         uint32_t m_colorTextureID = 0;
+        bool m_missingTextureLogged = false;
     };
 } // namespace Hybrid

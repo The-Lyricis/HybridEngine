@@ -5,25 +5,35 @@
 
 namespace Hybrid
 {
+    namespace
+    {
+        constexpr const char* kSceneLoaderLogTag = "[SceneLoader]";
+    } // namespace
+
     std::shared_ptr<Scene> SceneLoader::loadFromLogicalPath(const std::string& logical, IVirtualFileSystem& vfs, const AssetRegistry* registry)
     {
         if (logical.empty())
         {
-            HBD_CORE_ERROR("SceneLoader: empty logical path");
+            HBD_CORE_ERROR("{} load_failed reason=empty_logical_path", kSceneLoaderLogTag);
             return nullptr;
         }
 
         auto native = vfs.resolve(logical);
         if (!native)
         {
-            HBD_CORE_ERROR("SceneLoader: resolve failed {}", logical);
+            HBD_CORE_ERROR("{} load_failed logical_path={} reason=resolve_failed",
+                           kSceneLoaderLogTag,
+                           logical);
             return nullptr;
         }
 
         auto scene = std::make_shared<Scene>();
         if (!SceneSerializer::DeserializeFromFile(*scene, *native, registry))
         {
-            HBD_CORE_ERROR("SceneLoader: deserialize failed {}", native->string());
+            HBD_CORE_ERROR("{} load_failed logical_path={} native_path={} reason=deserialize_failed",
+                           kSceneLoaderLogTag,
+                           logical,
+                           native->string());
             return nullptr;
         }
 
@@ -34,7 +44,10 @@ namespace Hybrid
     {
         if (!meta.is_valid || meta.type != AssetType::Scene)
         {
-            HBD_CORE_ERROR("SceneLoader: invalid meta or wrong type (id={})", meta.id.value);
+            HBD_CORE_ERROR("{} load_failed asset_id={} asset_type={} reason=invalid_metadata",
+                           kSceneLoaderLogTag,
+                           meta.id.value,
+                           static_cast<uint32_t>(meta.type));
             return nullptr;
         }
 
@@ -42,7 +55,9 @@ namespace Hybrid
         const std::string& logical = !meta.cooked_path.empty() ? meta.cooked_path : meta.source_path;
         if (logical.empty())
         {
-            HBD_CORE_ERROR("SceneLoader: empty path (id={})", meta.id.value);
+            HBD_CORE_ERROR("{} load_failed asset_id={} reason=empty_path",
+                           kSceneLoaderLogTag,
+                           meta.id.value);
             return nullptr;
         }
 

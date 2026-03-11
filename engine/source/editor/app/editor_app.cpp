@@ -14,16 +14,19 @@ namespace Hybrid
 {
     int EditorApp::run(int argc, char** argv)
     {
+        constexpr const char* kEditorAppLogTag = "[EditorApp]";
         (void)argc;
         (void)argv;
 
         HybridEngine engine;
         engine.initialize();
+        HBD_CORE_INFO("{} engine_initialized", kEditorAppLogTag);
+        HBD_CORE_INFO("{} run_started", kEditorAppLogTag);
 
         auto editor_resources = std::make_shared<EditorResourceSystem>();
         if (!editor_resources->initialize(engine.getResourceSystem()))
         {
-            HBD_CORE_ERROR("EditorResourceSystem initialize failed.");
+            HBD_CORE_ERROR("{} editor_resources_initialize_failed", kEditorAppLogTag);
             engine.shutdown();
             return 1;
         }
@@ -71,8 +74,10 @@ namespace Hybrid
         editor_layer->setModeCallbacks(std::move(mode_callbacks));
 
         engine.pushLayer(editor_layer);
+        HBD_CORE_INFO("{} layers_attached", kEditorAppLogTag);
 
         engine.run();
+        HBD_CORE_INFO("{} run_completed exit_code=0", kEditorAppLogTag);
         engine.shutdown();
         return 0;
     }

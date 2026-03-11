@@ -17,6 +17,16 @@
 
 namespace Hybrid
 {
+    namespace
+    {
+        constexpr const char* kProjectPanelLogTag = "[ProjectPanel]";
+
+        std::string pathOrPlaceholder(const std::filesystem::path& path)
+        {
+            return path.empty() ? std::string("<empty>") : path.generic_string();
+        }
+    } // namespace
+
     void ProjectPanel::ensureRootInit()
     {
         if (m_rootInited)
@@ -27,7 +37,7 @@ namespace Hybrid
 
         if (m_assetsRoot.empty() || !std::filesystem::exists(m_assetsRoot))
         {
-            HBD_CORE_WARN("ProjectPanel: assets root invalid: {}", m_assetsRoot.string());
+            HBD_CORE_WARN("{} assets_root_invalid path={}", kProjectPanelLogTag, pathOrPlaceholder(m_assetsRoot));
             m_assetsRoot.clear();
             m_currentDir.clear();
             m_entries.clear();
@@ -207,15 +217,36 @@ namespace Hybrid
     bool ProjectPanel::createFolder(const std::string& folder_name)
     {
         if (m_currentDir.empty() || folder_name.empty())
+        {
+            HBD_CORE_WARN("{} create_folder_rejected current_dir={} folder_name={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(m_currentDir),
+                          folder_name.empty() ? "<empty>" : folder_name);
             return false;
+        }
 
         std::filesystem::path target = m_currentDir / folder_name;
         std::error_code ec;
         if (std::filesystem::exists(target))
+        {
+            HBD_CORE_WARN("{} create_folder_failed path={} reason=already_exists",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(target));
             return false;
+        }
 
         const bool ok = std::filesystem::create_directories(target, ec);
-        return ok && !ec;
+        if (!ok || ec)
+        {
+            HBD_CORE_WARN("{} create_folder_failed path={} reason={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(target),
+                          ec ? ec.message() : "create_directories_returned_false");
+            return false;
+        }
+
+        HBD_CORE_INFO("{} create_folder_completed path={}", kProjectPanelLogTag, pathOrPlaceholder(target));
+        return true;
     }
 
     void ProjectPanel::openCreateFolderPopup()
@@ -236,13 +267,19 @@ namespace Hybrid
     bool ProjectPanel::openEntry(EditorContext& ctx, const Entry& e)
     {
         if (e.physical.empty() || !std::filesystem::exists(e.physical))
+        {
+            HBD_CORE_WARN("{} open_rejected path={} reason=missing_entry",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(e.physical));
             return false;
+        }
 
         if (e.is_dir)
         {
             m_currentDir = e.physical;
             gatherEntries(m_currentDir);
             m_selectedRelStr.clear();
+            HBD_CORE_INFO("{} directory_opened path={}", kProjectPanelLogTag, pathOrPlaceholder(e.physical));
             return true;
         }
 
@@ -251,10 +288,13 @@ namespace Hybrid
             const auto vpath = relToAssetVPath(e.rel);
             if (!ctx.open_scene)
             {
-                HBD_CORE_WARN("ProjectPanel: ctx.open_scene not bound, cannot open {}", vpath);
+                HBD_CORE_WARN("{} open_scene_rejected path={} reason=open_scene_not_bound",
+                              kProjectPanelLogTag,
+                              vpath);
                 return false;
             }
 
+            HBD_CORE_INFO("{} open_scene_requested path={}", kProjectPanelLogTag, vpath);
             ctx.open_scene(vpath);
             return true;
         }
@@ -265,7 +305,12 @@ namespace Hybrid
     bool ProjectPanel::deleteEntry(EditorContext& ctx, const Entry& e)
     {
         if (e.physical.empty() || !std::filesystem::exists(e.physical))
+        {
+            HBD_CORE_WARN("{} delete_rejected path={} reason=missing_entry",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(e.physical));
             return false;
+        }
 
         std::error_code ec;
         if (e.is_dir)
@@ -273,23 +318,46 @@ namespace Hybrid
             notifyAssetChangeRecursive(ctx, e.physical, true, nullptr);
             std::filesystem::remove_all(e.physical, ec);
             if (ec)
+            {
+                HBD_CORE_WARN("{} delete_failed path={} reason={}",
+                              kProjectPanelLogTag,
+                              pathOrPlaceholder(e.physical),
+                              ec.message());
                 return false;
+            }
+            HBD_CORE_INFO("{} delete_completed path={} entry_type=directory",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(e.physical));
             return true;
         }
 
         const auto rel = e.rel;
         std::filesystem::remove(e.physical, ec);
         if (ec)
+        {
+            HBD_CORE_WARN("{} delete_failed path={} reason={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(e.physical),
+                          ec.message());
             return false;
+        }
 
         notifyAssetChange(ctx, rel, true);
+        HBD_CORE_INFO("{} delete_completed path={} entry_type=file",
+                      kProjectPanelLogTag,
+                      pathOrPlaceholder(e.physical));
         return true;
     }
 
     bool ProjectPanel::duplicateEntry(EditorContext& ctx, const Entry& e)
     {
         if (e.physical.empty() || !std::filesystem::exists(e.physical))
+        {
+            HBD_CORE_WARN("{} duplicate_rejected path={} reason=missing_entry",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(e.physical));
             return false;
+        }
 
         const auto parent = e.physical.parent_path();
         const auto stem = e.physical.stem().string();
@@ -321,7 +389,12 @@ namespace Hybrid
         }
 
         if (target.empty())
+        {
+            HBD_CORE_WARN("{} duplicate_failed path={} reason=no_available_target",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(e.physical));
             return false;
+        }
 
         if (e.is_dir)
         {
@@ -330,21 +403,50 @@ namespace Hybrid
                                   std::filesystem::copy_options::recursive,
                                   ec);
             if (ec)
+            {
+                HBD_CORE_WARN("{} duplicate_failed source={} target={} reason={}",
+                              kProjectPanelLogTag,
+                              pathOrPlaceholder(e.physical),
+                              pathOrPlaceholder(target),
+                              ec.message());
                 return false;
+            }
 
             notifyAssetChangeRecursive(ctx, target, false, nullptr);
+            HBD_CORE_INFO("{} duplicate_completed source={} target={} entry_type=directory",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(e.physical),
+                          pathOrPlaceholder(target));
             return true;
         }
 
         std::filesystem::copy_file(e.physical, target, std::filesystem::copy_options::none, ec);
         if (ec)
+        {
+            HBD_CORE_WARN("{} duplicate_failed source={} target={} reason={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(e.physical),
+                          pathOrPlaceholder(target),
+                          ec.message());
             return false;
+        }
 
         auto rel = std::filesystem::relative(target, m_assetsRoot, ec);
         if (ec)
+        {
+            HBD_CORE_WARN("{} duplicate_failed source={} target={} reason={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(e.physical),
+                          pathOrPlaceholder(target),
+                          ec.message());
             return false;
+        }
 
         notifyAssetChange(ctx, rel, false);
+        HBD_CORE_INFO("{} duplicate_completed source={} target={} entry_type=file",
+                      kProjectPanelLogTag,
+                      pathOrPlaceholder(e.physical),
+                      pathOrPlaceholder(target));
         return true;
     }
 
@@ -353,15 +455,34 @@ namespace Hybrid
                                    const std::filesystem::path& to)
     {
         if (from.empty() || to.empty() || from == to)
+        {
+            HBD_CORE_WARN("{} rename_rejected from={} to={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(from),
+                          pathOrPlaceholder(to));
             return false;
+        }
 
         std::error_code ec;
         if (!std::filesystem::exists(from) || std::filesystem::exists(to))
+        {
+            HBD_CORE_WARN("{} rename_rejected from={} to={} reason=invalid_path_state",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(from),
+                          pathOrPlaceholder(to));
             return false;
+        }
 
         const bool from_is_dir = std::filesystem::is_directory(from, ec);
         if (ec)
+        {
+            HBD_CORE_WARN("{} rename_failed from={} to={} reason={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(from),
+                          pathOrPlaceholder(to),
+                          ec.message());
             return false;
+        }
 
         auto notifyAssetMove = [this, &ctx](const std::filesystem::path& old_rel,
                                             const std::filesystem::path& new_rel) {
@@ -393,21 +514,59 @@ namespace Hybrid
 
         std::filesystem::rename(from, to, ec);
         if (ec)
+        {
+            HBD_CORE_WARN("{} rename_failed from={} to={} reason={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(from),
+                          pathOrPlaceholder(to),
+                          ec.message());
             return false;
+        }
 
         if (from_is_dir)
         {
             auto old_rel = std::filesystem::relative(from, m_assetsRoot, ec);
             if (ec)
+            {
+                HBD_CORE_WARN("{} rename_failed from={} to={} reason={}",
+                              kProjectPanelLogTag,
+                              pathOrPlaceholder(from),
+                              pathOrPlaceholder(to),
+                              ec.message());
                 return false;
+            }
 
             ec.clear();
             auto new_rel = std::filesystem::relative(to, m_assetsRoot, ec);
             if (ec)
+            {
+                HBD_CORE_WARN("{} rename_failed from={} to={} reason={}",
+                              kProjectPanelLogTag,
+                              pathOrPlaceholder(from),
+                              pathOrPlaceholder(to),
+                              ec.message());
                 return false;
+            }
 
             if (ctx.request_rename_folder)
-                return ctx.request_rename_folder(relToAssetVPath(old_rel), relToAssetVPath(new_rel));
+            {
+                const bool rename_requested =
+                    ctx.request_rename_folder(relToAssetVPath(old_rel), relToAssetVPath(new_rel));
+                if (!rename_requested)
+                {
+                    HBD_CORE_WARN("{} rename_folder_request_failed from={} to={}",
+                                  kProjectPanelLogTag,
+                                  relToAssetVPath(old_rel),
+                                  relToAssetVPath(new_rel));
+                    return false;
+                }
+
+                HBD_CORE_INFO("{} rename_completed from={} to={} entry_type=directory",
+                              kProjectPanelLogTag,
+                              pathOrPlaceholder(from),
+                              pathOrPlaceholder(to));
+                return true;
+            }
 
             for (const auto& old_file_rel : old_files)
             {
@@ -429,19 +588,41 @@ namespace Hybrid
 
                 notifyAssetMove(old_file_rel, new_rel);
             }
+            HBD_CORE_INFO("{} rename_completed from={} to={} entry_type=directory",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(from),
+                          pathOrPlaceholder(to));
             return true;
         }
 
         auto old_rel = std::filesystem::relative(from, m_assetsRoot, ec);
         if (ec)
+        {
+            HBD_CORE_WARN("{} rename_failed from={} to={} reason={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(from),
+                          pathOrPlaceholder(to),
+                          ec.message());
             return false;
+        }
 
         ec.clear();
         auto new_rel = std::filesystem::relative(to, m_assetsRoot, ec);
         if (ec)
+        {
+            HBD_CORE_WARN("{} rename_failed from={} to={} reason={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(from),
+                          pathOrPlaceholder(to),
+                          ec.message());
             return false;
+        }
 
         notifyAssetMove(old_rel, new_rel);
+        HBD_CORE_INFO("{} rename_completed from={} to={} entry_type=file",
+                      kProjectPanelLogTag,
+                      pathOrPlaceholder(from),
+                      pathOrPlaceholder(to));
 
         return true;
     }
@@ -457,7 +638,10 @@ namespace Hybrid
         std::filesystem::directory_iterator it(dir, ec), end;
         if (ec)
         {
-            HBD_CORE_WARN("ProjectPanel: cannot list dir {} ({})", dir.string(), ec.message());
+            HBD_CORE_WARN("{} directory_list_failed path={} reason={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(dir),
+                          ec.message());
             return;
         }
 
@@ -656,6 +840,9 @@ namespace Hybrid
             gatherEntries(m_currentDir);
             m_selectedRelStr.clear();
             ctx.setStatusMessage("Current folder was moved externally. View relocated.");
+            HBD_CORE_INFO("{} current_dir_relocated path={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(m_currentDir));
             return true;
         }
 
@@ -666,6 +853,9 @@ namespace Hybrid
             gatherEntries(m_currentDir);
             m_selectedRelStr.clear();
             ctx.setStatusMessage("Current folder no longer exists. Returned to nearest valid folder.");
+            HBD_CORE_INFO("{} current_dir_fallback path={}",
+                          kProjectPanelLogTag,
+                          pathOrPlaceholder(m_currentDir));
             return true;
         }
 
@@ -673,6 +863,7 @@ namespace Hybrid
         gatherEntries(m_currentDir);
         m_selectedRelStr.clear();
         ctx.setStatusMessage("Current folder no longer exists. Returned to Assets.");
+        HBD_CORE_INFO("{} current_dir_reset path={}", kProjectPanelLogTag, pathOrPlaceholder(m_currentDir));
         return true;
     }
 

@@ -19,8 +19,8 @@ namespace Hybrid
 			spdlog::level::level_enum level = spdlog::level::trace;
 			spdlog::level::level_enum flush_level = spdlog::level::err;
 
-			const char* console_pattern = "%^[%T] %n: %v%$";
-			const char* file_pattern = "[%Y-%m-%d %T.%e] [%l] %n: %v";
+			const char* console_pattern = "%^[%T] [tid=%t] %n: %v%$";
+			const char* file_pattern = "[%Y-%m-%d %T.%e] [%l] [tid=%t] %n: %v";
 		};
 
 		static void initialize(const Config& cfg = {});

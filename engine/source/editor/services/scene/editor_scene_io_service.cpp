@@ -29,6 +29,7 @@ namespace Hybrid
     namespace
     {
         using json = nlohmann::json;
+        constexpr const char* kEditorSceneIOLogTag = "[EditorSceneIOService]";
 
         std::filesystem::path GetEditorUserSettingsPath()
         {
@@ -148,6 +149,10 @@ namespace Hybrid
             m_assets_root = m_services.resources->getRegistry()->getRoot();
         else
             m_assets_root.clear();
+
+        HBD_CORE_INFO("{} initialize_completed assets_root={}",
+                      kEditorSceneIOLogTag,
+                      m_assets_root.empty() ? "<empty>" : m_assets_root.string());
     }
 
     void EditorSceneIOService::shutdown()
@@ -155,6 +160,7 @@ namespace Hybrid
         m_active_document.reset();
         m_assets_root.clear();
         m_status_message.clear();
+        HBD_CORE_INFO("{} shutdown_completed", kEditorSceneIOLogTag);
     }
 
     void EditorSceneIOService::clearStatusMessage()
@@ -226,14 +232,18 @@ namespace Hybrid
         if (!document)
         {
             m_status_message = "场景打开失败";
-            HBD_CORE_WARN("EditorSceneIOService: failed to open {}", scene_vpath);
+            HBD_CORE_WARN("{} open_failed scene_vpath={} reason=load_document_failed",
+                          kEditorSceneIOLogTag,
+                          scene_vpath);
             return false;
         }
 
         if (!activateDocument(document))
         {
             m_status_message = "场景激活失败";
-            HBD_CORE_WARN("EditorSceneIOService: failed to activate {}", scene_vpath);
+            HBD_CORE_WARN("{} open_failed scene_vpath={} reason=activate_document_failed",
+                          kEditorSceneIOLogTag,
+                          scene_vpath);
             return false;
         }
 
@@ -241,7 +251,10 @@ namespace Hybrid
             saveLastOpenedScene(scene_vpath);
 
         m_status_message.clear();
-        HBD_CORE_INFO("EditorSceneIOService: opened {}", scene_vpath);
+        HBD_CORE_INFO("{} open_completed scene_vpath={} display_name={}",
+                      kEditorSceneIOLogTag,
+                      scene_vpath,
+                      document->display_name);
         return true;
     }
 
@@ -352,8 +365,10 @@ namespace Hybrid
         if (ec)
         {
             m_status_message = "无法创建场景目录";
-            HBD_CORE_WARN("EditorSceneIOService: failed to create scene dir {} ({})",
-                          native->parent_path().string(),
+            HBD_CORE_WARN("{} save_failed scene_vpath={} native_path={} reason=create_scene_directory_failed error={}",
+                          kEditorSceneIOLogTag,
+                          normalized_vpath,
+                          native->string(),
                           ec.message());
             return false;
         }
@@ -363,7 +378,10 @@ namespace Hybrid
         if (!SceneSerializer::SerializeToFile(*m_active_document->scene, *native, registry))
         {
             m_status_message = "场景保存失败";
-            HBD_CORE_WARN("EditorSceneIOService: serialize failed: {}", native->string());
+            HBD_CORE_WARN("{} save_failed scene_vpath={} native_path={} reason=serialize_failed",
+                          kEditorSceneIOLogTag,
+                          normalized_vpath,
+                          native->string());
             return false;
         }
 
@@ -387,7 +405,12 @@ namespace Hybrid
                 existed ? AssetSourceChangeType::Modified : AssetSourceChangeType::Added);
         }
 
-        HBD_CORE_INFO("EditorSceneIOService: saved {}", normalized_vpath);
+        HBD_CORE_INFO("{} save_completed scene_vpath={} native_path={} existed_before={} asset_id={}",
+                      kEditorSceneIOLogTag,
+                      normalized_vpath,
+                      native->string(),
+                      existed ? "true" : "false",
+                      m_active_document->scene_asset_id.value);
         return true;
     }
 
@@ -405,7 +428,8 @@ namespace Hybrid
         }
         catch (const std::exception& e)
         {
-            HBD_CORE_WARN("EditorSceneIOService: failed to parse project settings {} ({})",
+            HBD_CORE_WARN("{} restore_default_scene_skipped settings_path={} reason=parse_project_settings_failed error={}",
+                          kEditorSceneIOLogTag,
                           settings_path.string(),
                           e.what());
             return false;
@@ -600,8 +624,9 @@ namespace Hybrid
         std::filesystem::create_directories(session_path.parent_path(), ec);
         if (ec)
         {
-            HBD_CORE_WARN("EditorSceneIOService: failed to create session dir {} ({})",
-                          session_path.parent_path().string(),
+            HBD_CORE_WARN("{} session_state_save_failed path={} reason=create_session_directory_failed error={}",
+                          kEditorSceneIOLogTag,
+                          session_path.string(),
                           ec.message());
             return;
         }
@@ -612,7 +637,9 @@ namespace Hybrid
         std::ofstream ofs(session_path, std::ios::trunc);
         if (!ofs.is_open())
         {
-            HBD_CORE_WARN("EditorSceneIOService: failed to write editor state {}", session_path.string());
+            HBD_CORE_WARN("{} session_state_save_failed path={} reason=open_file_failed",
+                          kEditorSceneIOLogTag,
+                          session_path.string());
             return;
         }
 
@@ -633,7 +660,8 @@ namespace Hybrid
         }
         catch (const std::exception& e)
         {
-            HBD_CORE_WARN("EditorSceneIOService: failed to parse editor state {} ({})",
+            HBD_CORE_WARN("{} session_state_load_failed path={} reason=parse_failed error={}",
+                          kEditorSceneIOLogTag,
                           session_path.string(),
                           e.what());
             return {};

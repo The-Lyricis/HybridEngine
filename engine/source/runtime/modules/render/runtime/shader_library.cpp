@@ -11,6 +11,8 @@ namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kShaderLibraryLogTag = "[ShaderLibrary]";
+
         bool queryWriteTime(const std::filesystem::path& path, std::filesystem::file_time_type& out_time)
         {
             std::error_code ec;
@@ -33,7 +35,9 @@ namespace Hybrid
     {
         if (contains(name))
         {
-            HBD_CORE_WARN("ShaderLibrary duplicate load ignored: {}", name);
+            HBD_CORE_WARN("{} load_rejected shader={} reason=duplicate_registration",
+                          kShaderLibraryLogTag,
+                          name);
             return false;
         }
 
@@ -55,13 +59,17 @@ namespace Hybrid
         auto it = m_entries.find(name);
         if (it == m_entries.end())
         {
-            HBD_CORE_ERROR("ShaderLibrary get failed, shader not found: {}", name);
+            HBD_CORE_ERROR("{} get_failed shader={} reason=not_registered",
+                           kShaderLibraryLogTag,
+                           name);
             return nullptr;
         }
 
         if (!it->second.loaded || !it->second.shader)
         {
-            HBD_CORE_ERROR("ShaderLibrary get failed, shader not loaded: {}", name);
+            HBD_CORE_ERROR("{} get_failed shader={} reason=not_loaded",
+                           kShaderLibraryLogTag,
+                           name);
             return nullptr;
         }
 
@@ -73,7 +81,9 @@ namespace Hybrid
         auto it = m_entries.find(name);
         if (it == m_entries.end())
         {
-            HBD_CORE_ERROR("ShaderLibrary reload failed, shader not found: {}", name);
+            HBD_CORE_ERROR("{} reload_failed shader={} reason=not_registered",
+                           kShaderLibraryLogTag,
+                           name);
             return false;
         }
 
@@ -83,35 +93,53 @@ namespace Hybrid
         std::string fragment_source;
         if (!readTextFile(entry.vertex_path, vertex_source))
         {
-            HBD_CORE_ERROR("ShaderLibrary failed to read vertex shader '{}': {}", entry.name, entry.vertex_path.string());
+            HBD_CORE_ERROR("{} reload_failed shader={} reason=read_vertex_failed vertex_path={}",
+                           kShaderLibraryLogTag,
+                           entry.name,
+                           entry.vertex_path.string());
             return false;
         }
 
         if (!readTextFile(entry.fragment_path, fragment_source))
         {
-            HBD_CORE_ERROR("ShaderLibrary failed to read fragment shader '{}': {}", entry.name, entry.fragment_path.string());
+            HBD_CORE_ERROR("{} reload_failed shader={} reason=read_fragment_failed fragment_path={}",
+                           kShaderLibraryLogTag,
+                           entry.name,
+                           entry.fragment_path.string());
             return false;
         }
 
         auto shader = Shader::Create(vertex_source, fragment_source);
         if (!shader)
         {
-            HBD_CORE_ERROR("ShaderLibrary failed to create shader: {}", entry.name);
+            HBD_CORE_ERROR("{} reload_failed shader={} reason=create_shader_failed",
+                           kShaderLibraryLogTag,
+                           entry.name);
             return false;
         }
 
         std::filesystem::file_time_type vertex_time{};
         std::filesystem::file_time_type fragment_time{};
         if (!queryWriteTime(entry.vertex_path, vertex_time))
-            HBD_CORE_WARN("ShaderLibrary cannot query timestamp for {}", entry.vertex_path.string());
+            HBD_CORE_WARN("{} timestamp_query_failed shader={} stage=vertex path={}",
+                          kShaderLibraryLogTag,
+                          entry.name,
+                          entry.vertex_path.string());
         if (!queryWriteTime(entry.fragment_path, fragment_time))
-            HBD_CORE_WARN("ShaderLibrary cannot query timestamp for {}", entry.fragment_path.string());
+            HBD_CORE_WARN("{} timestamp_query_failed shader={} stage=fragment path={}",
+                          kShaderLibraryLogTag,
+                          entry.name,
+                          entry.fragment_path.string());
 
         entry.shader = std::move(shader);
         entry.vertex_write_time = vertex_time;
         entry.fragment_write_time = fragment_time;
         entry.loaded = true;
-        HBD_CORE_INFO("ShaderLibrary loaded shader '{}'", entry.name);
+        HBD_CORE_INFO("{} reload_completed shader={} vertex_path={} fragment_path={}",
+                      kShaderLibraryLogTag,
+                      entry.name,
+                      entry.vertex_path.string(),
+                      entry.fragment_path.string());
         return true;
     }
 
@@ -132,7 +160,11 @@ namespace Hybrid
                 continue;
 
             if (reload(name))
-                HBD_CORE_INFO("ShaderLibrary reloaded changed shader '{}'", name);
+                HBD_CORE_INFO("{} hot_reload_completed shader={} vertex_changed={} fragment_changed={}",
+                              kShaderLibraryLogTag,
+                              name,
+                              vertex_changed ? "true" : "false",
+                              fragment_changed ? "true" : "false");
         }
     }
 

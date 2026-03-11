@@ -7,10 +7,14 @@
 
 #include <nlohmann/json.hpp>
 
+#include "runtime/core/base/macro.h"
+
 namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kSceneImporterLogTag = "[SceneImporter]";
+
         std::string toLower(std::string v)
         {
             std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c) {
@@ -95,6 +99,10 @@ namespace Hybrid
         IVirtualFileSystem& vfs)
     {
         ImportResult out{};
+        HBD_CORE_INFO("{} import_started source_path={} requested_cooked_path={}",
+                      kSceneImporterLogTag,
+                      request.source_path,
+                      request.cooked_path.empty() ? "<default>" : request.cooked_path);
 
         std::string src_alias, src_rel;
         if (!splitLogicalPath(request.source_path, src_alias, src_rel))
@@ -187,6 +195,11 @@ namespace Hybrid
         out.success = true;
         out.primary_id = meta.id;
         out.assets.push_back(std::move(meta));
+        HBD_CORE_INFO("{} import_completed source_path={} cooked_path={} asset_id={}",
+                      kSceneImporterLogTag,
+                      request.source_path,
+                      cooked_path,
+                      out.primary_id.value);
         return out;
     }
 

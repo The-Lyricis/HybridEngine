@@ -11,6 +11,8 @@ namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kMaterialLoaderLogTag = "[MaterialLoader]";
+
         using json = nlohmann::json;
 
         bool parseAssetId(const json& node, AssetID& out_id)
@@ -91,21 +93,29 @@ namespace Hybrid
 
         if (load_path.empty())
         {
-            HBD_CORE_ERROR("Material load failed: empty path for asset {}", meta.id.value);
+            HBD_CORE_ERROR("{} load_failed asset_id={} reason=empty_path",
+                           kMaterialLoaderLogTag,
+                           meta.id.value);
             return nullptr;
         }
 
         const std::vector<char> bytes = vfs.readAll(load_path);
         if (bytes.empty())
         {
-            HBD_CORE_ERROR("Material load failed: file not found {}", load_path);
+            HBD_CORE_ERROR("{} load_failed asset_id={} path={} reason=file_not_found",
+                           kMaterialLoaderLogTag,
+                           meta.id.value,
+                           load_path);
             return nullptr;
         }
 
         json root = json::parse(bytes.begin(), bytes.end(), nullptr, false);
         if (root.is_discarded() || !root.is_object())
         {
-            HBD_CORE_ERROR("Material load failed: invalid json {}", load_path);
+            HBD_CORE_ERROR("{} load_failed asset_id={} path={} reason=invalid_json",
+                           kMaterialLoaderLogTag,
+                           meta.id.value,
+                           load_path);
             return nullptr;
         }
 

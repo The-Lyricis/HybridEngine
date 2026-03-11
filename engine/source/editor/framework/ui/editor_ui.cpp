@@ -19,6 +19,9 @@ namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kEditorUILogTag = "[EditorUI]";
+        static bool g_TopToolbarIconLoadFailedLogged = false;
+
         static GLuint LoadTextureRGBA8(const std::string& path)
         {
             int w = 0, h = 0, comp = 0;
@@ -107,7 +110,7 @@ namespace Hybrid
 
         if (ImGui::GetCurrentContext() == nullptr)
         {
-            HBD_CORE_ERROR("EditorUI initialize failed: ImGui context is null");
+            HBD_CORE_ERROR("{} initialize_failed reason=imgui_context_is_null", kEditorUILogTag);
             return;
         }
 
@@ -119,6 +122,7 @@ namespace Hybrid
         m_GameViewportPanel = std::make_unique<GameViewPanel>();
 
         m_initialized = true;
+        HBD_CORE_INFO("{} initialize_completed", kEditorUILogTag);
     }
 
     void EditorUI::shutdown()
@@ -139,6 +143,7 @@ namespace Hybrid
         m_DockSpaceID = 0;
         m_DefaultLayoutBuilt = false;
         m_RequestResetLayout = false;
+        HBD_CORE_INFO("{} shutdown_completed", kEditorUILogTag);
     }
 
     void EditorUI::drawPanels()
@@ -371,6 +376,11 @@ namespace Hybrid
             g_TopToolbarIcons.stop = LoadTextureRGBA8(base + "icon_topTool_stop.png");
             g_TopToolbarIcons.loaded =
                 (g_TopToolbarIcons.play != 0 && g_TopToolbarIcons.pause != 0 && g_TopToolbarIcons.stop != 0);
+            if (!g_TopToolbarIcons.loaded && !g_TopToolbarIconLoadFailedLogged)
+            {
+                HBD_CORE_WARN("{} top_toolbar_icon_load_failed", kEditorUILogTag);
+                g_TopToolbarIconLoadFailedLogged = true;
+            }
         }
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 4.0f));
@@ -451,10 +461,14 @@ namespace Hybrid
             if (!is_playing)
             {
                 if (m_ctx->enter_play_mode)
+                {
+                    HBD_CORE_INFO("{} play_mode_enter_requested", kEditorUILogTag);
                     m_ctx->enter_play_mode();
+                }
             }
             else if (m_ctx->exit_play_mode)
             {
+                HBD_CORE_INFO("{} play_mode_exit_requested", kEditorUILogTag);
                 m_ctx->exit_play_mode();
             }
         }
@@ -466,6 +480,7 @@ namespace Hybrid
         if (drawTopToolbarButton("##TopToolbarPause", g_TopToolbarIcons.pause, is_paused ? "Resume" : "Pause", is_paused ? "Resume" : "Pause", is_paused, false) &&
             m_ctx->toggle_pause_mode)
         {
+            HBD_CORE_INFO("{} play_mode_pause_toggle_requested paused={}", kEditorUILogTag, !is_paused);
             m_ctx->toggle_pause_mode();
         }
         if (!pause_enabled)

@@ -19,6 +19,8 @@ namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kEditorResourceLogTag = "[EditorResourceSystem]";
+
         bool hasParentTraversal(const std::filesystem::path& p)
         {
             for (const auto& part : p)
@@ -61,6 +63,21 @@ namespace Hybrid
 
             return std::string("asset:") + rel.generic_string();
         }
+
+        const char* changeTypeName(AssetSourceChangeType change)
+        {
+            switch (change)
+            {
+            case AssetSourceChangeType::Added:
+                return "added";
+            case AssetSourceChangeType::Modified:
+                return "modified";
+            case AssetSourceChangeType::Removed:
+                return "removed";
+            default:
+                return "unknown";
+            }
+        }
     } // namespace
 
     bool EditorResourceSystem::initialize(RuntimeResourceSystem& runtime_system)
@@ -68,14 +85,14 @@ namespace Hybrid
         auto registry = runtime_system.getRegistry();
         if (!registry)
         {
-            HBD_CORE_ERROR("EditorResourceSystem init failed: runtime registry is null");
+            HBD_CORE_ERROR("{} initialize_failed reason=runtime_registry_null", kEditorResourceLogTag);
             return false;
         }
 
         auto vfs = runtime_system.getVFS();
         if (!vfs)
         {
-            HBD_CORE_ERROR("EditorResourceSystem init failed: runtime vfs is null");
+            HBD_CORE_ERROR("{} initialize_failed reason=runtime_vfs_null", kEditorResourceLogTag);
             return false;
         }
 
@@ -91,6 +108,9 @@ namespace Hybrid
         m_pending_changes.clear();
         m_assets_reloaded_callback = {};
         m_bootstrap_done = false;
+        HBD_CORE_INFO("{} initialize_completed assets_root={}",
+                      kEditorResourceLogTag,
+                      registry->getRoot().empty() ? "<empty>" : registry->getRoot().string());
         return true;
     }
 
@@ -141,7 +161,9 @@ namespace Hybrid
         std::string normalized;
         if (!normalizeAssetLogicalPath(source_vpath, normalized))
         {
-            HBD_CORE_WARN("EditorResourceSystem: ignore invalid source path {}", source_vpath);
+            HBD_CORE_WARN("{} enqueue_rejected source_path={} reason=invalid_source_path",
+                          kEditorResourceLogTag,
+                          source_vpath);
             return;
         }
         // We allow only importable files to trigger events, which helps to reduce noise (e.g. temp files, irrelevant assets).
@@ -167,6 +189,13 @@ namespace Hybrid
                 m_event_queue.push_front(normalized);
             else
                 m_event_queue.push_back(normalized);
+            HBD_CORE_DEBUG("{} enqueue_added source_path={} change={} force_reimport={} high_priority={} queue_size={}",
+                           kEditorResourceLogTag,
+                           normalized,
+                           changeTypeName(change),
+                           force_reimport ? "true" : "false",
+                           high_priority ? "true" : "false",
+                           m_event_queue.size());
             return;
         }
 
@@ -182,6 +211,13 @@ namespace Hybrid
             m_event_queue.erase(std::remove(m_event_queue.begin(), m_event_queue.end(), normalized), m_event_queue.end());
             m_event_queue.push_front(normalized);
         }
+        HBD_CORE_DEBUG("{} enqueue_merged source_path={} change={} force_reimport={} high_priority={} queue_size={}",
+                       kEditorResourceLogTag,
+                       normalized,
+                       changeTypeName(it->second.type),
+                       it->second.force_reimport ? "true" : "false",
+                       high_priority ? "true" : "false",
+                       m_event_queue.size());
     }
 
     // Consume queued import tasks with optional frame time budget.
@@ -263,7 +299,10 @@ namespace Hybrid
         std::filesystem::recursive_directory_iterator it(assets_root, ec), end;
         if (ec)
         {
-            HBD_CORE_WARN("EditorResourceSystem: bootstrap scan failed at {} ({})", assets_root.string(), ec.message());
+            HBD_CORE_WARN("{} bootstrap_scan_failed assets_root={} error={}",
+                          kEditorResourceLogTag,
+                          assets_root.string(),
+                          ec.message());
             return;
         }
 
@@ -324,7 +363,8 @@ namespace Hybrid
         }
 
         m_bootstrap_done = true;
-        HBD_CORE_INFO("EditorResourceSystem bootstrap: scanned={}, queued_missing_meta={}, queued_missing_cooked={}",
+        HBD_CORE_INFO("{} bootstrap_completed scanned={} queued_missing_meta={} queued_missing_cooked={}",
+                      kEditorResourceLogTag,
                       scanned,
                       queued_missing_meta,
                       queued_missing_cooked);
@@ -340,7 +380,8 @@ namespace Hybrid
         if (!normalizeAssetLogicalPath(old_source_vpath, old_norm) ||
             !normalizeAssetLogicalPath(new_source_vpath, new_norm))
         {
-            HBD_CORE_WARN("EditorResourceSystem: move asset path invalid ({} -> {})",
+            HBD_CORE_WARN("{} move_rejected old_source_path={} new_source_path={} reason=invalid_path",
+                          kEditorResourceLogTag,
                           old_source_vpath,
                           new_source_vpath);
             return false;
@@ -383,21 +424,28 @@ namespace Hybrid
         const auto& assets_root = registry->getRoot();
         if (assets_root.empty())
         {
-            HBD_CORE_ERROR("EditorResourceSystem move failed: asset root is empty");
+            HBD_CORE_ERROR("{} move_failed old_source_path={} new_source_path={} reason=asset_root_empty",
+                           kEditorResourceLogTag,
+                           old_norm,
+                           new_norm);
             return false;
         }
 
         // Persist new path first, then remove old meta file.
         if (!m_metaStore->saveOne(moved, assets_root))
         {
-            HBD_CORE_ERROR("EditorResourceSystem move failed: save new meta {}",
+            HBD_CORE_ERROR("{} move_failed old_source_path={} new_source_path={} reason=save_new_meta_failed",
+                           kEditorResourceLogTag,
+                           old_norm,
                            moved.source_path);
             return false;
         }
 
         if (!m_metaStore->removeOne(old_norm, assets_root))
         {
-            HBD_CORE_WARN("EditorResourceSystem move: old meta remove failed {}", old_norm);
+            HBD_CORE_WARN("{} move_cleanup_failed source_path={} reason=remove_old_meta_failed",
+                          kEditorResourceLogTag,
+                          old_norm);
         }
 
         // Keep id stable, only update path/hash mapping.
@@ -412,6 +460,11 @@ namespace Hybrid
         if (m_importManager && m_importManager->canImport(new_norm, moved.type))
             enqueueManualReimport(new_norm);
 
+        HBD_CORE_INFO("{} move_completed old_source_path={} new_source_path={} asset_id={}",
+                      kEditorResourceLogTag,
+                      old_norm,
+                      new_norm,
+                      moved.id.value);
         return true;
     }
 
@@ -425,7 +478,8 @@ namespace Hybrid
         if (!normalizeAssetLogicalPath(old_folder_vpath, old_norm) ||
             !normalizeAssetLogicalPath(new_folder_vpath, new_norm))
         {
-            HBD_CORE_WARN("EditorResourceSystem: rename folder path invalid ({} -> {})",
+            HBD_CORE_WARN("{} rename_folder_rejected old_path={} new_path={} reason=invalid_path",
+                          kEditorResourceLogTag,
                           old_folder_vpath,
                           new_folder_vpath);
             return false;
@@ -469,7 +523,9 @@ namespace Hybrid
 
             if (!m_metaStore->saveOne(meta, assets_root))
             {
-                HBD_CORE_WARN("EditorResourceSystem: rename folder save meta failed {}", meta.source_path);
+                HBD_CORE_WARN("{} rename_folder_failed new_source_path={} reason=save_meta_failed",
+                              kEditorResourceLogTag,
+                              meta.source_path);
                 return false;
             }
 
@@ -483,7 +539,8 @@ namespace Hybrid
             ++moved_count;
         }
 
-        HBD_CORE_INFO("EditorResourceSystem: renamed folder {} -> {}, updated {} assets",
+        HBD_CORE_INFO("{} rename_folder_completed old_path={} new_path={} updated_assets={}",
+                      kEditorResourceLogTag,
                       old_norm,
                       new_norm,
                       moved_count);
@@ -502,7 +559,9 @@ namespace Hybrid
         const auto& asset_root = registry->getRoot();
         if (asset_root.empty())
         {
-            HBD_CORE_ERROR("Editor save meta failed: asset root is empty");
+            HBD_CORE_ERROR("{} meta_save_failed source_path={} reason=asset_root_empty",
+                           kEditorResourceLogTag,
+                           meta.source_path.empty() ? "<empty>" : meta.source_path);
             return false;
         }
 
@@ -516,7 +575,10 @@ namespace Hybrid
         const bool ok = m_metaStore->saveOne(meta, asset_root);
         if (!ok)
         {
-            HBD_CORE_ERROR("Editor save meta failed for {}", meta.source_path);
+            HBD_CORE_ERROR("{} meta_save_failed source_path={} asset_id={} reason=save_one_failed",
+                           kEditorResourceLogTag,
+                           meta.source_path,
+                           meta.id.value);
             return false;
         }
 
@@ -598,7 +660,9 @@ namespace Hybrid
 
             if (!m_metaStore->saveOne(meta, assets_root))
             {
-                HBD_CORE_WARN("EditorResourceSystem: reconcile save failed for {}", inferred_vpath);
+                HBD_CORE_WARN("{} reconcile_failed inferred_source_path={} reason=save_meta_failed",
+                              kEditorResourceLogTag,
+                              inferred_vpath);
                 continue;
             }
 
@@ -606,13 +670,16 @@ namespace Hybrid
             if (m_importManager && m_importManager->canImport(meta.source_path, meta.type))
                 enqueueManualReimport(meta.source_path);
             ++reconciled;
-            HBD_CORE_INFO("EditorResourceSystem: reconciled moved asset {} -> {}",
+            HBD_CORE_INFO("{} reconcile_completed meta_path={} inferred_source_path={}",
+                          kEditorResourceLogTag,
                           it->path().string(),
                           inferred_vpath);
         }
 
         if (reconciled > 0)
-            HBD_CORE_INFO("EditorResourceSystem: reconciled {} moved assets from meta scan", reconciled);
+            HBD_CORE_INFO("{} reconcile_summary reconciled_assets={}",
+                          kEditorResourceLogTag,
+                          reconciled);
 
         return reconciled;
     }
@@ -696,14 +763,23 @@ namespace Hybrid
         ImportResult result = m_importManager->importAsset(req);
         if (!result.success)
         {
-            HBD_CORE_ERROR("EditorResourceSystem: import failed for {} ({})", source_vpath, result.message);
+            HBD_CORE_ERROR("{} import_failed source_path={} change={} force_reimport={} reason={}",
+                           kEditorResourceLogTag,
+                           source_vpath,
+                           changeTypeName(change),
+                           force_reimport ? "true" : "false",
+                           result.message);
             return false;
         }
         if (out_assets)
             *out_assets = result.assets;
 
-        const char* op = (change == AssetSourceChangeType::Added) ? "imported(new)" : "reimported(modified)";
-        HBD_CORE_INFO("EditorResourceSystem: {} {}", op, source_vpath);
+        HBD_CORE_INFO("{} import_completed source_path={} change={} force_reimport={} assets={}",
+                      kEditorResourceLogTag,
+                      source_vpath,
+                      changeTypeName(change),
+                      force_reimport ? "true" : "false",
+                      result.assets.size());
         return true;
     }
 
@@ -745,7 +821,11 @@ namespace Hybrid
 
         if (removed_meta || existing)
         {
-            HBD_CORE_INFO("EditorResourceSystem: removed asset {}", source_vpath);
+            HBD_CORE_INFO("{} remove_completed source_path={} removed_meta={} had_registry_entry={}",
+                          kEditorResourceLogTag,
+                          source_vpath,
+                          removed_meta ? "true" : "false",
+                          existing ? "true" : "false");
         }
 
         return removed_meta || existing != nullptr;

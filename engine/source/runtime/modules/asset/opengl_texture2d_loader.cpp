@@ -23,6 +23,8 @@ namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kGLTexture2DLoaderLogTag = "[GLTexture2DLoader]";
+
         TextureHandle CreateTextureFromRgba8(const uint8_t* pixels, int w, int h)
         {
             if (!pixels || w <= 0 || h <= 0)
@@ -80,7 +82,10 @@ namespace Hybrid
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &current_tex);
         if (glGetError() != GL_NO_ERROR)
         {
-            HBD_CORE_ERROR("GLTexture2DLoader: no valid GL context for {}", meta.source_path);
+            HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=invalid_gl_context",
+                           kGLTexture2DLoaderLogTag,
+                           meta.id.value,
+                           meta.source_path.empty() ? "<empty>" : meta.source_path);
             while (glGetError() != GL_NO_ERROR) {}
             return nullptr;
         }
@@ -91,7 +96,10 @@ namespace Hybrid
 
         if (cooked.empty() && !kAllowSourceFallback)
         {
-            HBD_CORE_ERROR("Texture2D load failed: cooked path empty and fallback disabled for {}", source);
+            HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=empty_cooked_path_fallback_disabled",
+                           kGLTexture2DLoaderLogTag,
+                           meta.id.value,
+                           source.empty() ? "<empty>" : source);
             return nullptr;
         }
 
@@ -100,7 +108,10 @@ namespace Hybrid
             std::vector<char> cooked_bytes = readBytes(vfs, cooked);
             if (cooked_bytes.empty())
             {
-                HBD_CORE_WARN("Texture2D cooked missing: {}", cooked);
+                HBD_CORE_WARN("{} cooked_missing asset_id={} cooked_path={}",
+                              kGLTexture2DLoaderLogTag,
+                              meta.id.value,
+                              cooked);
             }
             else
             {
@@ -113,21 +124,34 @@ namespace Hybrid
                                                                static_cast<int>(image.height));
                     if (!tex)
                     {
-                        HBD_CORE_ERROR("Texture2D cooked upload failed: {}", cooked);
+                        HBD_CORE_ERROR("{} load_failed asset_id={} cooked_path={} reason=upload_failed",
+                                       kGLTexture2DLoaderLogTag,
+                                       meta.id.value,
+                                       cooked);
                     }
                     return tex;
                 }
 
-                HBD_CORE_ERROR("Texture2D cooked invalid: {} ({})", cooked, decode_error);
+                HBD_CORE_ERROR("{} load_failed asset_id={} cooked_path={} reason=decode_failed error={}",
+                               kGLTexture2DLoaderLogTag,
+                               meta.id.value,
+                               cooked,
+                               decode_error.empty() ? "<empty>" : decode_error);
                 if (!HtexLooksLikeFile(cooked_bytes))
                 {
-                    HBD_CORE_ERROR("Texture2D cooked format mismatch: {}", cooked);
+                    HBD_CORE_ERROR("{} load_failed asset_id={} cooked_path={} reason=format_mismatch",
+                                   kGLTexture2DLoaderLogTag,
+                                   meta.id.value,
+                                   cooked);
                 }
             }
 
             if (!kAllowSourceFallback)
             {
-                HBD_CORE_ERROR("Texture2D load failed: fallback disabled, cooked unusable for {}", source);
+                HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=cooked_unusable_fallback_disabled",
+                               kGLTexture2DLoaderLogTag,
+                               meta.id.value,
+                               source.empty() ? "<empty>" : source);
                 return nullptr;
             }
         }
@@ -135,7 +159,10 @@ namespace Hybrid
         std::vector<char> source_bytes = readBytes(vfs, source);
         if (source_bytes.empty())
         {
-            HBD_CORE_ERROR("Texture2D load failed: {} (no source data)", source);
+            HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=missing_source_data",
+                           kGLTexture2DLoaderLogTag,
+                           meta.id.value,
+                           source.empty() ? "<empty>" : source);
             return nullptr;
         }
 
@@ -148,7 +175,10 @@ namespace Hybrid
                                                 4);
         if (!pixels || w <= 0 || h <= 0)
         {
-            HBD_CORE_ERROR("Texture2D source decode failed: {}", source);
+            HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=source_decode_failed",
+                           kGLTexture2DLoaderLogTag,
+                           meta.id.value,
+                           source.empty() ? "<empty>" : source);
             if (pixels)
                 stbi_image_free(pixels);
             return nullptr;
@@ -159,7 +189,10 @@ namespace Hybrid
 
         if (out)
         {
-            HBD_CORE_WARN("Texture2D fallback to source succeeded: {}", source);
+            HBD_CORE_WARN("{} source_fallback_succeeded asset_id={} source_path={}",
+                          kGLTexture2DLoaderLogTag,
+                          meta.id.value,
+                          source.empty() ? "<empty>" : source);
         }
         return out;
     }

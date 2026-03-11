@@ -36,6 +36,8 @@ namespace Hybrid
 
     namespace
     {
+        constexpr const char* kRenderSystemLogTag = "[RenderSystem]";
+
         uint32_t encodeEntityID(uint32_t entity_id)
         {
             return entity_id + 1u;
@@ -132,7 +134,8 @@ namespace Hybrid
         Renderer::initialize();
         if (!loadBuiltinShaders())
         {
-            HBD_CORE_ERROR("RenderSystem failed to load builtin shaders");
+            HBD_CORE_ERROR("{} initialize_failed reason=load_builtin_shaders_failed",
+                           kRenderSystemLogTag);
             return;
         }
 
@@ -148,7 +151,10 @@ namespace Hybrid
 
         m_Initialized = true;
 
-        HBD_CORE_TRACE("RenderSystem initialized");
+        HBD_CORE_INFO("{} initialize_completed framebuffer_size={}x{}",
+                      kRenderSystemLogTag,
+                      spec.width,
+                      spec.height);
     }
 
     void RenderSystem::update(float dt)
@@ -217,6 +223,13 @@ namespace Hybrid
 
         m_MeshShader = m_ShaderLibrary.get("HybridDefault");
         m_DebugBoxShader = m_ShaderLibrary.get("BoxColider");
+        HBD_CORE_INFO("{} builtin_shaders_loaded mesh={} debug_box={} selection_outline={} mesh_shader_ready={} debug_box_shader_ready={}",
+                      kRenderSystemLogTag,
+                      mesh_ok ? "true" : "false",
+                      debug_box_ok ? "true" : "false",
+                      selection_outline_ok ? "true" : "false",
+                      m_MeshShader ? "true" : "false",
+                      m_DebugBoxShader ? "true" : "false");
         return mesh_ok && debug_box_ok && selection_outline_ok && m_MeshShader && m_DebugBoxShader;
     }
 

@@ -3,11 +3,13 @@
 #include "editor/core/editor_context.h"
 #include "editor/core/editor_drag_drop.h"
 
+#include "runtime/core/base/macro.h"
 #include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/scene.h"
 
 #include <algorithm>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include <entt/entt.hpp>
@@ -17,6 +19,8 @@ namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kHierarchyPanelLogTag = "[HierarchyPanel]";
+
         enum class DropIntent : uint8_t
         {
             None = 0,
@@ -35,6 +39,11 @@ namespace Hybrid
             if (auto* tag = registry.try_get<TagComponent>(entity))
                 return tag->Tag.c_str();
             return "Entity";
+        }
+
+        uint32_t entityHandleValue(entt::entity entity)
+        {
+            return entt::to_integral(entity);
         }
 
         DropIntent calcDropIntent(const ImVec2& min, const ImVec2& max, float mouseY)
@@ -234,33 +243,64 @@ namespace Hybrid
         case PendingActionType::Delete:
         {
             if (!registry.valid(m_pendingTarget))
+            {
+                HBD_CORE_WARN("{} delete_rejected entity={} reason=invalid_entity",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(m_pendingTarget));
                 break;
+            }
 
+            const std::string entity_name = getEntityLabel(registry, m_pendingTarget);
             ctx.active_scene->DestroyEntityRecursive(Entity{m_pendingTarget, &registry, ctx.active_scene});
             ctx.selection.remove(m_pendingTarget);
             ctx.markSceneDirty();
+            HBD_CORE_INFO("{} delete_completed entity={} name={}",
+                          kHierarchyPanelLogTag,
+                          entityHandleValue(m_pendingTarget),
+                          entity_name);
             break;
         }
         case PendingActionType::Unparent:
         {
             if (!hasTransform(registry, m_pendingTarget))
+            {
+                HBD_CORE_WARN("{} unparent_rejected entity={} reason=missing_transform",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(m_pendingTarget));
                 break;
+            }
 
             Entity child{m_pendingTarget, &registry, ctx.active_scene};
             if (ctx.active_scene->Detach(child, true))
             {
                 ctx.selection.setSingle(m_pendingTarget);
                 ctx.markSceneDirty();
+                HBD_CORE_INFO("{} unparent_completed entity={} name={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(m_pendingTarget),
+                              getEntityLabel(registry, m_pendingTarget));
+            }
+            else
+            {
+                HBD_CORE_WARN("{} unparent_failed entity={} name={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(m_pendingTarget),
+                              getEntityLabel(registry, m_pendingTarget));
             }
             break;
         }
         case PendingActionType::CreateRootEmpty:
         {
             Entity created = ctx.active_scene->createEntity("Empty");
+            const bool parent_requested = hasTransform(registry, m_pendingTarget);
             if (hasTransform(registry, m_pendingTarget))
                 ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
             ctx.selection.setSingle(created.GetHandle());
             ctx.markSceneDirty();
+            HBD_CORE_INFO("{} create_completed entity={} name=Empty parent_entity={}",
+                          kHierarchyPanelLogTag,
+                          entityHandleValue(created.GetHandle()),
+                          parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"));
             break;
         }
         case PendingActionType::CreateRootCube:
@@ -268,22 +308,37 @@ namespace Hybrid
             const AssetID cube_mesh_id =
                 ctx.get_builtin_mesh_id ? ctx.get_builtin_mesh_id(BuiltinMesh::Cube) : AssetID{};
             if (cube_mesh_id.value == 0)
+            {
+                HBD_CORE_WARN("{} create_rejected entity_type=Cube reason=missing_builtin_mesh",
+                              kHierarchyPanelLogTag);
                 break;
+            }
 
             Entity created = createBuiltinCube(*ctx.active_scene, cube_mesh_id);
+            const bool parent_requested = hasTransform(registry, m_pendingTarget);
             if (hasTransform(registry, m_pendingTarget))
                 ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
             ctx.selection.setSingle(created.GetHandle());
             ctx.markSceneDirty();
+            HBD_CORE_INFO("{} create_completed entity={} name=Cube parent_entity={} mesh_id={}",
+                          kHierarchyPanelLogTag,
+                          entityHandleValue(created.GetHandle()),
+                          parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"),
+                          cube_mesh_id.value);
             break;
         }
         case PendingActionType::CreateRootCamera:
         {
             Entity created = ctx.active_scene->createCameraEntity("Camera", false);
+            const bool parent_requested = hasTransform(registry, m_pendingTarget);
             if (hasTransform(registry, m_pendingTarget))
                 ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
             ctx.selection.setSingle(created.GetHandle());
             ctx.markSceneDirty();
+            HBD_CORE_INFO("{} create_completed entity={} name=Camera parent_entity={}",
+                          kHierarchyPanelLogTag,
+                          entityHandleValue(created.GetHandle()),
+                          parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"));
             break;
         }
         case PendingActionType::CreateRootDirectionalLight:
@@ -293,11 +348,27 @@ namespace Hybrid
             {
                 ctx.selection.setSingle(created.GetHandle());
                 ctx.markSceneDirty();
+                HBD_CORE_INFO("{} create_completed entity={} name=\"Directional Light\" parent_entity=<root>",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(created.GetHandle()));
                 break;
             }
 
             if (ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true))
+            {
                 ctx.selection.setSingle(created.GetHandle());
+                HBD_CORE_INFO("{} create_completed entity={} name=\"Directional Light\" parent_entity={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(created.GetHandle()),
+                              entityHandleValue(m_pendingTarget));
+            }
+            else
+            {
+                HBD_CORE_WARN("{} create_parent_failed entity={} name=\"Directional Light\" parent_entity={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(created.GetHandle()),
+                              entityHandleValue(m_pendingTarget));
+            }
             ctx.markSceneDirty();
             break;
         }
@@ -308,11 +379,27 @@ namespace Hybrid
             {
                 ctx.selection.setSingle(created.GetHandle());
                 ctx.markSceneDirty();
+                HBD_CORE_INFO("{} create_completed entity={} name=\"Point Light\" parent_entity=<root>",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(created.GetHandle()));
                 break;
             }
 
             if (ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true))
+            {
                 ctx.selection.setSingle(created.GetHandle());
+                HBD_CORE_INFO("{} create_completed entity={} name=\"Point Light\" parent_entity={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(created.GetHandle()),
+                              entityHandleValue(m_pendingTarget));
+            }
+            else
+            {
+                HBD_CORE_WARN("{} create_parent_failed entity={} name=\"Point Light\" parent_entity={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(created.GetHandle()),
+                              entityHandleValue(m_pendingTarget));
+            }
             ctx.markSceneDirty();
             break;
         }
@@ -398,6 +485,23 @@ namespace Hybrid
                         {
                             ctx.selection.setSingle(dropped);
                             ctx.markSceneDirty();
+                            HBD_CORE_INFO("{} reparent_completed entity={} target_entity={} intent={}",
+                                          kHierarchyPanelLogTag,
+                                          entityHandleValue(dropped),
+                                          entityHandleValue(entity),
+                                          intent == DropIntent::AsChild
+                                              ? "as_child"
+                                              : (intent == DropIntent::Before ? "before" : "after"));
+                        }
+                        else
+                        {
+                            HBD_CORE_WARN("{} reparent_failed entity={} target_entity={} intent={}",
+                                          kHierarchyPanelLogTag,
+                                          entityHandleValue(dropped),
+                                          entityHandleValue(entity),
+                                          intent == DropIntent::AsChild
+                                              ? "as_child"
+                                              : (intent == DropIntent::Before ? "before" : "after"));
                         }
                     }
                 }
@@ -439,6 +543,15 @@ namespace Hybrid
                 {
                     ctx.selection.setSingle(dropped);
                     ctx.markSceneDirty();
+                    HBD_CORE_INFO("{} reparent_to_root_completed entity={}",
+                                  kHierarchyPanelLogTag,
+                                  entityHandleValue(dropped));
+                }
+                else
+                {
+                    HBD_CORE_WARN("{} reparent_to_root_failed entity={}",
+                                  kHierarchyPanelLogTag,
+                                  entityHandleValue(dropped));
                 }
             }
             ImGui::EndDragDropTarget();

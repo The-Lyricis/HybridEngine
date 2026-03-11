@@ -25,6 +25,8 @@ namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kMeshImporterLogTag = "[MeshImporter]";
+
         struct VertexKey
         {
             int position_index = -1;
@@ -323,7 +325,10 @@ namespace Hybrid
 
             if (!reader.Warning().empty())
             {
-                HBD_CORE_WARN("MeshImporter OBJ warning ({}): {}", source_file.string(), reader.Warning());
+                HBD_CORE_WARN("{} obj_parse_warning source_file={} reason={}",
+                              kMeshImporterLogTag,
+                              source_file.string(),
+                              reader.Warning());
             }
 
             const tinyobj::attrib_t& attrib = reader.GetAttrib();
@@ -486,7 +491,9 @@ namespace Hybrid
                 return false;
             }
 
-            HBD_CORE_INFO("MeshImporter OBJ: {} shapes, {} materials, {} vertices, {} indices, {} submeshes",
+            HBD_CORE_INFO("{} obj_build_completed source_file={} shapes={} materials={} vertices={} indices={} submeshes={}",
+                          kMeshImporterLogTag,
+                          source_file.string(),
                           shapes.size(),
                           materials.size(),
                           dst_vertices.size(),
@@ -507,6 +514,10 @@ namespace Hybrid
                                            IVirtualFileSystem& vfs)
     {
         ImportResult out{};
+        HBD_CORE_INFO("{} import_started source_path={} requested_cooked_path={}",
+                      kMeshImporterLogTag,
+                      request.source_path,
+                      request.cooked_path.empty() ? "<default>" : request.cooked_path);
 
         std::string src_alias, src_rel;
         if (!splitLogicalPath(request.source_path, src_alias, src_rel))
@@ -598,9 +609,10 @@ namespace Hybrid
                 material_index < static_cast<int>(obj_build.materials.size());
             if (!valid_index)
             {
-                HBD_CORE_WARN("MeshImporter: skip invalid OBJ material index {} for {}",
-                              material_index,
-                              request.source_path);
+                HBD_CORE_WARN("{} material_subasset_skipped source_path={} material_index={} reason=invalid_material_index",
+                              kMeshImporterLogTag,
+                              request.source_path,
+                              material_index);
                 continue;
             }
 
@@ -641,14 +653,20 @@ namespace Hybrid
 
                 if (!vfs.exists(texture_source_path))
                 {
-                    HBD_CORE_WARN("MeshImporter: referenced texture missing {}", texture_source_path);
+                    HBD_CORE_WARN("{} referenced_texture_missing source_path={} texture_source_path={}",
+                                  kMeshImporterLogTag,
+                                  request.source_path,
+                                  texture_source_path);
                     return AssetID{};
                 }
 
                 auto texture_native = vfs.resolve(texture_source_path);
                 if (!texture_native)
                 {
-                    HBD_CORE_WARN("MeshImporter: cannot resolve referenced texture {}", texture_source_path);
+                    HBD_CORE_WARN("{} referenced_texture_resolve_failed source_path={} texture_source_path={}",
+                                  kMeshImporterLogTag,
+                                  request.source_path,
+                                  texture_source_path);
                     return AssetID{};
                 }
 
@@ -660,7 +678,9 @@ namespace Hybrid
                 ImportResult texture_result = texture_importer.importAsset(texture_request, registry, vfs);
                 if (!texture_result.success)
                 {
-                    HBD_CORE_WARN("MeshImporter: texture import failed for {} ({})",
+                    HBD_CORE_WARN("{} referenced_texture_import_failed source_path={} texture_source_path={} reason={}",
+                                  kMeshImporterLogTag,
+                                  request.source_path,
                                   texture_source_path,
                                   texture_result.message);
                     return AssetID{};
@@ -856,9 +876,13 @@ namespace Hybrid
         for (auto& asset_meta : generated_assets)
             out.assets.push_back(std::move(asset_meta));
 
-        HBD_CORE_INFO("MeshImporter OBJ: generated {} material sub-assets for {}",
+        HBD_CORE_INFO("{} import_completed source_path={} cooked_path={} mesh_asset_id={} material_subassets={} total_assets={}",
+                      kMeshImporterLogTag,
+                      request.source_path,
+                      cooked_path,
+                      out.primary_id.value,
                       material_index_to_id.size(),
-                      request.source_path);
+                      out.assets.size());
         return out;
     }
 } // namespace Hybrid

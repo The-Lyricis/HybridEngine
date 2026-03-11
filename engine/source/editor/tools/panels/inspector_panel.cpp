@@ -20,6 +20,13 @@ namespace Hybrid
 {
     namespace
     {
+        constexpr const char* kInspectorPanelLogTag = "[InspectorPanel]";
+
+        uint32_t entityHandleValue(entt::entity entity)
+        {
+            return entt::to_integral(entity);
+        }
+
         static GLuint LoadTextureRGBA8(const std::string& path)
         {
             int w = 0, h = 0, comp = 0;
@@ -221,8 +228,16 @@ namespace Hybrid
 
         if (pending_remove_desc != nullptr && pending_remove_desc->remove != nullptr)
         {
+            HBD_CORE_INFO("{} component_remove_requested entity={} component={}",
+                          kInspectorPanelLogTag,
+                          entityHandleValue(selected_entity.GetHandle()),
+                          pending_remove_desc->name);
             pending_remove_desc->remove(selected_entity);
             ctx.markSceneDirty();
+            HBD_CORE_INFO("{} component_remove_completed entity={} component={}",
+                          kInspectorPanelLogTag,
+                          entityHandleValue(selected_entity.GetHandle()),
+                          pending_remove_desc->name);
         }
 
         ImGui::Separator();
@@ -256,9 +271,27 @@ namespace Hybrid
                 {
                     if (!already_has_component && desc.add(selected_entity))
                     {
+                        HBD_CORE_INFO("{} component_add_completed entity={} component={}",
+                                      kInspectorPanelLogTag,
+                                      entityHandleValue(selected_entity.GetHandle()),
+                                      desc.name);
                         if (std::strcmp(desc.name, "BoxColider") == 0 && ctx.fit_box_collider_to_mesh)
                             (void)ctx.fit_box_collider_to_mesh(selected_entity.GetHandle());
                         ctx.markSceneDirty();
+                    }
+                    else if (already_has_component)
+                    {
+                        HBD_CORE_WARN("{} component_add_rejected entity={} component={} reason=already_exists",
+                                      kInspectorPanelLogTag,
+                                      entityHandleValue(selected_entity.GetHandle()),
+                                      desc.name);
+                    }
+                    else
+                    {
+                        HBD_CORE_WARN("{} component_add_failed entity={} component={}",
+                                      kInspectorPanelLogTag,
+                                      entityHandleValue(selected_entity.GetHandle()),
+                                      desc.name);
                     }
                     ImGui::CloseCurrentPopup();
                 }

@@ -8,13 +8,18 @@
 
 namespace Hybrid
 {
+    namespace
+    {
+        constexpr const char* kImGuiLayerLogTag = "[ImGuiLayer]";
+    } // namespace
+
     ImGuiLayer::ImGuiLayer(GLFWwindow* window) : Layer("ImGuiLayer"), m_window(window) {}
 
     void ImGuiLayer::onAttach()
     {
         if (!m_window)
         {
-            HBD_CORE_ERROR("ImGuiLayer attach failed: window is null");
+            HBD_CORE_ERROR("{} attach_failed reason=window_is_null", kImGuiLayerLogTag);
             return;
         }
 
@@ -28,6 +33,7 @@ namespace Hybrid
         ImGui_ImplGlfw_InitForOpenGL(m_window, true);
         ImGui_ImplOpenGL3_Init("#version 330");
         m_initialized = true;
+        HBD_CORE_INFO("{} attach_completed", kImGuiLayerLogTag);
     }
 
     void ImGuiLayer::onDetach()
@@ -39,6 +45,7 @@ namespace Hybrid
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
         m_initialized = false;
+        HBD_CORE_INFO("{} detach_completed", kImGuiLayerLogTag);
     }
 
     void ImGuiLayer::onBeginFrame()

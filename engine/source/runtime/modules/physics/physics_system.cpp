@@ -8,28 +8,33 @@
 
 namespace Hybrid
 {
+    namespace
+    {
+        constexpr const char* kPhysicsSystemLogTag = "[PhysicsSystem]";
+    } // namespace
+
     void PhysicsSystem::initialize()
     {
         if (m_Initialized)
         {
-            HBD_CORE_WARN("PhysicsSystem already initialized.");
+            HBD_CORE_WARN("{} initialize_skipped reason=already_initialized", kPhysicsSystemLogTag);
             return;
         }
 
         m_Initialized = true;
-        HBD_CORE_INFO("PhysicsSystem initialized.");
+        HBD_CORE_INFO("{} initialize_completed", kPhysicsSystemLogTag);
     }
 
     void PhysicsSystem::shutdown()
     {
         if (!m_Initialized)
         {
-            HBD_CORE_WARN("PhysicsSystem shutdown called before initialization.");
+            HBD_CORE_WARN("{} shutdown_skipped reason=not_initialized", kPhysicsSystemLogTag);
             return;
         }
 
         m_Initialized = false;
-        HBD_CORE_INFO("PhysicsSystem shutdown.");
+        HBD_CORE_INFO("{} shutdown_completed", kPhysicsSystemLogTag);
     }
 
     void PhysicsSystem::tick(float dt, Scene& scene)
