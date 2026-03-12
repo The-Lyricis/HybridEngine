@@ -396,14 +396,14 @@ namespace Hybrid
 
         std::string status_line;
         if (m_ctx->active_document)
-            status_line = m_ctx->active_document->isSaved() ? m_ctx->active_document->vpath : m_ctx->active_document->display_name;
+            status_line = m_ctx->active_document->display_name.empty() ? std::string("Untitled") : m_ctx->active_document->display_name;
         else
             status_line = "Untitled";
 
         if (m_ctx->active_document && m_ctx->active_document->dirty)
-            status_line += " *";
-        if (!m_ctx->status_message.empty())
-            status_line += " | " + m_ctx->status_message;
+            status_line += " (Unsaved)";
+        else if (m_ctx->active_document && m_ctx->active_document->isSaved())
+            status_line += " (Saved)";
 
         const ImVec2 button_size(32.0f, 20.0f);
         const ImVec2 icon_size(18.0f, 18.0f);
