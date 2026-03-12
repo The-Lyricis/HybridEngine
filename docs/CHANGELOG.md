@@ -4,14 +4,13 @@
 
 - `Readme.md` keeps build and run instructions. This file only tracks version history and development milestones.
 
-## Unreleased
-
-### 2026-03-11
+### v0.0.6 Current
 
 - Rendering work continued toward a clearer pass / pipeline split to support later outline, shadow, and post-process expansion.
 - Initial `ShaderLibrary` work was added to centralize shader management.
 - The editor gained a new scene creation flow and a hierarchy entry for point light creation.
 - Physics and rigidbody logic were still under active iteration, with multiple same-day updates in `physics_system.cpp` and related components.
+- System update log system, DEBUG level log update, add log specifications, unify log system.
 
 ### v0.0.5
 
