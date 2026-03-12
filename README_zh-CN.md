@@ -120,7 +120,7 @@ bin\HybridEditor.exe
 
 ## 写在后面
 
-Hybrid Engine 目前主要作为我的长期个人学习与研究项目持续开发。
+Hybrid Engine 目前主要作为我的长期个人学习与研究项目持续开发，感兴趣可以与我一同交流。
 
 特别感谢 [@SaluteBEE](https://github.com/SaluteBEE) 在协作与交流中的支持。
 
