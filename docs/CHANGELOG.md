@@ -1,8 +1,5 @@
 # Hybrid Engine Changelog
 
-## Notes
-
-- `Readme.md` keeps build and run instructions. This file only tracks version history and development milestones.
 
 ### v0.0.6 Current
 
