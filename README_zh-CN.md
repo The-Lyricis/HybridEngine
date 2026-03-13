@@ -42,9 +42,8 @@ Hybrid Engine 是一个以学习、研究和实践现代引擎架构为目标的
 
 - Windows 10 或 Windows 11
 - CMake 3.20 及以上
-- 支持 C++17 的编译器
-- 推荐使用 Visual Studio 2022 / MSVC
-- 支持 submodule 的 Git
+- C++17 环境
+- 编译器推荐使用 Visual Studio 2022 / MSVC
 - 能运行 OpenGL 4.5 的显卡与驱动环境
 
 补充说明：
