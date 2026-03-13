@@ -89,7 +89,7 @@ bin\HybridEditor.exe
 
 项目文档位于 `docs/`：
 
-- [开发日志 / Changelog](docs/CHANGELOG.md)：版本演进与阶段记录
+- [开发日志 / Changelog](docs/CHANGELOG_zh-CN.md)：版本演进与阶段记录
 - [开发计划](docs/plans/PROJECT_PLAN.md)：整体开发方向与阶段目标
 - [渲染系统](docs/systems/render_system.md)：当前渲染结构、pass 划分与职责
 - [资源系统](docs/systems/resource_system.md)：资源注册、导入、缓存与运行时加载
