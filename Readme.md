@@ -144,4 +144,4 @@ Special thanks to [@SaluteBEE](https://github.com/SaluteBEE) and [@zong4](https:
 Contact:
 
 - Portfolio: [Portfolio](https://the-lyricis.github.io/)
-- Email: lyigchick1623@gmail.com
+- Email: pigchick1623@gmail.com
