@@ -1,21 +1,48 @@
 # Hybrid Engine
-[简体中文版Readme](README_zh-CN.md)
 
-A personal engine project for studying modern engine architecture, system implementation, and technical exploration.
+[![README](https://img.shields.io/badge/README-English-111827?style=flat-square)](README.md)
+[![README](https://img.shields.io/badge/README-Simplified%20Chinese-374151?style=flat-square)](README_zh-CN.md)
+[![C++](https://img.shields.io/badge/Language-C%2B%2B-00599C?logo=c%2B%2B&style=flat-square)](https://isocpp.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](./LICENSE)
+
+> A personal engine project for studying modern engine architecture, runtime/editor boundaries, and practical toolchain design through real implementation work.
+
+![Hybrid Engine Editor Preview](docs/images/editor_preview.png)
 
 ## Overview
 
-Hybrid Engine is a personal project focused on learning, researching, and practicing modern engine architecture. The goal of this project is not simply to build a runnable engine prototype, but to gradually understand the responsibilities, collaboration patterns, and architectural boundaries of core engine modules through actual implementation, while also exploring technical areas worth developing in greater depth.
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6)](#requirements)
+[![Renderer](https://img.shields.io/badge/Renderer-OpenGL%204.5-5586A4)](#features--current-status)
+[![Editor](https://img.shields.io/badge/Editor-ImGui%20Docking-FF6F61)](#features--current-status)
+[![Assets](https://img.shields.io/badge/Assets-OBJ%20%2F%20Meta%20%2F%20Cooked-6A9C89)](#features--current-status)
+[![Physics](https://img.shields.io/badge/Physics-Early%20WIP-D97706)](#roadmap)
 
-At the current stage, the project is mainly focused on building a solid foundation for the core framework, including rendering, resource management, scene systems, editor workflows, input, events, and physics. Once the overall architecture becomes more stable, I plan to dive deeper into several selected directions, such as rendering pipeline design, physics-system implementation, engine performance optimization and profiling, as well as editor interaction and workflow logic, while gradually moving toward cross-platform and multi-API support.
+Hybrid Engine is a long-term implementation playground for understanding how rendering, assets, scene data, editor tooling, input, events, and runtime systems should be structured and how they evolve together.
 
-For me, this project is both a long-term learning process in low-level engine development and a continuing practice platform for validating architectural ideas, accumulating engineering experience, and exploring technical details.
+Current development is mainly focused on:
 
-![Editor Preview](docs/images/editor_preview.png)
+- editor-driven scene workflow
+- asset import, metadata, and cooked-cache pipeline
+- render architecture cleanup and pass evolution
+- play-mode transitions, scene switching, and early physics iteration
+
+## Status Snapshot
+
+| Platform | Toolchain |
+| --- | --- |
+| Windows 10 / 11 | Visual Studio 2022 + MSVC + CMake 3.20+ |
+
+| Rendering | Main Entry |
+| --- | --- |
+| OpenGL 4.5 | `bin\HybridEditor.exe` |
+
+| Current Focus | Dev Log |
+| --- | --- |
+| Editor, asset pipeline, render architecture, scene workflow | `docs/CHANGELOG.md` |
 
 ## Requirements
 
-The current primary development environment is:
+Current primary development environment:
 
 - Windows 10 or Windows 11
 - CMake 3.20 or later
@@ -23,11 +50,6 @@ The current primary development environment is:
 - Visual Studio 2022 / MSVC is the recommended toolchain
 - Git with submodule support
 - A GPU and driver environment capable of running OpenGL 4.5
-
-Notes:
-
-- The repository already contains some traces of cross-platform build support, such as a macOS build script and CI workflow, but the current editor codebase is still primarily Windows-first.
-- The editor depends on bundled third-party libraries under `engine/3rdparty`, so submodules must be initialized before the first configure step.
 
 ## Build and Run
 
@@ -58,73 +80,68 @@ bin\HybridEditor.exe
 
 Runtime notes:
 
-- The build process copies the editor executable, shaders, and editor resources into the `bin/` directory.
-- On first launch, the engine automatically initializes `bin/GameProject/` as the project root (currently a hardcoded path) and creates a default `GameProject.hyproj` if it does not already exist.
+- The build copies the editor executable, shaders, and editor resources into `bin/`.
+- On first launch, the engine automatically initializes `bin/GameProject/` and creates a default `GameProject.hyproj` if it does not already exist.
 - Runtime logs are written to `bin/hybrid_engine.log`.
 
 ## Documentation
 
-Project documentation is located under `docs/`:
+Project documentation lives under `docs/`:
 
-**Development Log**
-
-- [Changelog](docs/CHANGELOG_zh-CN.md): development history and version milestones
-
-**Detailed Documentation**
-
+- [Changelog](docs/CHANGELOG.md): development history and milestone notes
+- [Development Plan](docs/plans/PROJECT_PLAN_ENG.md): current plan and longer-term structure
 - [Render System](docs/systems/render_system.md): current render-system architecture and pass layout
 - [Resource System](docs/systems/resource_system.md): runtime/editor asset pipeline, registry, cache, and loading flow
-- [Render ECS Asset Chain](docs/systems/render_ecs_asset_chain.md): integration notes for meshes, materials, ECS, and editor flow within the render path
+- [Render ECS Asset Chain](docs/systems/render_ecs_asset_chain.md): integration notes for mesh, material, ECS, and editor flow inside the render path
 - [Event System](docs/systems/event_system.md): event dispatch and input/event bridge notes
 - [Log System](docs/systems/log_system.md): logging structure and usage
 
-## Features and Current Status
+## Features & Current Status
 
-The following parts are already implemented or basically usable:
+Already implemented or broadly usable:
 
-- Core runtime foundation, including logging, events, input, the window system, and the main loop
-- Basic rendering workflow, including the OpenGL backend, framebuffer-based rendering path, and the split between Scene and Game viewports
-- Scene system, including EnTT-based entities and components, scene serialization, hierarchy data, and the `scene_document` flow
-- Editor basics, including the docking UI, Hierarchy, Inspector, Scene View, Game View, Project Panel, gizmo interaction, and object picking
-- Asset-system foundation, including VFS logical paths, the asset registry, `.meta` files, cooked cache output, and loading for textures, meshes, materials, and scenes
-- Import workflow, including OBJ import, material generation, texture import, drag-and-drop placement into the scene, and initial hot-reload support
-- Basic lighting support in the current render path, including directional lights and point lights
-- An early physics baseline, including AABB collision, collider registration, rigidbody iteration, and collider gizmo debugging
+- Core runtime foundation: logging, events, input, window system, and main loop
+- Rendering baseline: OpenGL backend, framebuffer path, forward rendering, and Scene / Game viewport split
+- Scene system: EnTT-based entities and components, scene serialization, hierarchy data, and the `scene_document` flow
+- Editor basics: docking UI, Hierarchy, Inspector, Scene View, Game View, Project Panel, gizmo interaction, and object picking
+- Asset-system baseline: VFS logical paths, asset registry, `.meta` files, cooked cache output, and loading for textures, meshes, materials, and scenes
+- Import workflow: OBJ import, material generation, texture import, drag-and-drop scene placement, and initial hot-reload support
+- Lighting: directional lights and point lights in the current render path
+- Physics baseline: AABB collision, collider registration, rigidbody iteration, and collider gizmo debugging
 
-The following areas are still under active development:
+Still under active development:
 
-- The render-pipeline split is still being refined, and the higher-level pass orchestration structure has not been fully settled yet
-- Shadow, outline, and post-processing paths have been started but are not complete yet
-- The physics system is still in an early iteration phase and remains unstable overall
-- The editor workflow is already usable for experiments and feature validation, but there is still significant room for improvement in polish, reliability, and tooling depth
-- Audio and scripting systems have not been implemented yet
+- The render-pipeline split is still being refined and higher-level pass orchestration is not fully settled yet.
+- Shadow, outline, and post-process paths have started but are not complete yet.
+- The physics system is still in an early iteration phase and remains unstable overall.
+- The editor workflow is already useful for experiments and feature validation, but polish, reliability, and tooling depth still need work.
+- Audio and scripting systems have not been implemented yet.
 
 ## Roadmap
 
-My near-term focus will mainly be on the following directions:
+Near-term focus:
 
-- Continue refining the render-pipeline structure, including pass execution flow, shader management, and the data upload path
-- Improve physics behavior, rigidbody flow, and editor-side debugging support
-- Strengthen scene-editing reliability across edit/play mode transitions
-- Continue improving the stability of asset hot reload, cache invalidation, and the import workflow
+- continue refining render-pipeline structure, including pass execution flow, shader management, and data upload paths
+- improve physics behavior, rigidbody flow, and editor-side debugging support
+- strengthen scene-editing reliability across edit/play transitions
+- keep improving asset hot reload, cache invalidation, and import stability
 
-Planned future work includes:
+Planned future work:
 
-- More complete rendering features, such as shadows, outlines, and post-processing
-- A more polished editor workflow and better panel-level usability
-- Broader coverage for default resources and error paths in the asset system
-- Exploration of an audio system
-- Scripting support and runtime extensibility after the core architecture becomes more stable
+- more complete rendering features such as shadows, outline, and post-process
+- a more polished editor workflow and better panel-level usability
+- broader coverage for default resources and failure paths in the asset system
+- audio-system exploration
+- scripting support and runtime extensibility after the core architecture becomes more stable
 
 For the broader plan, see [docs/plans/PROJECT_PLAN_ENG.md](docs/plans/PROJECT_PLAN_ENG.md).
 
 ## Closing Notes
 
-Hybrid Engine is currently being developed as a long-term personal project for learning and research.
+Hybrid Engine is still a long-term personal learning and research project. If you are also interested in engine architecture, editor tooling, or asset workflows, feel free to reach out.
 
-Special thanks to [@SaluteBEE](https://github.com/SaluteBEE) for support, collaboration, and discussion.
-
+Special thanks to [@SaluteBEE](https://github.com/SaluteBEE) and [@zong4](https://github.com/zong4) for support, collaboration, and discussion.
 Contact:
 
 - Portfolio: [Portfolio](https://the-lyricis.github.io/)
-- Gmail: pigchick1623@gmail.com
+- Email: lyigchick1623@gmail.com
