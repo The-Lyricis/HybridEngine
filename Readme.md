@@ -48,7 +48,6 @@ Current primary development environment:
 - CMake 3.20 or later
 - A compiler with C++17 support
 - Visual Studio 2022 / MSVC is the recommended toolchain
-- Git with submodule support
 - A GPU and driver environment capable of running OpenGL 4.5
 
 ## Build and Run
