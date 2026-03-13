@@ -19,7 +19,6 @@ Date: 2026-03-10
 - Split the editor into separate Scene and Game viewports and substantially rebuilt the project and hierarchy panel workflows.
 - Improved scene serialization with root serialization support and hierarchy deserialization-order fixes.
 - Added editor-side asset hot reload and support for dragging OBJ assets directly into the scene.
-- Updated the system docs for render, resource, and render/ECS/asset integration on 2026-03-10.
 
 ### v0.0.4
 
@@ -59,13 +58,3 @@ Date: 2026-01-28
 
 - Initial project scaffold.
 - Basic CMake setup, third-party dependencies, and early engine structure only.
-
-## Sources Used
-
-This reconstruction is based on:
-
-- `git log` from 2026-02-14 through 2026-03-11
-- [render_system.md](/f:/Project/Engine/TDA572/docs/systems/render_system.md)
-- [resource_system.md](/f:/Project/Engine/TDA572/docs/systems/resource_system.md)
-- [render_ecs_asset_chain.md](/f:/Project/Engine/TDA572/docs/systems/render_ecs_asset_chain.md)
-- [Readme.md](/f:/Project/Engine/TDA572/Readme.md)
