@@ -146,4 +146,4 @@ Hybrid Engine 目前仍然是一个长期个人学习与研究项目。如果你
 联系方式：
 
 - 主页：[Portfolio](https://the-lyricis.github.io/)
-- 邮箱：lyigchick1623@gmail.com
+- 邮箱：pigchick1623@gmail.com
