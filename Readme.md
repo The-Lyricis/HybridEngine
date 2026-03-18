@@ -48,7 +48,6 @@ Current primary development environment:
 - CMake 3.20 or later
 - A compiler with C++17 support
 - Visual Studio 2022 / MSVC is the recommended toolchain
-- Git with submodule support
 - A GPU and driver environment capable of running OpenGL 4.5
 
 ## Build and Run
@@ -144,4 +143,4 @@ Special thanks to [@SaluteBEE](https://github.com/SaluteBEE) and [@zong4](https:
 Contact:
 
 - Portfolio: [Portfolio](https://the-lyricis.github.io/)
-- Email: lyigchick1623@gmail.com
+- Email: pigchick1623@gmail.com
