@@ -1,0 +1,88 @@
+<mxfile host="65bd71144e">
+    <diagram id="resource-system" name="Resource System">
+        <mxGraphModel dx="736" dy="625" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="&lt;font style=&quot;font-size:24px&quot;&gt;&lt;b&gt;Resource System&amp;nbsp;&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 12px; color: rgb(102, 102, 102);&quot;&gt;Editor import, shared asset infrastructure, runtime loading, and consumers&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry x="620" y="730" width="760" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="projectFiles" value="Project Files" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#F7F2FF;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="810" width="300" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="projectFilesBody" value="&lt;b&gt;Source:&lt;/b&gt; Assets/, source files&lt;br/&gt;&lt;b&gt;Metadata:&lt;/b&gt; .meta files&lt;br/&gt;&lt;b&gt;Derived:&lt;/b&gt; Cache/Cooked/&lt;br/&gt;&lt;b&gt;Project:&lt;/b&gt; GameProject.hyproj&lt;br/&gt;&lt;b&gt;Logical Paths:&lt;/b&gt; asset:..." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="projectFiles" vertex="1">
+                    <mxGeometry x="8" y="36" width="224" height="174" as="geometry"/>
+                </mxCell>
+                <mxCell id="editorLayer" value="Editor Resource Layer" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#F7F1E8;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;arcSize=19;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="180" width="300" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="editorLayerBody" value="&lt;b&gt;Coordinator:&lt;/b&gt; EditorResourceSystem&lt;br/&gt;&lt;b&gt;Import:&lt;/b&gt; ImportManager, Importers&lt;br/&gt;&lt;b&gt;Startup:&lt;/b&gt; bootstrapImportOnce()&lt;br/&gt;&lt;b&gt;Per-frame:&lt;/b&gt; processImportQueue(...)&lt;br/&gt;&lt;b&gt;Watch / Reload:&lt;/b&gt; FileWatcher, Hot Reload&lt;br/&gt;&lt;b&gt;Ops:&lt;/b&gt; import, reimport, move, delete&lt;br/&gt;&lt;b&gt;Cache Invalidation:&lt;/b&gt; unload affected AssetIDs" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="editorLayer" vertex="1">
+                    <mxGeometry x="8" y="36" width="262" height="114" as="geometry"/>
+                </mxCell>
+                <mxCell id="sharedCore" value="Shared Asset Core" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#F4F7F2;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="180" width="300" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="sharedCoreBody" value="&lt;b&gt;Paths:&lt;/b&gt; IVirtualFileSystem&lt;br/&gt;&lt;b&gt;Metadata:&lt;/b&gt; AssetRegistry, AssetMetaStore&lt;br/&gt;&lt;b&gt;Load State:&lt;/b&gt; AssetManager&lt;br/&gt;&lt;b&gt;Rules:&lt;/b&gt; AssetID, logical-path mapping&lt;br/&gt;&lt;b&gt;Lookup:&lt;/b&gt; metadata, source_path, cooked_path&lt;br/&gt;&lt;b&gt;Shared Use:&lt;/b&gt; importers, serializers, loaders" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="sharedCore" vertex="1">
+                    <mxGeometry x="8" y="36" width="284" height="254" as="geometry"/>
+                </mxCell>
+                <mxCell id="runtimeLayer" value="Runtime Resource Layer" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#EEF4FF;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;arcSize=18;" parent="1" vertex="1">
+                    <mxGeometry x="1280" y="180" width="300" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="runtimeLayerBody" value="&lt;b&gt;Bootstrap:&lt;/b&gt; RuntimeResourceSystem&lt;br/&gt;&lt;b&gt;Loaders:&lt;/b&gt; GLTexture2DLoader, MeshCookedLoader&lt;br/&gt;&lt;b&gt;More Loaders:&lt;/b&gt; MaterialFileLoader, SceneLoader&lt;br/&gt;&lt;b&gt;Defaults:&lt;/b&gt; default Texture, Material, built-in Mesh&lt;br/&gt;&lt;b&gt;Resident Data:&lt;/b&gt; built-in assets&lt;br/&gt;&lt;b&gt;Result:&lt;/b&gt; runtime CPU-side asset objects" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="runtimeLayer" vertex="1">
+                    <mxGeometry x="8" y="36" width="284" height="104" as="geometry"/>
+                </mxCell>
+                <mxCell id="loadChain" value="Typical Load Chain" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#FAFAFA;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;" parent="1" vertex="1">
+                    <mxGeometry x="1270" y="500" width="300" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="loadChainBody" value="1. caller obtains AssetID&lt;br/&gt;2. AssetManager::loadSync/loadAsync&lt;br/&gt;3. query AssetRegistry metadata&lt;br/&gt;4. choose matching loader&lt;br/&gt;5. resolve logical path through VFS&lt;br/&gt;6. create runtime object&lt;br/&gt;7. cache and return&lt;br/&gt;8. fallback to default resource on failure" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=8;spacingRight=8;spacingTop=4;fontSize=12;" parent="loadChain" vertex="1">
+                    <mxGeometry x="8" y="36" width="424" height="164" as="geometry"/>
+                </mxCell>
+                <mxCell id="consumers" value="Runtime Consumers" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#FFF4F2;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;" parent="1" vertex="1">
+                    <mxGeometry x="1270" y="830" width="300" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="consumersBody" value="&lt;b&gt;RenderSystem:&lt;/b&gt; Mesh / Material / Texture&lt;br/&gt;&lt;b&gt;Scene Loading:&lt;/b&gt; Scene assets&lt;br/&gt;&lt;b&gt;Editor Preview:&lt;/b&gt; same asset path&lt;br/&gt;&lt;b&gt;GPU Ownership:&lt;/b&gt; RenderSystem caches GPU resources" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="consumers" vertex="1">
+                    <mxGeometry x="8" y="36" width="184" height="164" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge1" value="scan / import / reimport" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="projectFiles" target="editorLayer" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge2" value="meta + cooked update" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="editorLayer" target="projectFiles" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge3" value="registry + metadata access" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="editorLayer" target="sharedCore" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge4" value="project bootstrap + meta scan" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="sharedCore" target="runtimeLayer" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge5" value="loader reads through VFS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="sharedCore" target="loadChain" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="920" y="585"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge6" value="load / cache / fallback" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="runtimeLayer" target="loadChain" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1430" y="585"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge7" value="asset requests" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1370" y="830" as="sourcePoint"/>
+                        <mxPoint x="1370" y="670" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge8" value="runtime asset objects" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1480" y="670" as="sourcePoint"/>
+                        <mxPoint x="1480" y="830" as="targetPoint"/>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

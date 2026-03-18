@@ -1,0 +1,87 @@
+<mxfile host="65bd71144e">
+    <diagram id="engine-overview" name="Engine Overview">
+        <mxGraphModel dx="355" dy="302" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="&lt;font style=&quot;font-size:24px&quot;&gt;&lt;b&gt;Hybrid Engine Overview&lt;/b&gt;&lt;/font&gt;&lt;br/&gt;&lt;font style=&quot;font-size:12px;color:#3F3F46&quot;&gt;High-level runtime / editor / asset / backend architecture&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;" parent="1" vertex="1">
+                    <mxGeometry y="470" width="680" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="projectData" value="Project Data" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#F7F2FF;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;" parent="1" vertex="1">
+                    <mxGeometry x="510" y="450" width="200" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="projectDataBody" value="&lt;b&gt;Project:&lt;/b&gt; GameProject.hyproj&lt;br/&gt;&lt;b&gt;Source:&lt;/b&gt; Assets/, .meta files&lt;br/&gt;&lt;b&gt;Derived:&lt;/b&gt; Cooked Cache/&lt;br/&gt;&lt;b&gt;User Data:&lt;/b&gt; Scenes, Settings" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="projectData" vertex="1">
+                    <mxGeometry x="8" y="36" width="184" height="134" as="geometry"/>
+                </mxCell>
+                <mxCell id="editorApp" value="Editor Application" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#FFF4F2;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;swimlaneLine=1;" parent="1" vertex="1">
+                    <mxGeometry x="510" y="140" width="200" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="editorAppBody" value="&lt;b&gt;Entry:&lt;/b&gt; EditorApp, EditorLayer&lt;br/&gt;&lt;b&gt;UI:&lt;/b&gt; Docking, Panels&lt;br/&gt;&lt;b&gt;Views:&lt;/b&gt; Hierarchy, Inspector, Scene, Game, Project&lt;br/&gt;&lt;b&gt;State:&lt;/b&gt; EditorContext, SceneDocument&lt;br/&gt;&lt;b&gt;Tools:&lt;/b&gt; Gizmo, Picking, Editor Camera" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="editorApp" vertex="1">
+                    <mxGeometry x="8" y="36" width="184" height="164" as="geometry"/>
+                </mxCell>
+                <mxCell id="sharedInfra" value="Shared Asset + Scene Infrastructure" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#F4F7F2;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;" parent="1" vertex="1">
+                    <mxGeometry x="1005" y="675" width="200" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="sharedInfraBody" value="&lt;b&gt;Paths:&lt;/b&gt; IVirtualFileSystem&lt;br/&gt;&lt;b&gt;Registry:&lt;/b&gt; AssetRegistry, AssetMetaStore&lt;br/&gt;&lt;b&gt;Runtime Cache:&lt;/b&gt; AssetManager&lt;br/&gt;&lt;b&gt;Scene IO:&lt;/b&gt; SceneSerializer&lt;br/&gt;&lt;b&gt;Project Boot:&lt;/b&gt; ProjectLoader, ProjectContext" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="sharedInfra" vertex="1">
+                    <mxGeometry x="8" y="36" width="184" height="114" as="geometry"/>
+                </mxCell>
+                <mxCell id="engineHost" value="Engine Host" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#EEF4FF;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="675" width="200" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="engineHostBody" value="&lt;b&gt;Entry:&lt;/b&gt; HybridEngine&lt;br/&gt;&lt;b&gt;Loop:&lt;/b&gt; Main Loop, LayerStack&lt;br/&gt;&lt;b&gt;Mode:&lt;/b&gt; Edit / Play Transition&lt;br/&gt;&lt;b&gt;Platform:&lt;/b&gt; WindowSystem, SurfaceIO&lt;br/&gt;&lt;b&gt;Flow:&lt;/b&gt; Update, Event Dispatch, Render Kickoff" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="engineHost" vertex="1">
+                    <mxGeometry x="8" y="36" width="184" height="114" as="geometry"/>
+                </mxCell>
+                <mxCell id="runtimeSystems" value="Runtime Systems" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#F4F7F2;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;swimlaneLine=1;shadow=0;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="660" width="200" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="runtimeSystemsBody" value="&lt;b&gt;Render:&lt;/b&gt; RenderSystem, RenderPipeline, Passes&lt;br/&gt;&lt;b&gt;Scene:&lt;/b&gt; Scene, Entity, Components&lt;br/&gt;&lt;b&gt;Assets:&lt;/b&gt; RuntimeResourceSystem, Loaders&lt;br/&gt;&lt;b&gt;Core:&lt;/b&gt; Input, Event, Log&lt;br/&gt;&lt;b&gt;Simulation:&lt;/b&gt; Physics, Project Service, Frame Context" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="runtimeSystems" vertex="1">
+                    <mxGeometry x="8" y="36" width="184" height="144" as="geometry"/>
+                </mxCell>
+                <mxCell id="graphicsBackend" value="Graphics Backend" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#FAFAFA;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="950" width="200" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="graphicsBackendBody" value="&lt;b&gt;Context:&lt;/b&gt; OpenGL Context&lt;br/&gt;&lt;b&gt;Shaders:&lt;/b&gt; Shader&lt;br/&gt;&lt;b&gt;GPU Buffers:&lt;/b&gt; Buffer, VertexArray&lt;br/&gt;&lt;b&gt;Targets:&lt;/b&gt; Framebuffer, Texture&lt;br/&gt;&lt;b&gt;API Bridge:&lt;/b&gt; GLFW, GLAD" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="graphicsBackend" vertex="1">
+                    <mxGeometry x="8" y="36" width="184" height="94" as="geometry"/>
+                </mxCell>
+                <mxCell id="editorServices" value="Editor Services" style="swimlane;whiteSpace=wrap;html=1;rounded=1;startSize=28;fillColor=#F7F1E8;strokeColor=#3F3F46;fontSize=15;fontStyle=1;fontColor=#111827;horizontal=1;" parent="1" vertex="1">
+                    <mxGeometry x="1005" y="155" width="200" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="editorServicesBody" value="&lt;b&gt;Import:&lt;/b&gt; ImportManager, Importers&lt;br/&gt;&lt;b&gt;Asset IO:&lt;/b&gt; EditorResourceSystem&lt;br/&gt;&lt;b&gt;Scene IO:&lt;/b&gt; Scene IO Service&lt;br/&gt;&lt;b&gt;Reload:&lt;/b&gt; Asset Hot Reload Controller&lt;br/&gt;&lt;b&gt;Platform:&lt;/b&gt; Win32 File Dialogs" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;spacingLeft=6;spacingRight=6;spacingTop=4;fontSize=11;" parent="editorServices" vertex="1">
+                    <mxGeometry x="8" y="36" width="184" height="144" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge1" value="project editing" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="projectData" target="editorApp" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge2" value="meta + cooked IO" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="projectData" target="sharedInfra" edge="1">
+                    <mxGeometry x="-0.3636" y="-10" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge3" value="editor commands" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="editorApp" target="engineHost" edge="1">
+                    <mxGeometry x="0.2857" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge4" value="import + reload" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="editorApp" target="editorServices" edge="1">
+                    <mxGeometry x="-0.6666" y="15" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge5" value="registry + scene IO" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="editorServices" target="sharedInfra" edge="1">
+                    <mxGeometry x="-0.3704" y="-40" relative="1" as="geometry">
+                        <mxPoint x="1" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge6" value="frame update + render" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="engineHost" target="runtimeSystems" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge7" value="asset + scene access" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="sharedInfra" target="runtimeSystems" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge8" value="GPU submission" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#000000;labelBackgroundColor=#FFFFFF;" parent="1" source="runtimeSystems" target="graphicsBackend" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
