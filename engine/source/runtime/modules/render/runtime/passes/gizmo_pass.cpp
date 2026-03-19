@@ -41,12 +41,12 @@ namespace Hybrid
     {
         const RenderPacket& packet = *context.packet;
         const std::shared_ptr<Framebuffer>& framebuffer = context.framebuffer;
-        const std::shared_ptr<Shader>& box_colider_shader = context.box_colider_shader;
+        const std::shared_ptr<Shader>& collider_debug_shader = context.collider_debug_shader;
 
         if (!packet.showColliderDebug)
             return;
 
-        if (!framebuffer || !packet.scene || !box_colider_shader)
+        if (!framebuffer || !packet.scene || !collider_debug_shader)
             return;
 
         auto* debug_box_mesh = getOrCreateDebugBoxMeshGPU();
@@ -64,12 +64,12 @@ namespace Hybrid
         glDisable(GL_CULL_FACE);
         glLineWidth(2.0f);
 
-        box_colider_shader->bind();
-        box_colider_shader->setMat4("u_ViewProjection", packet.frame.viewProj);
+        collider_debug_shader->bind();
+        collider_debug_shader->setMat4("u_ViewProjection", packet.frame.viewProj);
 
         for (auto e : view)
         {
-            if (packet.selectedEntityID == kInvalidEntityID || entt::to_integral(e) != packet.selectedEntityID)
+            if (packet.activeEntityID == kInvalidEntityID || entt::to_integral(e) != packet.activeEntityID)
                 continue;
 
             const auto& tr = view.get<TransformComponent>(e);
@@ -86,8 +86,8 @@ namespace Hybrid
                 glm::scale(glm::mat4(1.0f), col.Box.HalfExtents * 2.0f);
 
             const glm::mat4 model = tr.WorldMatrix * collider_local;
-            box_colider_shader->setMat4("u_Model", model);
-            box_colider_shader->setVec4("u_Color", color);
+            collider_debug_shader->setMat4("u_Model", model);
+            collider_debug_shader->setVec4("u_Color", color);
 
             debug_box_mesh->vao->bind();
             RenderCommand::drawLinesIndexed(debug_box_mesh->index_count);

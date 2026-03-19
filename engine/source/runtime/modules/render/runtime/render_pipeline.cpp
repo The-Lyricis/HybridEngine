@@ -5,12 +5,13 @@ namespace Hybrid
     RenderPipeline::RenderPipeline()
         : m_pass_order
         {
-            RenderPassType::Forward,
+            RenderPassType::Scene,
             RenderPassType::Picking,
-            RenderPassType::SelectionOutline,
-            RenderPassType::Gizmos,
+            RenderPassType::SelectionMask,
+            RenderPassType::SelectionOverlay,
+            RenderPassType::Gizmo,
             //RenderPassType::Grid,
-            RenderPassType::Shadows,
+            RenderPassType::Shadow,
             RenderPassType::PostProcess,
             //RenderPassType::DebugNormals
         }
@@ -31,20 +32,21 @@ namespace Hybrid
     {
         switch (pass)
         {
-        case RenderPassType::Forward:
+        case RenderPassType::Scene:
             return HasFlag(flags, RenderFlags::Forward) ||
                    HasFlag(flags, RenderFlags::PickingID) ||
-                   HasFlag(flags, RenderFlags::SelectionOutline);
+                   HasFlag(flags, RenderFlags::SelectionHighlight);
         case RenderPassType::Picking:
             return HasFlag(flags, RenderFlags::PickingID);
-        case RenderPassType::SelectionOutline:
-            return HasFlag(flags, RenderFlags::SelectionOutline);
-        case RenderPassType::Gizmos:
-            return HasFlag(flags, RenderFlags::Gizmos);
+        case RenderPassType::SelectionMask:
+        case RenderPassType::SelectionOverlay:
+            return HasFlag(flags, RenderFlags::SelectionHighlight);
+        case RenderPassType::Gizmo:
+            return HasFlag(flags, RenderFlags::Gizmo);
         // case RenderPassType::Grid:
         //     return HasFlag(flags, RenderFlags::Grid);
-        case RenderPassType::Shadows:
-            return HasFlag(flags, RenderFlags::Shadows);
+        case RenderPassType::Shadow:
+            return HasFlag(flags, RenderFlags::Shadow);
         case RenderPassType::PostProcess:
             return HasFlag(flags, RenderFlags::PostProcess);
         // case RenderPassType::DebugNormals:
@@ -58,29 +60,33 @@ namespace Hybrid
     {
         switch (pass)
         {
-        case RenderPassType::Forward:
-            if (callbacks.forward)
-                callbacks.forward(context);
+        case RenderPassType::Scene:
+            if (callbacks.scene)
+                callbacks.scene(context);
             break;
         case RenderPassType::Picking:
             if (callbacks.picking)
                 callbacks.picking(context);
             break;
-        case RenderPassType::SelectionOutline:
-            if (callbacks.selection_outline)
-                callbacks.selection_outline(context);
+        case RenderPassType::SelectionMask:
+            if (callbacks.selection_mask)
+                callbacks.selection_mask(context);
             break;
-        case RenderPassType::Gizmos:
-            if (callbacks.gizmos)
-                callbacks.gizmos(context);
+        case RenderPassType::SelectionOverlay:
+            if (callbacks.selection_overlay)
+                callbacks.selection_overlay(context);
+            break;
+        case RenderPassType::Gizmo:
+            if (callbacks.gizmo)
+                callbacks.gizmo(context);
             break;
         // case RenderPassType::Grid:
         //     if (callbacks.grid)
         //         callbacks.grid(context);
         //     break;
-        case RenderPassType::Shadows:
-            if (callbacks.shadows)
-                callbacks.shadows(context);
+        case RenderPassType::Shadow:
+            if (callbacks.shadow)
+                callbacks.shadow(context);
             break;
         case RenderPassType::PostProcess:
             if (callbacks.post_process)

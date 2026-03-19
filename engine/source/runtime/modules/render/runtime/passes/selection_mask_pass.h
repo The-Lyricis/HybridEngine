@@ -4,7 +4,7 @@
 
 namespace Hybrid
 {
-    class ForwardPass
+    class SelectionMaskPass
     {
     public:
         void execute(RenderContext& context);

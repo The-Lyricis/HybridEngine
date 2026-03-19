@@ -38,6 +38,31 @@ namespace Hybrid
     {
         constexpr const char* kRenderSystemLogTag = "[RenderSystem]";
 
+        FramebufferSpec makeMainFramebufferSpec(uint32_t width, uint32_t height)
+        {
+            FramebufferSpec spec{};
+            spec.width = width;
+            spec.height = height;
+            spec.attachment_spec = {
+                FramebufferTextureFormat::RGBA8,
+                FramebufferTextureFormat::R32UI,
+                FramebufferTextureFormat::Depth32F
+            };
+            return spec;
+        }
+
+        FramebufferSpec makeSelectionFramebufferSpec(uint32_t width, uint32_t height)
+        {
+            FramebufferSpec spec{};
+            spec.width = width;
+            spec.height = height;
+            spec.attachment_spec = {
+                FramebufferTextureFormat::R8,
+                FramebufferTextureFormat::Depth32F
+            };
+            return spec;
+        }
+
         uint32_t encodeEntityID(uint32_t entity_id)
         {
             return entity_id + 1u;
@@ -69,6 +94,13 @@ namespace Hybrid
             if (len < 1e-4f)
                 return glm::vec3(0.0f, -1.0f, 0.0f);
             return dir / len;
+        }
+
+        uint32_t resolveActiveSelectionEntityID(const EditorRenderExt* editor_ext)
+        {
+            if (!editor_ext)
+                return kInvalidEntityID;
+            return editor_ext->selection.active_entity;
         }
         // Returns false if no valid camera found.
         static bool getSceneCameraMatrices(Hybrid::Scene& scene,
@@ -143,18 +175,17 @@ namespace Hybrid
         int w = 0, h = 0;
         glfwGetFramebufferSize(window, &w, &h);
 
-        FramebufferSpec spec;
-        spec.width = (uint32_t)std::max(1, w);
-        spec.height = (uint32_t)std::max(1, h);
-        m_SceneFB = Framebuffer::Create(spec);
-        m_GameFB = Framebuffer::Create(spec);
+        const uint32_t width = static_cast<uint32_t>(std::max(1, w));
+        const uint32_t height = static_cast<uint32_t>(std::max(1, h));
+        ensureSceneViewRenderTargets(width, height);
+        ensureFramebuffer(m_GameFB, makeMainFramebufferSpec(width, height));
 
         m_Initialized = true;
 
         HBD_CORE_INFO("{} initialize_completed framebuffer_size={}x{}",
                       kRenderSystemLogTag,
-                      spec.width,
-                      spec.height);
+                      width,
+                      height);
     }
 
     void RenderSystem::update(float dt)
@@ -169,8 +200,8 @@ namespace Hybrid
         m_ShaderReloadTimer = 0.0f;
         m_ShaderLibrary.reloadChanged();
 
-        m_MeshShader = m_ShaderLibrary.get("HybridDefault");
-        m_DebugBoxShader = m_ShaderLibrary.get("BoxColider");
+        m_SceneShader = m_ShaderLibrary.get("Scene");
+        m_ColliderDebugShader = m_ShaderLibrary.get("ColliderDebug");
     }
 
     MeshGPU *RenderSystem::getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh)
@@ -208,45 +239,54 @@ namespace Hybrid
     {
         m_ShaderLibrary.setRoot(std::filesystem::path(HYBRID_PROJECT_ROOT_DIR) / "engine/shader");
 
-        const bool mesh_ok = m_ShaderLibrary.load(
-            "HybridDefault",
-            "HybridDefault.vert",
-            "HybridDefault.frag");
-        const bool debug_box_ok = m_ShaderLibrary.load(
-            "BoxColider",
-            "BoxColider.vert",
-            "BoxColider.frag");
-        const bool selection_outline_ok = m_ShaderLibrary.load(
-            "SelectionOutline",
-            "SelectionOutline.vert",
-            "SelectionOutline.frag");
+        const bool scene_ok = m_ShaderLibrary.load(
+            "Scene",
+            "Scene.vert",
+            "Scene.frag");
+        const bool collider_debug_ok = m_ShaderLibrary.load(
+            "ColliderDebug",
+            "ColliderDebug.vert",
+            "ColliderDebug.frag");
+        const bool selection_mask_ok = m_ShaderLibrary.load(
+            "SelectionMask",
+            "SelectionMask.vert",
+            "SelectionMask.frag");
+        const bool selection_overlay_ok = m_ShaderLibrary.load(
+            "SelectionOverlay",
+            "SelectionOverlay.vert",
+            "SelectionOverlay.frag");
 
-        m_MeshShader = m_ShaderLibrary.get("HybridDefault");
-        m_DebugBoxShader = m_ShaderLibrary.get("BoxColider");
-        HBD_CORE_INFO("{} builtin_shaders_loaded mesh={} debug_box={} selection_outline={} mesh_shader_ready={} debug_box_shader_ready={}",
+        m_SceneShader = m_ShaderLibrary.get("Scene");
+        m_ColliderDebugShader = m_ShaderLibrary.get("ColliderDebug");
+        HBD_CORE_INFO("{} builtin_shaders_loaded scene={} collider_debug={} selection_mask={} selection_overlay={} scene_shader_ready={} collider_debug_shader_ready={}",
                       kRenderSystemLogTag,
-                      mesh_ok ? "true" : "false",
-                      debug_box_ok ? "true" : "false",
-                      selection_outline_ok ? "true" : "false",
-                      m_MeshShader ? "true" : "false",
-                      m_DebugBoxShader ? "true" : "false");
-        return mesh_ok && debug_box_ok && selection_outline_ok && m_MeshShader && m_DebugBoxShader;
+                      scene_ok ? "true" : "false",
+                      collider_debug_ok ? "true" : "false",
+                      selection_mask_ok ? "true" : "false",
+                      selection_overlay_ok ? "true" : "false",
+                      m_SceneShader ? "true" : "false",
+                      m_ColliderDebugShader ? "true" : "false");
+        return scene_ok && collider_debug_ok && selection_mask_ok && selection_overlay_ok && m_SceneShader && m_ColliderDebugShader;
     }
 
-    void RenderSystem::ensureFramebufferSize(std::shared_ptr<Framebuffer>& framebuffer, uint32_t w, uint32_t h)
+    void RenderSystem::ensureFramebuffer(std::shared_ptr<Framebuffer>& framebuffer, const FramebufferSpec& spec)
     {
-        w = std::max(1u, w);
-        h = std::max(1u, h);
-
         if (!framebuffer)
         {
-            FramebufferSpec spec{w, h};
             framebuffer = Framebuffer::Create(spec);
         }
         else
         {
-            framebuffer->resize(w, h);
+            framebuffer->resize(spec.width, spec.height);
         }
+    }
+
+    void RenderSystem::ensureSceneViewRenderTargets(uint32_t w, uint32_t h)
+    {
+        const uint32_t width = std::max(1u, w);
+        const uint32_t height = std::max(1u, h);
+        ensureFramebuffer(m_SceneFB, makeMainFramebufferSpec(width, height));
+        ensureFramebuffer(m_SelectionFB, makeSelectionFramebufferSpec(width, height));
     }
 
     uint32_t RenderSystem::getSceneColorTexture() const
@@ -263,8 +303,8 @@ namespace Hybrid
     {
         if (!m_Initialized)
             return;
-        ensureFramebufferSize(m_SceneFB, width, height);
-        ensureFramebufferSize(m_GameFB, width, height);
+        ensureSceneViewRenderTargets(width, height);
+        ensureFramebuffer(m_GameFB, makeMainFramebufferSpec(width, height));
     }
 
     void RenderSystem::invalidateAsset(AssetID id, AssetType type)
@@ -302,14 +342,9 @@ namespace Hybrid
         std::shared_ptr<Scene> scene = frame_context.scene ? frame_context.scene : m_Scene;
 
         bool use_game_camera = true;
-        uint32_t selected_entity_id = kInvalidEntityID;
         if (editor_ext)
         {
             use_game_camera = editor_ext->use_game_camera;
-            if (HasFlag(flags, RenderFlags::SelectionOutline))
-            {
-                selected_entity_id = editor_ext->selected_entity_id;
-            }
         }
 
         // A) resolve active camera (scene game camera or editor-provided camera).
@@ -354,9 +389,11 @@ namespace Hybrid
 
         pkt.scene = scene;
         pkt.showColliderDebug = editor_ext ? editor_ext->show_collider_debug : false;
-        pkt.selectedEntityID = editor_ext ? editor_ext->selected_entity_id : kInvalidEntityID;
+        pkt.activeEntityID = resolveActiveSelectionEntityID(editor_ext);
 
         // B) write packet
+        pkt.frame.view = viewM;
+        pkt.frame.proj = projM;
         pkt.frame.viewProj = projM * viewM;
         pkt.frame.cameraPos = cameraPos;
         pkt.frame.time = frame_context.dt;
@@ -426,7 +463,6 @@ namespace Hybrid
                 item.model = tr.WorldMatrix;
                 item.tint = mr.Tint;
                 item.entityID = (uint32_t)entt::to_integral(e);
-                item.selected = (selected_entity_id != kInvalidEntityID && item.entityID == selected_entity_id);
                 pkt.items.push_back(item);
             }
         }
@@ -442,19 +478,23 @@ namespace Hybrid
             [this]()
         {
             RenderPipelineCallbacks callbacks;
-            callbacks.forward = [this](RenderContext& context)
+            callbacks.scene = [this](RenderContext& context)
             {
-                m_ForwardPass.execute(context);
+                m_ScenePass.execute(context);
             };
             callbacks.picking = [this](RenderContext& context)
             {
                 m_PickingPass.execute(context);
             };
-            callbacks.selection_outline = [this](RenderContext& context)
+            callbacks.selection_mask = [this](RenderContext& context)
             {
-                m_SelectionOutlinePass.execute(context);
+                m_SelectionMaskPass.execute(context);
             };
-            callbacks.gizmos = [this](RenderContext& context)
+            callbacks.selection_overlay = [this](RenderContext& context)
+            {
+                m_SelectionOverlayPass.execute(context);
+            };
+            callbacks.gizmo = [this](RenderContext& context)
             {
                 m_GizmoPass.execute(context);
             };
@@ -462,7 +502,7 @@ namespace Hybrid
             // {
             //     m_GridPass.execute(context);
             // };
-            callbacks.shadows = [this](RenderContext& context)
+            callbacks.shadow = [this](RenderContext& context)
             {
                 m_ShadowPass.execute(context);
             };
@@ -497,9 +537,8 @@ namespace Hybrid
             {
                 FrameContext scene_frame = frame_context;
                 scene_frame.viewport_size = editor_ext->scene_viewport_size;
-                ensureFramebufferSize(m_SceneFB,
-                                      static_cast<uint32_t>(scene_frame.viewport_size.x),
-                                      static_cast<uint32_t>(scene_frame.viewport_size.y));
+                ensureSceneViewRenderTargets(static_cast<uint32_t>(scene_frame.viewport_size.x),
+                                             static_cast<uint32_t>(scene_frame.viewport_size.y));
 
                 EditorRenderExt scene_ext = *editor_ext;
                 scene_ext.use_game_camera = false;
@@ -507,9 +546,12 @@ namespace Hybrid
                 RenderContext scene_context{};
                 scene_context.frame = &scene_frame;
                 scene_context.packet = &scene_packet;
+                scene_context.editor_selection = &scene_ext.selection;
                 scene_context.flags = flags;
                 scene_context.window_handle = window_handle;
                 scene_context.framebuffer = m_SceneFB;
+                scene_context.scene_framebuffer = m_SceneFB;
+                scene_context.selection_framebuffer = m_SelectionFB;
                 scene_context.asset_manager = m_AssetManager;
                 scene_context.shader_library = &m_ShaderLibrary;
                 scene_context.material_system = &m_MaterialSystem;
@@ -517,8 +559,8 @@ namespace Hybrid
                 {
                     return getOrCreateMeshGPU(mesh_id, mesh);
                 };
-                scene_context.mesh_shader = m_MeshShader;
-                scene_context.box_colider_shader = m_DebugBoxShader;
+                scene_context.scene_shader = m_SceneShader;
+                scene_context.collider_debug_shader = m_ColliderDebugShader;
                 m_RenderPipeline.execute(scene_context, make_pipeline_callbacks());
                 rendered_any = true;
             }
@@ -529,9 +571,9 @@ namespace Hybrid
             {
                 FrameContext game_frame = frame_context;
                 game_frame.viewport_size = editor_ext->game_viewport_size;
-                ensureFramebufferSize(m_GameFB,
-                                      static_cast<uint32_t>(game_frame.viewport_size.x),
-                                      static_cast<uint32_t>(game_frame.viewport_size.y));
+                ensureFramebuffer(m_GameFB,
+                                  makeMainFramebufferSpec(static_cast<uint32_t>(game_frame.viewport_size.x),
+                                                          static_cast<uint32_t>(game_frame.viewport_size.y)));
 
                 EditorRenderExt game_ext = *editor_ext;
                 game_ext.use_game_camera = true;
@@ -541,9 +583,12 @@ namespace Hybrid
                 RenderContext game_context{};
                 game_context.frame = &game_frame;
                 game_context.packet = &game_packet;
+                game_context.editor_selection = &game_ext.selection;
                 game_context.flags = game_flags;
                 game_context.window_handle = window_handle;
                 game_context.framebuffer = m_GameFB;
+                game_context.scene_framebuffer = m_GameFB;
+                game_context.selection_framebuffer = nullptr;
                 game_context.asset_manager = m_AssetManager;
                 game_context.shader_library = &m_ShaderLibrary;
                 game_context.material_system = &m_MaterialSystem;
@@ -551,8 +596,8 @@ namespace Hybrid
                 {
                     return getOrCreateMeshGPU(mesh_id, mesh);
                 };
-                game_context.mesh_shader = m_MeshShader;
-                game_context.box_colider_shader = m_DebugBoxShader;
+                game_context.scene_shader = m_SceneShader;
+                game_context.collider_debug_shader = m_ColliderDebugShader;
                 m_RenderPipeline.execute(game_context, make_pipeline_callbacks());
                 rendered_any = true;
             }
@@ -564,17 +609,19 @@ namespace Hybrid
         if (frame_context.viewport_size.x <= 0.0f || frame_context.viewport_size.y <= 0.0f)
             return;
 
-        ensureFramebufferSize(m_SceneFB,
-                              static_cast<uint32_t>(frame_context.viewport_size.x),
-                              static_cast<uint32_t>(frame_context.viewport_size.y));
+        ensureSceneViewRenderTargets(static_cast<uint32_t>(frame_context.viewport_size.x),
+                                     static_cast<uint32_t>(frame_context.viewport_size.y));
 
         auto packet = buildRenderPacket(frame_context, flags, editor_ext, true);
         RenderContext context{};
         context.frame = &frame_context;
         context.packet = &packet;
+        context.editor_selection = editor_ext ? &editor_ext->selection : nullptr;
         context.flags = flags;
         context.window_handle = window_handle;
         context.framebuffer = m_SceneFB;
+        context.scene_framebuffer = m_SceneFB;
+        context.selection_framebuffer = m_SelectionFB;
         context.asset_manager = m_AssetManager;
         context.shader_library = &m_ShaderLibrary;
         context.material_system = &m_MaterialSystem;
@@ -582,19 +629,19 @@ namespace Hybrid
         {
             return getOrCreateMeshGPU(mesh_id, mesh);
         };
-        context.mesh_shader = m_MeshShader;
-        context.box_colider_shader = m_DebugBoxShader;
+        context.scene_shader = m_SceneShader;
+        context.collider_debug_shader = m_ColliderDebugShader;
         m_RenderPipeline.execute(context, make_pipeline_callbacks());
     }
     uint32_t RenderSystem::readEntityID(int x, int y) const
     {
         if (!m_SceneFB)
-            return 0;
+            return kInvalidEntityID;
         if (x < 0 || y < 0)
-            return 0;
+            return kInvalidEntityID;
         if (x >= static_cast<int>(m_SceneFB->getWidth()) ||
             y >= static_cast<int>(m_SceneFB->getHeight()))
-            return 0;
+            return kInvalidEntityID;
 
         m_SceneFB->bind();
 

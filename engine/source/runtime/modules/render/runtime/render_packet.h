@@ -17,6 +17,8 @@ namespace Hybrid
 
     struct RenderFrameData
     {
+        glm::mat4 view{1.0f};
+        glm::mat4 proj{1.0f};
         glm::mat4 viewProj{1.0f};
         glm::vec3 cameraPos{0.0f};
         glm::vec4 clearColor{0.1f, 0.1f, 0.12f, 1.0f};
@@ -53,7 +55,6 @@ namespace Hybrid
         glm::mat4 model{1.0f};
         glm::vec4 tint{1.0f};
         uint32_t entityID = 0;
-        bool selected = false;
     };
 
     struct RenderPacket
@@ -62,7 +63,7 @@ namespace Hybrid
         RenderLightData lights;
         std::vector<RenderDrawItem> items;
         bool showColliderDebug = false;
-        uint32_t selectedEntityID = kInvalidEntityID;
+        uint32_t activeEntityID = kInvalidEntityID;
         std::shared_ptr<Scene> scene;
     };
 } // namespace Hybrid

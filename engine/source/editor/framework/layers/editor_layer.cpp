@@ -362,8 +362,17 @@ namespace Hybrid
         editor_ext->render_game_view = ctx.game_viewport_size.x > 1.0f && ctx.game_viewport_size.y > 1.0f;
         editor_ext->scene_viewport_size = {ctx.scene_viewport_size.x, ctx.scene_viewport_size.y};
         editor_ext->game_viewport_size = {ctx.game_viewport_size.x, ctx.game_viewport_size.y};
-        editor_ext->selected_entity_id =
+        editor_ext->selection.selected_entities.clear();
+        editor_ext->selection.selected_entities.reserve(ctx.selection.items.size());
+        for (entt::entity selected : ctx.selection.items)
+        {
+            if (selected == entt::null)
+                continue;
+            editor_ext->selection.selected_entities.push_back(static_cast<uint32_t>(entt::to_integral(selected)));
+        }
+        editor_ext->selection.active_entity =
             (ctx.activeEntity() == entt::null) ? kInvalidEntityID : static_cast<uint32_t>(entt::to_integral(ctx.activeEntity()));
+        editor_ext->selection.hovered_entity = kInvalidEntityID;
         editor_ext->pan_tool = ctx.pan_tool;
         editor_ext->show_collider_debug = ctx.show_collider_debug;
 
@@ -379,9 +388,9 @@ namespace Hybrid
             editor_ext->has_editor_camera = false;
         }
 
-        *render_flags = RenderFlags::Forward | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmos;
-        if (editor_ext->selected_entity_id != kInvalidEntityID)
-            *render_flags |= RenderFlags::SelectionOutline;
+        *render_flags = RenderFlags::Forward | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmo;
+        if (!editor_ext->selection.selected_entities.empty())
+            *render_flags |= RenderFlags::SelectionHighlight;
 
         if (ctx.request_pick)
         {

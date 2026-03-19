@@ -15,7 +15,7 @@
 #include "runtime/modules/asset/mesh.h"
 #include "runtime/modules/render/runtime/editor_render_ext.h"
 #include "runtime/modules/render/runtime/passes/grid_pass.h"
-#include "runtime/modules/render/runtime/passes/forward_pass.h"
+#include "runtime/modules/render/runtime/passes/scene_pass.h"
 #include "runtime/modules/render/runtime/passes/gizmo_pass.h"
 #include "runtime/modules/render/runtime/passes/picking_pass.h"
 #include "runtime/modules/render/runtime/passes/post_process_pass.h"
@@ -23,13 +23,15 @@
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/mesh_gpu.h"
+#include "runtime/modules/render/runtime/passes/selection_overlay_pass.h"
+#include "runtime/modules/render/runtime/passes/selection_mask_pass.h"
 #include "runtime/modules/render/runtime/render_packet.h"
 #include "runtime/modules/render/runtime/render_pipeline.h"
 #include "runtime/modules/render/runtime/render_flags.h"
-#include "runtime/modules/render/runtime/passes/selection_outline_pass.h"
 #include "runtime/modules/render/runtime/shader_library.h"
 #include "runtime/modules/render/runtime/passes/shadow_pass.h"
 #include "runtime/modules/render/runtime/passes/debug_normals_pass.h"
+#include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/texture.h"
 
 namespace Hybrid
@@ -68,7 +70,8 @@ namespace Hybrid
         const glm::mat4& getLastProj() const { return m_LastProj; }
 
     private:
-        void ensureFramebufferSize(std::shared_ptr<Framebuffer>& framebuffer, uint32_t w, uint32_t h);
+        void ensureFramebuffer(std::shared_ptr<Framebuffer>& framebuffer, const FramebufferSpec& spec);
+        void ensureSceneViewRenderTargets(uint32_t w, uint32_t h);
         bool loadBuiltinShaders();
 
         static constexpr int kMaxPointLights = 16;
@@ -85,20 +88,22 @@ namespace Hybrid
         std::shared_ptr<Scene> m_Scene; // Fallback scene source when frame context has no scene.
 
         std::shared_ptr<Framebuffer> m_SceneFB;
+        std::shared_ptr<Framebuffer> m_SelectionFB;
         std::shared_ptr<Framebuffer> m_GameFB;
-        std::shared_ptr<Shader> m_MeshShader;
-        std::shared_ptr<Shader> m_DebugBoxShader;
+        std::shared_ptr<Shader> m_SceneShader;
+        std::shared_ptr<Shader> m_ColliderDebugShader;
         ShaderLibrary m_ShaderLibrary;
         MaterialSystem m_MaterialSystem;
         RenderPipeline m_RenderPipeline;
-        ForwardPass m_ForwardPass;
+        ScenePass m_ScenePass;
         PickingPass m_PickingPass;
         GizmoPass m_GizmoPass;
         //GridPass m_GridPass;
         ShadowPass m_ShadowPass;
         PostProcessPass m_PostProcessPass;
         //DebugNormalsPass m_DebugNormalsPass;
-        SelectionOutlinePass m_SelectionOutlinePass;
+        SelectionMaskPass m_SelectionMaskPass;
+        SelectionOverlayPass m_SelectionOverlayPass;
 
         std::shared_ptr<AssetManager> m_AssetManager;
         std::unordered_map<AssetID, MeshGPU, AssetID::Hasher> m_MeshCache;
@@ -114,5 +119,3 @@ namespace Hybrid
     };
 
 } // namespace Hybrid
-
-

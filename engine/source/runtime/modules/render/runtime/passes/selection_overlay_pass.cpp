@@ -1,10 +1,6 @@
-#include "selection_outline_pass.h"
+#include "selection_overlay_pass.h"
 
-#include <algorithm>
 #include <array>
-
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
 
 #include <glad/gl.h>
 
@@ -33,77 +29,96 @@ namespace Hybrid
         }
     }
 
-    void SelectionOutlinePass::execute(RenderContext& context)
+    void SelectionOverlayPass::execute(RenderContext& context)
     {
-        const RenderPacket& packet = *context.packet;
-        const std::shared_ptr<Framebuffer>& framebuffer = context.framebuffer;
-        if (!framebuffer || packet.selectedEntityID == kInvalidEntityID || context.shader_library == nullptr)
-            return;
+        const std::shared_ptr<Framebuffer>& scene_framebuffer = context.scene_framebuffer;
+        const std::shared_ptr<Framebuffer>& selection_framebuffer = context.selection_framebuffer;
+        const EditorSelectionState* selection = context.editor_selection;
 
-        auto shader = context.shader_library->get("SelectionOutline");
+        if (!scene_framebuffer || !selection_framebuffer || !selection || selection->selected_entities.empty() ||
+            context.shader_library == nullptr)
+        {
+            return;
+        }
+
+        auto shader = context.shader_library->get("SelectionOverlay");
         if (!shader)
             return;
 
-        ensureInputFramebuffer(framebuffer->getWidth(), framebuffer->getHeight());
+        ensureInputFramebuffer(scene_framebuffer->getWidth(), scene_framebuffer->getHeight());
         if (!m_InputFramebuffer)
             return;
 
-        const uint32_t width = framebuffer->getWidth();
-        const uint32_t height = framebuffer->getHeight();
-        const uint32_t src_color = framebuffer->getColorAttachmentRendererID(0);
-        const uint32_t src_id = framebuffer->getColorAttachmentRendererID(1);
-        const uint32_t copy_color = m_InputFramebuffer->getColorAttachmentRendererID(0);
-        const uint32_t copy_id = m_InputFramebuffer->getColorAttachmentRendererID(1);
+        const uint32_t width = scene_framebuffer->getWidth();
+        const uint32_t height = scene_framebuffer->getHeight();
 
-        glCopyImageSubData(src_color, GL_TEXTURE_2D, 0, 0, 0, 0,
-                           copy_color, GL_TEXTURE_2D, 0, 0, 0, 0,
+        // Snapshot the scene inputs first to avoid sampling from the same target
+        // that this pass writes back into.
+        glCopyImageSubData(scene_framebuffer->getColorAttachmentRendererID(0), GL_TEXTURE_2D, 0, 0, 0, 0,
+                           m_InputFramebuffer->getColorAttachmentRendererID(0), GL_TEXTURE_2D, 0, 0, 0, 0,
                            static_cast<GLsizei>(width), static_cast<GLsizei>(height), 1);
-        glCopyImageSubData(src_id, GL_TEXTURE_2D, 0, 0, 0, 0,
-                           copy_id, GL_TEXTURE_2D, 0, 0, 0, 0,
+        glCopyImageSubData(scene_framebuffer->getDepthAttachmentRendererID(), GL_TEXTURE_2D, 0, 0, 0, 0,
+                           m_InputFramebuffer->getDepthAttachmentRendererID(), GL_TEXTURE_2D, 0, 0, 0, 0,
                            static_cast<GLsizei>(width), static_cast<GLsizei>(height), 1);
 
         auto* quad = getOrCreateFullscreenQuad();
         if (!quad)
             return;
 
-        framebuffer->bind();
+        scene_framebuffer->bind();
         setSceneFramebufferDrawBuffers(false);
         RenderCommand::setViewport(0, 0, width, height);
 
         glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_FALSE);
         glDisable(GL_CULL_FACE);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_BLEND);
 
         shader->bind();
-        shader->setInt("u_EntityIDTex", 0);
-        shader->setUInt("u_SelectedEntityID", packet.selectedEntityID + 1u);
+        shader->setInt("u_SceneColorTex", 0);
+        shader->setInt("u_SceneDepthTex", 1);
+        shader->setInt("u_SelectedMaskTex", 2);
+        shader->setInt("u_SelectedDepthTex", 3);
         shader->setFloat("u_TexelWidth", width > 0 ? 1.0f / static_cast<float>(width) : 0.0f);
         shader->setFloat("u_TexelHeight", height > 0 ? 1.0f / static_cast<float>(height) : 0.0f);
-        shader->setVec4("u_OutlineColor", glm::vec4(0.836f, 0.292f, 0.312f, 0.95f));
+        shader->setFloat("u_DepthEpsilon", 1e-5f);
+        shader->setVec4("u_VisibleOutlineColor", glm::vec4(0.836f, 0.292f, 0.312f, 0.95f));
+        shader->setVec4("u_OccludedOutlineColor", glm::vec4(0.320f, 0.360f, 0.500f, 0.40f));
+        shader->setVec4("u_FillColor", glm::vec4(0.836f, 0.292f, 0.312f, 0.12f));
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, copy_id);
+        glBindTexture(GL_TEXTURE_2D, m_InputFramebuffer->getColorAttachmentRendererID(0));
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, m_InputFramebuffer->getDepthAttachmentRendererID());
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, selection_framebuffer->getColorAttachmentRendererID(0));
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_2D, selection_framebuffer->getDepthAttachmentRendererID());
 
         quad->vao->bind();
         RenderCommand::drawIndexed(quad->index_count);
 
-        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
         glEnable(GL_CULL_FACE);
         setSceneFramebufferDrawBuffers(true);
-        framebuffer->unbind();
+        scene_framebuffer->unbind();
     }
 
-    void SelectionOutlinePass::ensureInputFramebuffer(uint32_t width, uint32_t height)
+    void SelectionOverlayPass::ensureInputFramebuffer(uint32_t width, uint32_t height)
     {
         width = std::max(1u, width);
         height = std::max(1u, height);
 
+        FramebufferSpec spec{};
+        spec.width = width;
+        spec.height = height;
+        spec.attachment_spec = {
+            FramebufferTextureFormat::RGBA8,
+            FramebufferTextureFormat::Depth32F
+        };
+
         if (!m_InputFramebuffer)
         {
-            FramebufferSpec spec{};
-            spec.width = width;
-            spec.height = height;
             m_InputFramebuffer = Framebuffer::Create(spec);
             return;
         }
@@ -112,7 +127,7 @@ namespace Hybrid
             m_InputFramebuffer->resize(width, height);
     }
 
-    SelectionOutlinePass::FullscreenQuadGPU* SelectionOutlinePass::getOrCreateFullscreenQuad()
+    SelectionOverlayPass::FullscreenQuadGPU* SelectionOverlayPass::getOrCreateFullscreenQuad()
     {
         if (m_HasFullscreenQuad)
             return &m_FullscreenQuad;

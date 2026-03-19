@@ -10,10 +10,10 @@ namespace Hybrid
         None = 0,
         Forward = 1u << 0,           // Main color pass.
         PickingID = 1u << 1,         // Entity-ID output for picking.
-        SelectionOutline = 1u << 2,  // Selection highlight/outline pass.
-        Gizmos = 1u << 3,            // Editor gizmo overlay pass.
+        SelectionHighlight = 1u << 2, // Editor selection highlight pipeline.
+        Gizmo = 1u << 3,             // Editor gizmo overlay pass.
         Grid = 1u << 4,              // Editor/world grid overlay pass.
-        Shadows = 1u << 5,           // Shadow map pass.
+        Shadow = 1u << 5,            // Shadow map pass.
         PostProcess = 1u << 6,       // Post-process chain.
         DebugNormals = 1u << 7       // Debug normal visualization.
     };

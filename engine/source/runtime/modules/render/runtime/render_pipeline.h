@@ -10,24 +10,26 @@ namespace Hybrid
 {
     enum class RenderPassType : unsigned char
     {
-        Forward,
+        Scene,
         Picking,
-        SelectionOutline,
-        Gizmos,
+        SelectionMask,
+        SelectionOverlay,
+        Gizmo,
         // Grid,
-        Shadows,
+        Shadow,
         PostProcess,
         //DebugNormals
     };
 
     struct RenderPipelineCallbacks
     {
-        std::function<void(RenderContext&)> forward;
+        std::function<void(RenderContext&)> scene;
         std::function<void(RenderContext&)> picking;
-        std::function<void(RenderContext&)> selection_outline;
-        std::function<void(RenderContext&)> gizmos;
+        std::function<void(RenderContext&)> selection_mask;
+        std::function<void(RenderContext&)> selection_overlay;
+        std::function<void(RenderContext&)> gizmo;
         // std::function<void(RenderContext&)> grid;
-        std::function<void(RenderContext&)> shadows;
+        std::function<void(RenderContext&)> shadow;
         std::function<void(RenderContext&)> post_process;
         //std::function<void(RenderContext&)> debug_normals;
     };

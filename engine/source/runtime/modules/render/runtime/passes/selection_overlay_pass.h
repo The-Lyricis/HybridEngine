@@ -11,7 +11,7 @@ namespace Hybrid
     class VertexBuffer;
     class IndexBuffer;
 
-    class SelectionOutlinePass
+    class SelectionOverlayPass
     {
     public:
         void execute(RenderContext& context);

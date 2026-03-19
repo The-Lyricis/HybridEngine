@@ -255,7 +255,9 @@ namespace Hybrid
         m_HasPendingPickResult = false;
         m_LastPickResult = kInvalidEntityID;
         m_EditorRenderExt.request_pick = false;
-        m_EditorRenderExt.selected_entity_id = kInvalidEntityID;
+        m_EditorRenderExt.selection.selected_entities.clear();
+        m_EditorRenderExt.selection.active_entity = kInvalidEntityID;
+        m_EditorRenderExt.selection.hovered_entity = kInvalidEntityID;
 
         m_EditorScene = std::move(scene);
         m_SceneManager.setActiveScene(m_EditorScene);

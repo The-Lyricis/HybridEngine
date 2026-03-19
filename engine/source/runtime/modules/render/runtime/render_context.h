@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "runtime/modules/asset/asset_manager.h"
+#include "runtime/modules/render/runtime/editor_render_ext.h"
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/mesh_gpu.h"
@@ -21,16 +22,19 @@ namespace Hybrid
     {
         const FrameContext* frame = nullptr;
         const RenderPacket* packet = nullptr;
+        const EditorSelectionState* editor_selection = nullptr;
         RenderFlags flags = RenderFlags::None;
         void* window_handle = nullptr;
         std::shared_ptr<Framebuffer> framebuffer;
+        std::shared_ptr<Framebuffer> scene_framebuffer;
+        std::shared_ptr<Framebuffer> selection_framebuffer;
 
         std::shared_ptr<AssetManager> asset_manager;
         ShaderLibrary* shader_library = nullptr;
         MaterialSystem* material_system = nullptr;
         std::function<MeshGPU*(AssetID, const std::shared_ptr<Mesh>&)> resolve_mesh_gpu;
 
-        std::shared_ptr<Shader> mesh_shader;
-        std::shared_ptr<Shader> box_colider_shader;
+        std::shared_ptr<Shader> scene_shader;
+        std::shared_ptr<Shader> collider_debug_shader;
     };
 } // namespace Hybrid

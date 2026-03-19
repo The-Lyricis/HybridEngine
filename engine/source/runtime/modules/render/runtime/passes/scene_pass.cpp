@@ -1,4 +1,4 @@
-#include "forward_pass.h"
+#include "scene_pass.h"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -35,11 +35,11 @@ namespace Hybrid
         }
     }
 
-    void ForwardPass::execute(RenderContext& context)
+    void ScenePass::execute(RenderContext& context)
     {
         const RenderPacket& packet = *context.packet;
         const std::shared_ptr<Framebuffer>& framebuffer = context.framebuffer;
-        const std::shared_ptr<Shader>& mesh_shader = context.mesh_shader;
+        const std::shared_ptr<Shader>& scene_shader = context.scene_shader;
         auto asset_manager = context.asset_manager;
         auto* material_system = context.material_system;
 
@@ -53,31 +53,31 @@ namespace Hybrid
         uint32_t zero = 0;
         glClearBufferuiv(GL_COLOR, 1, &zero);
 
-        if (asset_manager && material_system && mesh_shader && context.resolve_mesh_gpu)
+        if (asset_manager && material_system && scene_shader && context.resolve_mesh_gpu)
         {
-            mesh_shader->bind();
-            mesh_shader->setMat4("u_ViewProjection", packet.frame.viewProj);
-            mesh_shader->setVec3("u_CameraPos", packet.frame.cameraPos);
-            mesh_shader->setVec3("u_DirLight.color", packet.lights.dir.color);
-            mesh_shader->setFloat("u_DirLight.intensity", packet.lights.dir.intensity);
-            mesh_shader->setVec3("u_DirLight.direction", packet.lights.dir.direction);
-            mesh_shader->setInt("u_PointCount", static_cast<int>(packet.lights.points.size()));
+            scene_shader->bind();
+            scene_shader->setMat4("u_ViewProjection", packet.frame.viewProj);
+            scene_shader->setVec3("u_CameraPos", packet.frame.cameraPos);
+            scene_shader->setVec3("u_DirLight.color", packet.lights.dir.color);
+            scene_shader->setFloat("u_DirLight.intensity", packet.lights.dir.intensity);
+            scene_shader->setVec3("u_DirLight.direction", packet.lights.dir.direction);
+            scene_shader->setInt("u_PointCount", static_cast<int>(packet.lights.points.size()));
 
             for (int i = 0; i < static_cast<int>(packet.lights.points.size()) && i < 16; ++i)
             {
                 const auto& p = packet.lights.points[i];
                 std::string base = "u_PointLights[" + std::to_string(i) + "]";
-                mesh_shader->setVec3(base + ".color", p.color);
-                mesh_shader->setFloat(base + ".intensity", p.intensity);
-                mesh_shader->setVec3(base + ".position", p.position);
-                mesh_shader->setFloat(base + ".range", p.range);
+                scene_shader->setVec3(base + ".color", p.color);
+                scene_shader->setFloat(base + ".intensity", p.intensity);
+                scene_shader->setVec3(base + ".position", p.position);
+                scene_shader->setFloat(base + ".range", p.range);
             }
 
-            mesh_shader->setInt("u_AlbedoMap", 0);
-            mesh_shader->setInt("u_NormalMap", 1);
-            mesh_shader->setInt("u_MRMap", 2);
-            mesh_shader->setInt("u_AOMap", 3);
-            mesh_shader->setInt("u_EmissiveMap", 4);
+            scene_shader->setInt("u_AlbedoMap", 0);
+            scene_shader->setInt("u_NormalMap", 1);
+            scene_shader->setInt("u_MRMap", 2);
+            scene_shader->setInt("u_AOMap", 3);
+            scene_shader->setInt("u_EmissiveMap", 4);
 
             for (const auto& item : packet.items)
             {
@@ -125,10 +125,10 @@ namespace Hybrid
                         }
                     }
 
-                    mesh_shader->setMat4("u_Model", item.model);
-                    mesh_shader->setVec4("u_TintColor", item.tint);
-                    mesh_shader->setUInt("u_EntityID", encodeEntityID(item.entityID));
-                    use_material->bind(*mesh_shader);
+                    scene_shader->setMat4("u_Model", item.model);
+                    scene_shader->setVec4("u_TintColor", item.tint);
+                    scene_shader->setUInt("u_EntityID", encodeEntityID(item.entityID));
+                    use_material->bind(*scene_shader);
 
                     mesh_gpu->vao->bind();
                     RenderCommand::drawIndexed(submesh.index_count, submesh.index_offset);

@@ -275,7 +275,7 @@ namespace Hybrid
                                       kInspectorPanelLogTag,
                                       entityHandleValue(selected_entity.GetHandle()),
                                       desc.name);
-                        if (std::strcmp(desc.name, "BoxColider") == 0 && ctx.fit_box_collider_to_mesh)
+                        if (std::strcmp(desc.name, "BoxCollider") == 0 && ctx.fit_box_collider_to_mesh)
                             (void)ctx.fit_box_collider_to_mesh(selected_entity.GetHandle());
                         ctx.markSceneDirty();
                     }
