@@ -8,7 +8,7 @@ namespace Hybrid
     enum class RenderFlags : uint32_t
     {
         None = 0,
-        Forward = 1u << 0,           // Main color pass.
+        Scene = 1u << 0,             // Main scene pass.
         PickingID = 1u << 1,         // Entity-ID output for picking.
         SelectionHighlight = 1u << 2, // Editor selection highlight pipeline.
         Gizmo = 1u << 3,             // Editor gizmo overlay pass.

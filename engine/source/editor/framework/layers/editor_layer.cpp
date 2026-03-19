@@ -388,7 +388,7 @@ namespace Hybrid
             editor_ext->has_editor_camera = false;
         }
 
-        *render_flags = RenderFlags::Forward | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmo;
+        *render_flags = RenderFlags::Scene | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmo;
         if (!editor_ext->selection.selected_entities.empty())
             *render_flags |= RenderFlags::SelectionHighlight;
 

@@ -36,7 +36,6 @@
 
 namespace Hybrid
 {
-
     class Framebuffer;
     class VertexArray;
     class VertexBuffer;
@@ -51,7 +50,7 @@ namespace Hybrid
         RenderSystem() = default;
         ~RenderSystem() = default;
 
-        void initialize(void *glfwWindowHandle);
+        void initialize(void* glfwWindowHandle);
         void update(float dt);
         void setAssetManager(std::shared_ptr<AssetManager> mgr);
         void setScene(std::shared_ptr<Scene> scene) { m_Scene = std::move(scene); }
@@ -81,8 +80,7 @@ namespace Hybrid
                                        RenderFlags flags,
                                        const EditorRenderExt* editor_ext,
                                        bool cache_editor_camera_state = true);
-        MeshGPU *getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh);
-        
+        MeshGPU* getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh>& mesh);
 
     private:
         std::shared_ptr<Scene> m_Scene; // Fallback scene source when frame context has no scene.
@@ -114,8 +112,5 @@ namespace Hybrid
 
         glm::mat4 m_LastView = glm::mat4(1.0f);
         glm::mat4 m_LastProj = glm::mat4(1.0f);
-
-        
     };
-
 } // namespace Hybrid

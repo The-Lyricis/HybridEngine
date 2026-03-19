@@ -578,7 +578,7 @@ namespace Hybrid
                 EditorRenderExt game_ext = *editor_ext;
                 game_ext.use_game_camera = true;
                 game_ext.has_editor_camera = false;
-                const RenderFlags game_flags = RenderFlags::Forward;
+                const RenderFlags game_flags = RenderFlags::Scene;
                 auto game_packet = buildRenderPacket(game_frame, game_flags, &game_ext, false);
                 RenderContext game_context{};
                 game_context.frame = &game_frame;

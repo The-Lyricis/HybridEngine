@@ -33,7 +33,7 @@ namespace Hybrid
         switch (pass)
         {
         case RenderPassType::Scene:
-            return HasFlag(flags, RenderFlags::Forward) ||
+            return HasFlag(flags, RenderFlags::Scene) ||
                    HasFlag(flags, RenderFlags::PickingID) ||
                    HasFlag(flags, RenderFlags::SelectionHighlight);
         case RenderPassType::Picking:

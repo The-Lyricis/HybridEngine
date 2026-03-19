@@ -93,7 +93,7 @@ namespace Hybrid
         PhysicsSystem m_PhysicsSystem;
         SceneManager m_SceneManager;                           // Active scene manager.
         FrameContext m_FrameContext{};                         // Per-frame runtime render payload.
-        RenderFlags m_RenderFlags = RenderFlags::Forward;      // Enabled render passes this frame.
+        RenderFlags m_RenderFlags = RenderFlags::Scene;        // Enabled render passes this frame.
         EditorRenderExt m_EditorRenderExt{};                   // Optional editor-side render extension.
         bool m_HasPendingPickResult = false;                   // Whether a pick readback is ready.
         uint32_t m_LastPickResult = kInvalidEntityID;          // Last entity id read from ID buffer.
