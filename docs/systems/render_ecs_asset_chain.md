@@ -1,14 +1,14 @@
 # Render ECS Asset Chain
 
-Updated: 2026-03-10
-Scope: `TDA572/engine/source/runtime/modules/render/runtime`, `TDA572/engine/source/editor`
+Updated: 2026-03-19
+Scope: `TDA572/engine/source/runtime/modules/render/runtime`, `TDA572/engine/source/runtime/modules/asset`, `TDA572/engine/source/editor`
 
 ## Purpose
 
 This document records the current state of the Mesh / Material / ECS / editor render chain and the concrete implementation issues that were hit while building it.
 
 This is not a plan file.
-It is an engineering chain record.
+It is a chain record for the current implementation.
 
 ## Current Chain Structure
 
@@ -18,23 +18,19 @@ The current main chain is:
 - organize frame data in `RenderPacket`
 - feed Mesh / Material through `AssetID`
 - let `RenderSystem` resolve CPU assets and manage GPU caches
-- submit draw calls through the forward pass
+- execute the render pipeline through explicit passes
 
 ## Current Implementation State
 
-### 1. RenderSystem split
+### 1. Render-system split
 
-`RenderSystem` has already been split into:
+`RenderSystem` is now organized around:
 
 - `buildRenderPacket(...)`
-- `executePasses(...)`
-- `executeForwardPass(...)`
+- `RenderPipeline::execute(...)`
+- pass execution through `RenderContext`
 
-Benefits:
-
-- CPU extraction and GPU submission are separated
-- shadow / outline / post-process can grow on top of this structure
-- `renderFrame(...)` no longer keeps expanding
+This keeps ECS extraction, pass scheduling, and GPU submission separate.
 
 ### 2. Mesh / Material asset path
 
@@ -42,13 +38,13 @@ The current main path is asset-driven:
 
 - Mesh enters the render path through `AssetID`
 - Material enters the render path through `AssetID`
-- `RenderSystem` owns `MeshGPUCache` and `MaterialGPUCache`
-- the default cube has already been moved onto this asset path
-- the old cube fallback path is now compatibility-only logic
+- `RenderSystem` owns mesh GPU cache state
+- the default cube already goes through this asset path
+- old primitive fallback behavior has been reduced to compatibility-only handling
 
 ### 3. Material and shader path
 
-Current material support:
+Current material support includes:
 
 - albedo
 - metallic
@@ -57,18 +53,18 @@ Current material support:
 - emissive
 - normal map
 
-Current shader rules:
+Current shader-side rules include:
 
 - `MeshVertex::tangent` is `vec4`
 - `tangent.w` stores handedness
 - normal-map sampling includes tangent-length protection
 - the default MR texture is neutral
 - MR uses multiplicative modulation
-- emissive is accumulated independently and is no longer multiplied by albedo
+- emissive is accumulated independently from albedo
 
 ### 4. Lighting path
 
-Current lighting support:
+Current lighting support includes:
 
 - one directional light
 - multiple point lights
@@ -76,7 +72,26 @@ Current lighting support:
 Directional-light rule:
 
 - direction is derived from `TransformComponent`
-- there is no long-lived duplicate `direction` field in `DirectionalLightComponent`
+- there is no duplicated long-lived direction field in `DirectionalLightComponent`
+
+### 5. Current render passes
+
+The current render pass set is:
+
+- `ScenePass`
+- `PickingPass`
+- `SelectionMaskPass`
+- `SelectionOverlayPass`
+- `GizmoPass`
+- `ShadowPass`
+- `PostProcessPass`
+
+Current builtin shader registrations are:
+
+- `Scene`
+- `ColliderDebug`
+- `SelectionMask`
+- `SelectionOverlay`
 
 ## Editor and Runtime Integration
 
@@ -105,6 +120,27 @@ The following rules are also enforced:
 - shutdown exits Play first
 - Stop clears selection and pending-pick state before later UI work touches stale runtime data
 
+## Selection Highlight Chain
+
+The current editor selection highlight path is:
+
+- `SelectionMaskPass` writes the selected set into a projected union mask
+- `SelectionOverlayPass` extracts the outline from that projected mask
+- `SceneDepth` and `SelectedDepth` are used only for visible vs occluded style classification
+
+This means:
+
+- contour source comes from the projected selected-union mask
+- non-selected geometry does not cut the contour source
+- multiple selected objects produce one outer union outline
+- internal seams between selected objects do not produce outlines
+
+The current visible / occluded styling is already active:
+
+- visible outline uses the main warm accent color
+- occluded outline uses a weaker, cooler color
+- fill is only applied to visible selected pixels
+
 ## Problems Hit and Fixes
 
 ### 1. Valid entity `0` could not be picked
@@ -129,13 +165,13 @@ Fix:
 
 Problem:
 
-- editor-only passes shared the same framebuffer with the forward pass
+- editor-only passes shared the same framebuffer with the scene pass
 - helper shaders did not write EntityID
 - draw-buffer state could therefore damage the picking attachment
 
 Fix:
 
-- forward pass writes `COLOR0 + COLOR1`
+- scene pass writes `COLOR0 + COLOR1`
 - gizmo / helper passes write `COLOR0` only
 
 ### 3. Play-mode editing modified the wrong scene
@@ -166,11 +202,25 @@ Fix:
 - editor context is synchronized right away
 - later UI work in the same frame no longer sees the old runtime scene
 
+### 5. Selection outline semantics were wrong
+
+Problem:
+
+- the original outline approach treated visible scene-space mask edges as the contour source
+- unselected objects could cut the contour and create internal crossing outlines
+- geometry-shell outline experiments produced unwanted internal hard-edge outlines
+
+Fix:
+
+- the contour source was redefined as the projected selected-union mask
+- the overlay pass now extracts the outline from that projected mask
+- depth is retained only for visible vs occluded style classification
+
 ## Current Open Issues
 
 - frame/light data still uses per-uniform uploads
-- prepare / sort is still thin
-- outline / shadow / post-process are still pending work
+- prepare / sort layering is still thin
+- the current overlay path is correct for editor selection semantics, but configurable styling is still hard-coded in the pass
 
 ## Future Improvement Plan
 
@@ -178,4 +228,4 @@ I plan to continue in this order:
 
 1. I will implement Frame UBO + Light UBO first.
 2. I will continue to fill in the prepare / sort layer.
-3. After those two steps are stable, I will continue with shadow, outline, post-process, and any higher-level pipeline abstraction.
+3. After those two steps are stable, I will move selection overlay styling out of hard-coded pass constants and make it editor-configurable.
