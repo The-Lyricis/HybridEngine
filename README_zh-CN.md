@@ -1,4 +1,8 @@
-# Hybrid Engine
+<h1>
+  <img src="docs/images/hybrid_icon.png" alt="Hybrid Engine Icon" width="42" valign="middle" />
+  Hybrid Engine
+</h1>
+
 [![README](https://img.shields.io/badge/README-English-374151?style=flat-square)](README.md)
 [![README](https://img.shields.io/badge/README-Simplified%20Chinese-111827?style=flat-square)](README_zh-CN.md)
 [![C++](https://img.shields.io/badge/Language-C%2B%2B-00599C?logo=c%2B%2B&style=flat-square)](https://isocpp.org/)
