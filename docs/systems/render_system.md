@@ -1,11 +1,11 @@
 # Render System
 
-Updated: 2026-03-19
+Updated: 2026-03-21
 Scope: `TDA572/engine/source/runtime/modules/render`, `TDA572/engine/source/editor`
 
 ## Purpose
 
-This document describes the current render-system structure, pass naming, and the main runtime/editor integration points.
+This document describes the current render-system structure, pass naming, runtime/editor integration points, and the current platform/backend scope.
 
 Detailed notes about the Mesh / Material / ECS / editor data path are tracked in:
 
@@ -13,7 +13,7 @@ Detailed notes about the Mesh / Material / ECS / editor data path are tracked in
 
 ## Current Structure
 
-The render system is now organized around packet extraction plus pass dispatch.
+The render system is organized around packet extraction plus pass dispatch.
 
 Current high-level flow:
 
@@ -87,7 +87,7 @@ This keeps pass inputs explicit instead of pulling state directly from `RenderSy
 
 ## Shader Naming
 
-The builtin shader registrations now follow pass or responsibility naming.
+The builtin shader registrations follow pass or responsibility naming.
 
 Current builtin shader names are:
 
@@ -96,7 +96,63 @@ Current builtin shader names are:
 - `SelectionMask`
 - `SelectionOverlay`
 
-This replaces older names that mixed material, debug, and pass semantics.
+## Frame and Light Upload Path
+
+The scene shader now uses two global UBOs:
+
+- `FrameBlock`
+- `LightBlock`
+
+Current responsibility split:
+
+- `RenderSystem` owns the UBO objects and updates them before pipeline execution
+- `ScenePass` no longer uploads frame/light data through per-uniform calls
+- per-draw data still uses regular uniforms:
+  - `u_Model`
+  - `u_TintColor`
+  - `u_EntityID`
+
+This keeps frame-level and light-level data centralized while leaving per-draw and per-material data unchanged.
+
+## Platform and Backend Scope
+
+The current scope is intentionally staged.
+
+### Phase 1
+
+Current target:
+
+- runtime cross-platform
+- render backend remains OpenGL-only
+
+Meaning:
+
+- runtime systems should avoid being Windows-specific where possible
+- the render backend is still allowed to assume OpenGL as the only supported graphics API
+
+### Phase 2
+
+Next platform goal:
+
+- isolate editor-only Windows platform services behind explicit platform interfaces
+
+Examples:
+
+- file dialog services
+- show-in-explorer / open-directory services
+- platform icon or shell integration services
+
+### Phase 3
+
+Render-backend preparation goal:
+
+- move direct OpenGL calls out of runtime pass code and back into backend or render-command abstractions
+
+This is the real prerequisite for any future second graphics backend.
+
+Important rule:
+
+- new runtime render work should avoid adding fresh OpenGL calls directly into pass code unless strictly necessary
 
 ## Picking Rules
 
@@ -128,7 +184,7 @@ Important rule:
 - `SceneDepth` and `SelectedDepth` do not define the contour source
 - depth only controls visible vs occluded styling
 
-This was chosen to preserve the intended editor behavior:
+This preserves the intended editor behavior:
 
 - multiple selected objects contribute to one union outline
 - internal seams between selected objects do not produce outlines
@@ -145,17 +201,17 @@ The current rules are:
 
 ## Current Open Issues
 
-- frame/light data still uses per-uniform uploads instead of UBOs
 - prepare / sort layering is still thin
-- pass documentation is now cleaner than implementation layering; the next work should focus on data preparation, not more renaming
+- selection overlay style parameters are still hard-coded in the pass
+- runtime pass code still contains OpenGL calls that should eventually move behind backend abstractions
 
 ## Future Improvement Plan
 
 I plan to continue with these steps:
 
-1. I will move frame and light data to UBOs first.
-2. I will continue to strengthen prepare / sort / execute boundaries.
-3. After the data-upload path is stable, I will extend the editor overlay path further instead of mixing more work back into the scene pass.
+1. I will keep the runtime target OpenGL-only while continuing to remove avoidable platform-specific assumptions.
+2. I will isolate editor platform services behind interfaces before attempting broader editor portability.
+3. I will gradually move direct OpenGL usage out of runtime pass code so the renderer becomes structurally ready for a second backend later.
 
 ## Related Documents
 
