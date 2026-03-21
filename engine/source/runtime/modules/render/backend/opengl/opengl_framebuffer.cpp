@@ -1,6 +1,7 @@
 #include "opengl_framebuffer.h"
 
 #include <algorithm>
+#include <stdexcept>
 
 #include <glad/gl.h>
 
@@ -228,6 +229,93 @@ namespace Hybrid {
         m_Spec.width = w;
         m_Spec.height = h;
         invalidate();
+    }
+
+    void GLFramebuffer::setDrawColorAttachments(std::initializer_list<uint32_t> indices) const
+    {
+        bind();
+        if (indices.size() == 0)
+        {
+            glDrawBuffer(GL_NONE);
+            return;
+        }
+
+        std::vector<GLenum> draw_buffers;
+        draw_buffers.reserve(indices.size());
+        for (uint32_t index : indices)
+            draw_buffers.push_back(GL_COLOR_ATTACHMENT0 + index);
+
+        glDrawBuffers(static_cast<GLsizei>(draw_buffers.size()), draw_buffers.data());
+    }
+
+    void GLFramebuffer::clearColorAttachmentUInt(uint32_t index, uint32_t value) const
+    {
+        if (index >= m_ColorAttachments.size())
+            return;
+
+        bind();
+        glClearBufferuiv(GL_COLOR, static_cast<GLint>(index), &value);
+    }
+
+    uint32_t GLFramebuffer::readPixelUInt(uint32_t attachment_index, int x, int y) const
+    {
+        if (attachment_index >= m_ColorAttachments.size())
+            return 0;
+
+        bind();
+        glReadBuffer(GL_COLOR_ATTACHMENT0 + attachment_index);
+
+        uint32_t value = 0;
+        glReadPixels(x, y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT, &value);
+        return value;
+    }
+
+    void GLFramebuffer::copyColorAttachmentTo(const Framebuffer& dst, uint32_t src_index, uint32_t dst_index) const
+    {
+        const auto* dst_gl = dynamic_cast<const GLFramebuffer*>(&dst);
+        if (!dst_gl)
+            throw std::runtime_error("copyColorAttachmentTo requires GLFramebuffer destination");
+        if (src_index >= m_ColorAttachments.size() || dst_index >= dst_gl->m_ColorAttachments.size())
+            return;
+
+        glCopyImageSubData(m_ColorAttachments[src_index], GL_TEXTURE_2D, 0, 0, 0, 0,
+                           dst_gl->m_ColorAttachments[dst_index], GL_TEXTURE_2D, 0, 0, 0, 0,
+                           static_cast<GLsizei>(std::min(m_Spec.width, dst_gl->m_Spec.width)),
+                           static_cast<GLsizei>(std::min(m_Spec.height, dst_gl->m_Spec.height)),
+                           1);
+    }
+
+    void GLFramebuffer::copyDepthAttachmentTo(const Framebuffer& dst) const
+    {
+        const auto* dst_gl = dynamic_cast<const GLFramebuffer*>(&dst);
+        if (!dst_gl)
+            throw std::runtime_error("copyDepthAttachmentTo requires GLFramebuffer destination");
+        if (!m_DepthAttachment || !dst_gl->m_DepthAttachment)
+            return;
+
+        glCopyImageSubData(m_DepthAttachment, GL_TEXTURE_2D, 0, 0, 0, 0,
+                           dst_gl->m_DepthAttachment, GL_TEXTURE_2D, 0, 0, 0, 0,
+                           static_cast<GLsizei>(std::min(m_Spec.width, dst_gl->m_Spec.width)),
+                           static_cast<GLsizei>(std::min(m_Spec.height, dst_gl->m_Spec.height)),
+                           1);
+    }
+
+    void GLFramebuffer::bindColorAttachmentTexture(uint32_t index, uint32_t slot) const
+    {
+        if (index >= m_ColorAttachments.size())
+            return;
+
+        glActiveTexture(GL_TEXTURE0 + slot);
+        glBindTexture(GL_TEXTURE_2D, m_ColorAttachments[index]);
+    }
+
+    void GLFramebuffer::bindDepthAttachmentTexture(uint32_t slot) const
+    {
+        if (!m_DepthAttachment)
+            return;
+
+        glActiveTexture(GL_TEXTURE0 + slot);
+        glBindTexture(GL_TEXTURE_2D, m_DepthAttachment);
     }
 
     uint32_t GLFramebuffer::getColorAttachmentRendererID(uint32_t index) const

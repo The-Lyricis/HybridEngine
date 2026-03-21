@@ -23,6 +23,8 @@
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/mesh_gpu.h"
+#include "runtime/modules/render/runtime/render_uniforms.h"
+#include "runtime/modules/render/runtime/render_selection_style.h"
 #include "runtime/modules/render/runtime/passes/selection_overlay_pass.h"
 #include "runtime/modules/render/runtime/passes/selection_mask_pass.h"
 #include "runtime/modules/render/runtime/render_packet.h"
@@ -40,6 +42,7 @@ namespace Hybrid
     class VertexArray;
     class VertexBuffer;
     class IndexBuffer;
+    class UniformBuffer;
     class Shader;
     class Scene;
 
@@ -72,8 +75,10 @@ namespace Hybrid
         void ensureFramebuffer(std::shared_ptr<Framebuffer>& framebuffer, const FramebufferSpec& spec);
         void ensureSceneViewRenderTargets(uint32_t w, uint32_t h);
         bool loadBuiltinShaders();
-
-        static constexpr int kMaxPointLights = 16;
+        void ensureGlobalUniformBuffers();
+        void configureShaderBindings();
+        void updateFrameUBO(const RenderPacket& packet, const glm::vec2& viewport_size);
+        void updateLightUBO(const RenderPacket& packet);
 
         // Extract ECS data + camera/light state into a draw packet.
         RenderPacket buildRenderPacket(const FrameContext& frame_context,
@@ -88,6 +93,9 @@ namespace Hybrid
         std::shared_ptr<Framebuffer> m_SceneFB;
         std::shared_ptr<Framebuffer> m_SelectionFB;
         std::shared_ptr<Framebuffer> m_GameFB;
+        std::shared_ptr<UniformBuffer> m_FrameUBO;
+        std::shared_ptr<UniformBuffer> m_LightUBO;
+        SelectionOverlayStyle m_SelectionOverlayStyle;
         std::shared_ptr<Shader> m_SceneShader;
         std::shared_ptr<Shader> m_ColliderDebugShader;
         ShaderLibrary m_ShaderLibrary;

@@ -45,6 +45,15 @@ namespace Hybrid {
         virtual void bind() const = 0;
         virtual void unbind() const = 0;
         virtual void resize(uint32_t w, uint32_t h) = 0;
+        virtual void setDrawColorAttachments(std::initializer_list<uint32_t> indices) const = 0;
+        virtual void clearColorAttachmentUInt(uint32_t index, uint32_t value) const = 0;
+        virtual uint32_t readPixelUInt(uint32_t attachment_index, int x, int y) const = 0;
+        virtual void copyColorAttachmentTo(const Framebuffer& dst,
+                                           uint32_t src_index,
+                                           uint32_t dst_index) const = 0;
+        virtual void copyDepthAttachmentTo(const Framebuffer& dst) const = 0;
+        virtual void bindColorAttachmentTexture(uint32_t index, uint32_t slot) const = 0;
+        virtual void bindDepthAttachmentTexture(uint32_t slot) const = 0;
 
         virtual uint32_t getColorAttachmentRendererID(uint32_t index = 0) const = 0;
         virtual uint32_t getColorAttachmentCount() const = 0;

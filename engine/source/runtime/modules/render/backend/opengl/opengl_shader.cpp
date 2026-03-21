@@ -104,4 +104,11 @@ namespace Hybrid {
         glUniform1ui(loc, v);
     }
 
+    void GLShader::setUniformBlockBinding(const std::string& block_name, uint32_t binding) {
+        const GLuint block_index = glGetUniformBlockIndex(m_RendererID, block_name.c_str());
+        if (block_index == GL_INVALID_INDEX)
+            return;
+        glUniformBlockBinding(m_RendererID, block_index, binding);
+    }
+
 } // namespace Hybrid

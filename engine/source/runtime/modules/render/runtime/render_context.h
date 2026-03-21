@@ -10,6 +10,7 @@
 #include "runtime/modules/render/runtime/mesh_gpu.h"
 #include "runtime/modules/render/runtime/render_flags.h"
 #include "runtime/modules/render/runtime/render_packet.h"
+#include "runtime/modules/render/runtime/render_selection_style.h"
 #include "runtime/modules/render/runtime/shader_library.h"
 
 namespace Hybrid
@@ -28,6 +29,7 @@ namespace Hybrid
         std::shared_ptr<Framebuffer> framebuffer;
         std::shared_ptr<Framebuffer> scene_framebuffer;
         std::shared_ptr<Framebuffer> selection_framebuffer;
+        const SelectionOverlayStyle* selection_overlay_style = nullptr;
 
         std::shared_ptr<AssetManager> asset_manager;
         ShaderLibrary* shader_library = nullptr;

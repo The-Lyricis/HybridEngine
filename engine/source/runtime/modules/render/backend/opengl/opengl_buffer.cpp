@@ -50,4 +50,26 @@ namespace Hybrid {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 
+    GLUniformBuffer::GLUniformBuffer(uint32_t size)
+        : m_Size(size)
+    {
+        glCreateBuffers(1, &m_RendererID);
+        glNamedBufferData(m_RendererID, static_cast<GLsizeiptr>(size), nullptr, GL_DYNAMIC_DRAW);
+    }
+
+    GLUniformBuffer::~GLUniformBuffer() {
+        glDeleteBuffers(1, &m_RendererID);
+    }
+
+    void GLUniformBuffer::setData(const void* data, uint32_t size, uint32_t offset) {
+        glNamedBufferSubData(m_RendererID,
+                             static_cast<GLintptr>(offset),
+                             static_cast<GLsizeiptr>(size),
+                             data);
+    }
+
+    void GLUniformBuffer::bindBase(uint32_t binding) const {
+        glBindBufferBase(GL_UNIFORM_BUFFER, binding, m_RendererID);
+    }
+
 } // namespace Hybrid

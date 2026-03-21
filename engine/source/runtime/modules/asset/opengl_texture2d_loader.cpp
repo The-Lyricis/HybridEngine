@@ -25,6 +25,18 @@ namespace Hybrid
     {
         constexpr const char* kGLTexture2DLoaderLogTag = "[GLTexture2DLoader]";
 
+        GLenum DrainGLErrors()
+        {
+            GLenum last_error = GL_NO_ERROR;
+            while (true)
+            {
+                const GLenum error = glGetError();
+                if (error == GL_NO_ERROR)
+                    return last_error;
+                last_error = error;
+            }
+        }
+
         TextureHandle CreateTextureFromRgba8(const uint8_t* pixels, int w, int h)
         {
             if (!pixels || w <= 0 || h <= 0)
@@ -78,15 +90,20 @@ namespace Hybrid
 
     TextureHandle GLTexture2DLoader::load(const AssetMetadata& meta, IVirtualFileSystem& vfs)
     {
+        // Drain any unrelated earlier GL errors so this loader only reports
+        // errors caused by its own context probe / upload work.
+        (void)DrainGLErrors();
+
         GLint current_tex = 0;
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &current_tex);
-        if (glGetError() != GL_NO_ERROR)
+        const GLenum probe_error = DrainGLErrors();
+        if (probe_error != GL_NO_ERROR)
         {
-            HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=invalid_gl_context",
+            HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=gl_probe_failed gl_error=0x{:X}",
                            kGLTexture2DLoaderLogTag,
                            meta.id.value,
-                           meta.source_path.empty() ? "<empty>" : meta.source_path);
-            while (glGetError() != GL_NO_ERROR) {}
+                           meta.source_path.empty() ? "<empty>" : meta.source_path,
+                           static_cast<uint32_t>(probe_error));
             return nullptr;
         }
 

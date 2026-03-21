@@ -21,6 +21,7 @@ namespace Hybrid {
         virtual void setVec3(const std::string& name, const glm::vec3& v) = 0;
         virtual void setInt(const std::string& name, int v) = 0;
         virtual void setUInt(const std::string& name, uint32_t v) = 0;
+        virtual void setUniformBlockBinding(const std::string& block_name, uint32_t binding) = 0;
 
         static std::shared_ptr<Shader> Create(const std::string& vsSource, const std::string& fsSource);
     };

@@ -17,8 +17,35 @@ namespace Hybrid {
         glClearColor(color.r, color.g, color.b, color.a);
     }
 
+    void GLRendererAPI::setClearDepth(float depth) {
+        glClearDepth(depth);
+    }
+
     void GLRendererAPI::clear() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
+
+    void GLRendererAPI::setBlendEnabled(bool enabled) {
+        if (enabled) glEnable(GL_BLEND);
+        else glDisable(GL_BLEND);
+    }
+
+    void GLRendererAPI::setDepthTestEnabled(bool enabled) {
+        if (enabled) glEnable(GL_DEPTH_TEST);
+        else glDisable(GL_DEPTH_TEST);
+    }
+
+    void GLRendererAPI::setCullEnabled(bool enabled) {
+        if (enabled) glEnable(GL_CULL_FACE);
+        else glDisable(GL_CULL_FACE);
+    }
+
+    void GLRendererAPI::setDepthWriteEnabled(bool enabled) {
+        glDepthMask(enabled ? GL_TRUE : GL_FALSE);
+    }
+
+    void GLRendererAPI::setLineWidth(float width) {
+        glLineWidth(width);
     }
 
     void GLRendererAPI::drawIndexed(uint32_t indexCount, uint32_t indexOffset) {

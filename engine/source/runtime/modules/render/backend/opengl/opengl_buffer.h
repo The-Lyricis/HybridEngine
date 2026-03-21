@@ -34,6 +34,19 @@ namespace Hybrid {
         uint32_t m_Count = 0;
     };
 
+    class GLUniformBuffer final : public UniformBuffer {
+    public:
+        explicit GLUniformBuffer(uint32_t size);
+        ~GLUniformBuffer() override;
+
+        void setData(const void* data, uint32_t size, uint32_t offset = 0) override;
+        void bindBase(uint32_t binding) const override;
+
+    private:
+        uint32_t m_RendererID = 0;
+        uint32_t m_Size = 0;
+    };
+
 } // namespace Hybrid
 
 

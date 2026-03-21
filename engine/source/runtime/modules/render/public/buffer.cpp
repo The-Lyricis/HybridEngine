@@ -22,6 +22,15 @@ namespace Hybrid {
         }
     }
 
+    std::shared_ptr<UniformBuffer> UniformBuffer::Create(uint32_t size) {
+        switch (RendererAPI::getAPI()) {
+        case RendererAPI::API::OpenGL:
+            return std::make_shared<GLUniformBuffer>(size);
+        default:
+            return nullptr;
+        }
+    }
+
 } // namespace Hybrid
 
 

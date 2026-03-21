@@ -19,6 +19,7 @@ namespace Hybrid {
         void setVec3(const std::string& name, const glm::vec3& v) override;
         void setInt(const std::string& name, int v) override;
         void setUInt(const std::string& name, uint32_t v) override;
+        void setUniformBlockBinding(const std::string& block_name, uint32_t binding) override;
 
     private:
         uint32_t m_RendererID = 0;

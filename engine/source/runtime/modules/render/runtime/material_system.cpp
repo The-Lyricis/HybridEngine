@@ -1,28 +1,29 @@
 #include "material_system.h"
 
 #include "runtime/modules/render/public/shader.h"
+#include "runtime/modules/render/runtime/render_bindings.h"
 
 namespace Hybrid
 {
     void MaterialSystem::MaterialGPU::bind(Shader& shader) const
     {
-        shader.setVec4("u_AlbedoColor", data.albedo_color);
-        shader.setFloat("u_Metallic", data.metallic);
-        shader.setFloat("u_Roughness", data.roughness);
-        shader.setFloat("u_AO", data.ao);
-        shader.setFloat("u_Emissive", data.emissive);
-        shader.setInt("u_HasNormalMap", (data.normal_map.value != 0) ? 1 : 0);
+        shader.setVec4(RenderBindings::kSceneAlbedoColorUniform, data.albedo_color);
+        shader.setFloat(RenderBindings::kSceneMetallicUniform, data.metallic);
+        shader.setFloat(RenderBindings::kSceneRoughnessUniform, data.roughness);
+        shader.setFloat(RenderBindings::kSceneAOScalarUniform, data.ao);
+        shader.setFloat(RenderBindings::kSceneEmissiveScalarUniform, data.emissive);
+        shader.setInt(RenderBindings::kSceneHasNormalMapUniform, (data.normal_map.value != 0) ? 1 : 0);
 
         if (albedo)
-            albedo->bind(0);
+            albedo->bind(RenderBindings::kSceneAlbedoSlot);
         if (normal)
-            normal->bind(1);
+            normal->bind(RenderBindings::kSceneNormalSlot);
         if (mr)
-            mr->bind(2);
+            mr->bind(RenderBindings::kSceneMRSlot);
         if (ao)
-            ao->bind(3);
+            ao->bind(RenderBindings::kSceneAOSlot);
         if (emissive)
-            emissive->bind(4);
+            emissive->bind(RenderBindings::kSceneEmissiveSlot);
     }
 
     void MaterialSystem::initialize(std::shared_ptr<AssetManager> asset_manager)

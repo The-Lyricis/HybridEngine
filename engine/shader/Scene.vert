@@ -4,8 +4,16 @@ layout(location=1) in vec3 aNormal;
 layout(location=2) in vec2 aUV;
 layout(location=3) in vec4 aTangent;
 
-uniform mat4 u_ViewProjection;
 uniform mat4 u_Model;
+
+layout(std140) uniform FrameBlock
+{
+    mat4 u_View;
+    mat4 u_Proj;
+    mat4 u_ViewProjection;
+    vec4 u_CameraPos;
+    vec4 u_Viewport;
+};
 
 out vec3 vWorldPos;
 out vec3 vNormal;

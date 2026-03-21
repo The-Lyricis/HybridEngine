@@ -5,8 +5,6 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-#include <glad/gl.h>
-
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "runtime/modules/render/public/buffer.h"
@@ -14,6 +12,8 @@
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/vertex_array.h"
+#include "runtime/modules/render/runtime/render_targets.h"
+#include "runtime/modules/render/runtime/render_uniforms.h"
 #include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/components/collider_component.h"
 #include "runtime/modules/scene/scene.h"
@@ -22,19 +22,6 @@ namespace Hybrid
 {
     namespace
     {
-        void setSceneFramebufferDrawBuffers(bool write_entity_id)
-        {
-            if (write_entity_id)
-            {
-                constexpr GLenum buffers[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-                glDrawBuffers(2, buffers);
-            }
-            else
-            {
-                constexpr GLenum buffer = GL_COLOR_ATTACHMENT0;
-                glDrawBuffers(1, &buffer);
-            }
-        }
     }
 
     void GizmoPass::execute(RenderContext& context)
@@ -57,15 +44,16 @@ namespace Hybrid
         auto view = registry.view<TransformComponent, ColliderComponent>();
 
         framebuffer->bind();
-        setSceneFramebufferDrawBuffers(false);
+        framebuffer->setDrawColorAttachments({RenderTargets::kSceneColorAttachment});
         RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
 
-        glEnable(GL_DEPTH_TEST);
-        glDisable(GL_CULL_FACE);
-        glLineWidth(2.0f);
+        RenderCommand::setDepthTestEnabled(true);
+        RenderCommand::setCullEnabled(false);
+        RenderCommand::setLineWidth(2.0f);
 
         collider_debug_shader->bind();
-        collider_debug_shader->setMat4("u_ViewProjection", packet.frame.viewProj);
+        collider_debug_shader->setUniformBlockBinding(RenderUniforms::kFrameBlockName,
+                                                      RenderUniforms::kFrameUBOBinding);
 
         for (auto e : view)
         {
@@ -93,8 +81,11 @@ namespace Hybrid
             RenderCommand::drawLinesIndexed(debug_box_mesh->index_count);
         }
 
-        glEnable(GL_CULL_FACE);
-        setSceneFramebufferDrawBuffers(true);
+        RenderCommand::setCullEnabled(true);
+        framebuffer->setDrawColorAttachments({
+            RenderTargets::kSceneColorAttachment,
+            RenderTargets::kSceneEntityIDAttachment
+        });
         framebuffer->unbind();
     }
 

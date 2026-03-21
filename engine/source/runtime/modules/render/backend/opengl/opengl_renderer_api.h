@@ -9,7 +9,13 @@ namespace Hybrid {
         void init() override;
         void setViewport(int x, int y, int width, int height) override;
         void setClearColor(const glm::vec4& color) override;
+        void setClearDepth(float depth) override;
         void clear() override;
+        void setBlendEnabled(bool enabled) override;
+        void setDepthTestEnabled(bool enabled) override;
+        void setCullEnabled(bool enabled) override;
+        void setDepthWriteEnabled(bool enabled) override;
+        void setLineWidth(float width) override;
         void drawIndexed(uint32_t indexCount, uint32_t indexOffset = 0) override;
         void drawLinesIndexed(uint32_t indexCount, uint32_t indexOffset = 0) override;
     };

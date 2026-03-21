@@ -9,34 +9,20 @@
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/vertex_array.h"
+#include "runtime/modules/render/runtime/render_bindings.h"
+#include "runtime/modules/render/runtime/render_targets.h"
 
 namespace Hybrid
 {
-    namespace
-    {
-        void setSceneFramebufferDrawBuffers(bool write_entity_id)
-        {
-            if (write_entity_id)
-            {
-                constexpr GLenum buffers[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-                glDrawBuffers(2, buffers);
-            }
-            else
-            {
-                constexpr GLenum buffer = GL_COLOR_ATTACHMENT0;
-                glDrawBuffers(1, &buffer);
-            }
-        }
-    }
-
     void SelectionOverlayPass::execute(RenderContext& context)
     {
         const std::shared_ptr<Framebuffer>& scene_framebuffer = context.scene_framebuffer;
         const std::shared_ptr<Framebuffer>& selection_framebuffer = context.selection_framebuffer;
         const EditorSelectionState* selection = context.editor_selection;
+        const SelectionOverlayStyle* style = context.selection_overlay_style;
 
         if (!scene_framebuffer || !selection_framebuffer || !selection || selection->selected_entities.empty() ||
-            context.shader_library == nullptr)
+            context.shader_library == nullptr || style == nullptr)
         {
             return;
         }
@@ -54,53 +40,46 @@ namespace Hybrid
 
         // Snapshot the scene inputs first to avoid sampling from the same target
         // that this pass writes back into.
-        glCopyImageSubData(scene_framebuffer->getColorAttachmentRendererID(0), GL_TEXTURE_2D, 0, 0, 0, 0,
-                           m_InputFramebuffer->getColorAttachmentRendererID(0), GL_TEXTURE_2D, 0, 0, 0, 0,
-                           static_cast<GLsizei>(width), static_cast<GLsizei>(height), 1);
-        glCopyImageSubData(scene_framebuffer->getDepthAttachmentRendererID(), GL_TEXTURE_2D, 0, 0, 0, 0,
-                           m_InputFramebuffer->getDepthAttachmentRendererID(), GL_TEXTURE_2D, 0, 0, 0, 0,
-                           static_cast<GLsizei>(width), static_cast<GLsizei>(height), 1);
+        scene_framebuffer->copyColorAttachmentTo(*m_InputFramebuffer, 0, 0);
+        scene_framebuffer->copyDepthAttachmentTo(*m_InputFramebuffer);
 
         auto* quad = getOrCreateFullscreenQuad();
         if (!quad)
             return;
 
         scene_framebuffer->bind();
-        setSceneFramebufferDrawBuffers(false);
+        scene_framebuffer->setDrawColorAttachments({RenderTargets::kSceneColorAttachment});
         RenderCommand::setViewport(0, 0, width, height);
 
-        glDisable(GL_DEPTH_TEST);
-        glDepthMask(GL_FALSE);
-        glDisable(GL_CULL_FACE);
-        glDisable(GL_BLEND);
+        RenderCommand::setDepthTestEnabled(false);
+        RenderCommand::setDepthWriteEnabled(false);
+        RenderCommand::setCullEnabled(false);
+        RenderCommand::setBlendEnabled(false);
 
         shader->bind();
-        shader->setInt("u_SceneColorTex", 0);
-        shader->setInt("u_SceneDepthTex", 1);
-        shader->setInt("u_SelectedMaskTex", 2);
-        shader->setInt("u_SelectedDepthTex", 3);
         shader->setFloat("u_TexelWidth", width > 0 ? 1.0f / static_cast<float>(width) : 0.0f);
         shader->setFloat("u_TexelHeight", height > 0 ? 1.0f / static_cast<float>(height) : 0.0f);
-        shader->setFloat("u_DepthEpsilon", 1e-5f);
-        shader->setVec4("u_VisibleOutlineColor", glm::vec4(0.836f, 0.292f, 0.312f, 0.95f));
-        shader->setVec4("u_OccludedOutlineColor", glm::vec4(0.320f, 0.360f, 0.500f, 0.40f));
-        shader->setVec4("u_FillColor", glm::vec4(0.836f, 0.292f, 0.312f, 0.12f));
+        shader->setFloat("u_DepthEpsilon", style->depth_epsilon);
+        shader->setVec4("u_VisibleOutlineColor", style->visible_outline_color);
+        shader->setVec4("u_OccludedOutlineColor", style->occluded_outline_color);
+        shader->setVec4("u_FillColor", style->fill_color);
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, m_InputFramebuffer->getColorAttachmentRendererID(0));
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, m_InputFramebuffer->getDepthAttachmentRendererID());
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_2D, selection_framebuffer->getColorAttachmentRendererID(0));
-        glActiveTexture(GL_TEXTURE3);
-        glBindTexture(GL_TEXTURE_2D, selection_framebuffer->getDepthAttachmentRendererID());
+        m_InputFramebuffer->bindColorAttachmentTexture(RenderTargets::kSceneColorAttachment,
+                                                      RenderBindings::kSelectionOverlaySceneColorSlot);
+        m_InputFramebuffer->bindDepthAttachmentTexture(RenderBindings::kSelectionOverlaySceneDepthSlot);
+        selection_framebuffer->bindColorAttachmentTexture(RenderTargets::kSelectionMaskAttachment,
+                                                         RenderBindings::kSelectionOverlayMaskSlot);
+        selection_framebuffer->bindDepthAttachmentTexture(RenderBindings::kSelectionOverlaySelectedDepthSlot);
 
         quad->vao->bind();
         RenderCommand::drawIndexed(quad->index_count);
 
-        glDepthMask(GL_TRUE);
-        glEnable(GL_CULL_FACE);
-        setSceneFramebufferDrawBuffers(true);
+        RenderCommand::setDepthWriteEnabled(true);
+        RenderCommand::setCullEnabled(true);
+        scene_framebuffer->setDrawColorAttachments({
+            RenderTargets::kSceneColorAttachment,
+            RenderTargets::kSceneEntityIDAttachment
+        });
         scene_framebuffer->unbind();
     }
 

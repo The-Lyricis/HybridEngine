@@ -3,32 +3,17 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-#include <glad/gl.h>
-
 #include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/renderer.h"
 #include "runtime/modules/render/public/shader.h"
+#include "runtime/modules/render/runtime/render_targets.h"
 #include "runtime/modules/asset/material.h"
 
 namespace Hybrid
 {
     namespace
     {
-        void setSceneFramebufferDrawBuffers(bool write_entity_id)
-        {
-            if (write_entity_id)
-            {
-                constexpr GLenum buffers[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-                glDrawBuffers(2, buffers);
-            }
-            else
-            {
-                constexpr GLenum buffer = GL_COLOR_ATTACHMENT0;
-                glDrawBuffers(1, &buffer);
-            }
-        }
-
         uint32_t encodeEntityID(uint32_t entity_id)
         {
             return entity_id + 1u;
@@ -47,37 +32,17 @@ namespace Hybrid
             return;
 
         framebuffer->bind();
-        setSceneFramebufferDrawBuffers(true);
+        framebuffer->setDrawColorAttachments({
+            RenderTargets::kSceneColorAttachment,
+            RenderTargets::kSceneEntityIDAttachment
+        });
         RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
         Renderer::beginFrame(packet.frame.clearColor);
-        uint32_t zero = 0;
-        glClearBufferuiv(GL_COLOR, 1, &zero);
+        framebuffer->clearColorAttachmentUInt(RenderTargets::kSceneEntityIDAttachment, 0);
 
         if (asset_manager && material_system && scene_shader && context.resolve_mesh_gpu)
         {
             scene_shader->bind();
-            scene_shader->setMat4("u_ViewProjection", packet.frame.viewProj);
-            scene_shader->setVec3("u_CameraPos", packet.frame.cameraPos);
-            scene_shader->setVec3("u_DirLight.color", packet.lights.dir.color);
-            scene_shader->setFloat("u_DirLight.intensity", packet.lights.dir.intensity);
-            scene_shader->setVec3("u_DirLight.direction", packet.lights.dir.direction);
-            scene_shader->setInt("u_PointCount", static_cast<int>(packet.lights.points.size()));
-
-            for (int i = 0; i < static_cast<int>(packet.lights.points.size()) && i < 16; ++i)
-            {
-                const auto& p = packet.lights.points[i];
-                std::string base = "u_PointLights[" + std::to_string(i) + "]";
-                scene_shader->setVec3(base + ".color", p.color);
-                scene_shader->setFloat(base + ".intensity", p.intensity);
-                scene_shader->setVec3(base + ".position", p.position);
-                scene_shader->setFloat(base + ".range", p.range);
-            }
-
-            scene_shader->setInt("u_AlbedoMap", 0);
-            scene_shader->setInt("u_NormalMap", 1);
-            scene_shader->setInt("u_MRMap", 2);
-            scene_shader->setInt("u_AOMap", 3);
-            scene_shader->setInt("u_EmissiveMap", 4);
 
             for (const auto& item : packet.items)
             {

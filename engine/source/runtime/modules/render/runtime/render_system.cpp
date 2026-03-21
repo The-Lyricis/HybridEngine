@@ -17,10 +17,14 @@
 
 #include "runtime/modules/render/public/renderer.h"
 #include "runtime/modules/render/public/render_command.h"
+#include "runtime/modules/render/public/buffer.h"
 #include "runtime/modules/render/public/vertex_array.h"
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/texture.h"
+#include "runtime/modules/render/runtime/render_bindings.h"
+#include "runtime/modules/render/runtime/render_shaders.h"
+#include "runtime/modules/render/runtime/render_targets.h"
 #include "runtime/modules/scene/scene.h"
 #include "runtime/modules/scene/components.h"
 #include "runtime/core/base/macro.h"
@@ -33,6 +37,7 @@
 
 namespace Hybrid
 {
+    namespace RU = RenderUniforms;
 
     namespace
     {
@@ -71,20 +76,6 @@ namespace Hybrid
         uint32_t decodeEntityID(uint32_t encoded_id)
         {
             return (encoded_id == 0) ? kInvalidEntityID : (encoded_id - 1u);
-        }
-
-        void setSceneFramebufferDrawBuffers(bool write_entity_id)
-        {
-            if (write_entity_id)
-            {
-                constexpr GLenum buffers[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-                glDrawBuffers(2, buffers);
-            }
-            else
-            {
-                constexpr GLenum buffer = GL_COLOR_ATTACHMENT0;
-                glDrawBuffers(1, &buffer);
-            }
         }
 
         static glm::vec3 lightDirectionFromTransform(const Hybrid::TransformComponent &tr)
@@ -179,6 +170,14 @@ namespace Hybrid
         const uint32_t height = static_cast<uint32_t>(std::max(1, h));
         ensureSceneViewRenderTargets(width, height);
         ensureFramebuffer(m_GameFB, makeMainFramebufferSpec(width, height));
+        ensureGlobalUniformBuffers();
+        if (!m_FrameUBO || !m_LightUBO)
+        {
+            HBD_CORE_ERROR("{} initialize_failed reason=ubo_creation_failed",
+                           kRenderSystemLogTag);
+            return;
+        }
+        configureShaderBindings();
 
         m_Initialized = true;
 
@@ -202,6 +201,7 @@ namespace Hybrid
 
         m_SceneShader = m_ShaderLibrary.get("Scene");
         m_ColliderDebugShader = m_ShaderLibrary.get("ColliderDebug");
+        configureShaderBindings();
     }
 
     MeshGPU *RenderSystem::getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh)
@@ -239,25 +239,29 @@ namespace Hybrid
     {
         m_ShaderLibrary.setRoot(std::filesystem::path(HYBRID_PROJECT_ROOT_DIR) / "engine/shader");
 
-        const bool scene_ok = m_ShaderLibrary.load(
-            "Scene",
-            "Scene.vert",
-            "Scene.frag");
-        const bool collider_debug_ok = m_ShaderLibrary.load(
-            "ColliderDebug",
-            "ColliderDebug.vert",
-            "ColliderDebug.frag");
-        const bool selection_mask_ok = m_ShaderLibrary.load(
-            "SelectionMask",
-            "SelectionMask.vert",
-            "SelectionMask.frag");
-        const bool selection_overlay_ok = m_ShaderLibrary.load(
-            "SelectionOverlay",
-            "SelectionOverlay.vert",
-            "SelectionOverlay.frag");
+        bool scene_ok = false;
+        bool collider_debug_ok = false;
+        bool selection_mask_ok = false;
+        bool selection_overlay_ok = false;
 
-        m_SceneShader = m_ShaderLibrary.get("Scene");
-        m_ColliderDebugShader = m_ShaderLibrary.get("ColliderDebug");
+        for (const auto& shader_desc : RenderShaders::kBuiltinShaders)
+        {
+            const bool loaded = m_ShaderLibrary.load(std::string(shader_desc.name),
+                                                     std::string(shader_desc.vertex),
+                                                     std::string(shader_desc.fragment));
+            if (shader_desc.name == RenderShaders::kScene.name)
+                scene_ok = loaded;
+            else if (shader_desc.name == RenderShaders::kColliderDebug.name)
+                collider_debug_ok = loaded;
+            else if (shader_desc.name == RenderShaders::kSelectionMask.name)
+                selection_mask_ok = loaded;
+            else if (shader_desc.name == RenderShaders::kSelectionOverlay.name)
+                selection_overlay_ok = loaded;
+        }
+
+        m_SceneShader = m_ShaderLibrary.get(std::string(RenderShaders::kScene.name));
+        m_ColliderDebugShader = m_ShaderLibrary.get(std::string(RenderShaders::kColliderDebug.name));
+        configureShaderBindings();
         HBD_CORE_INFO("{} builtin_shaders_loaded scene={} collider_debug={} selection_mask={} selection_overlay={} scene_shader_ready={} collider_debug_shader_ready={}",
                       kRenderSystemLogTag,
                       scene_ok ? "true" : "false",
@@ -267,6 +271,105 @@ namespace Hybrid
                       m_SceneShader ? "true" : "false",
                       m_ColliderDebugShader ? "true" : "false");
         return scene_ok && collider_debug_ok && selection_mask_ok && selection_overlay_ok && m_SceneShader && m_ColliderDebugShader;
+    }
+
+    void RenderSystem::ensureGlobalUniformBuffers()
+    {
+        if (!m_FrameUBO)
+        {
+            m_FrameUBO = UniformBuffer::Create(sizeof(RU::FrameUBOData));
+            if (!m_FrameUBO)
+            {
+                HBD_CORE_ERROR("{} ubo_create_failed block={} size={}",
+                               kRenderSystemLogTag,
+                               RU::kFrameBlockName,
+                               sizeof(RU::FrameUBOData));
+            }
+        }
+        if (!m_LightUBO)
+        {
+            m_LightUBO = UniformBuffer::Create(sizeof(RU::LightUBOData));
+            if (!m_LightUBO)
+            {
+                HBD_CORE_ERROR("{} ubo_create_failed block={} size={}",
+                               kRenderSystemLogTag,
+                               RU::kLightBlockName,
+                               sizeof(RU::LightUBOData));
+            }
+        }
+    }
+
+    void RenderSystem::configureShaderBindings()
+    {
+        if (m_SceneShader)
+        {
+            m_SceneShader->bind();
+            m_SceneShader->setUniformBlockBinding(RU::kFrameBlockName, RU::kFrameUBOBinding);
+            m_SceneShader->setUniformBlockBinding(RU::kLightBlockName, RU::kLightUBOBinding);
+            m_SceneShader->setInt(RenderBindings::kSceneAlbedoUniform, RenderBindings::kSceneAlbedoSlot);
+            m_SceneShader->setInt(RenderBindings::kSceneNormalUniform, RenderBindings::kSceneNormalSlot);
+            m_SceneShader->setInt(RenderBindings::kSceneMRUniform, RenderBindings::kSceneMRSlot);
+            m_SceneShader->setInt(RenderBindings::kSceneAOUniform, RenderBindings::kSceneAOSlot);
+            m_SceneShader->setInt(RenderBindings::kSceneEmissiveUniform, RenderBindings::kSceneEmissiveSlot);
+        }
+
+        if (auto selection_overlay_shader = m_ShaderLibrary.get(std::string(RenderShaders::kSelectionOverlay.name)))
+        {
+            selection_overlay_shader->bind();
+            selection_overlay_shader->setInt(RenderBindings::kSelectionOverlaySceneColorUniform,
+                                             RenderBindings::kSelectionOverlaySceneColorSlot);
+            selection_overlay_shader->setInt(RenderBindings::kSelectionOverlaySceneDepthUniform,
+                                             RenderBindings::kSelectionOverlaySceneDepthSlot);
+            selection_overlay_shader->setInt(RenderBindings::kSelectionOverlayMaskUniform,
+                                             RenderBindings::kSelectionOverlayMaskSlot);
+            selection_overlay_shader->setInt(RenderBindings::kSelectionOverlaySelectedDepthUniform,
+                                             RenderBindings::kSelectionOverlaySelectedDepthSlot);
+        }
+    }
+
+    void RenderSystem::updateFrameUBO(const RenderPacket& packet, const glm::vec2& viewport_size)
+    {
+        if (!m_FrameUBO)
+            return;
+
+        RU::FrameUBOData data{};
+        data.view = packet.frame.view;
+        data.proj = packet.frame.proj;
+        data.viewProj = packet.frame.viewProj;
+        data.cameraPos = glm::vec4(packet.frame.cameraPos, 1.0f);
+
+        const float width = viewport_size.x;
+        const float height = viewport_size.y;
+        data.viewport = glm::vec4(width,
+                                  height,
+                                  width > 0.0f ? 1.0f / width : 0.0f,
+                                  height > 0.0f ? 1.0f / height : 0.0f);
+
+        m_FrameUBO->setData(&data, sizeof(RU::FrameUBOData));
+        m_FrameUBO->bindBase(RU::kFrameUBOBinding);
+    }
+
+    void RenderSystem::updateLightUBO(const RenderPacket& packet)
+    {
+        if (!m_LightUBO)
+            return;
+
+        RU::LightUBOData data{};
+        data.dirLight.colorIntensity = glm::vec4(packet.lights.dir.color, packet.lights.dir.intensity);
+        data.dirLight.direction = glm::vec4(packet.lights.dir.direction, 0.0f);
+
+        const int point_count = std::min<int>(static_cast<int>(packet.lights.points.size()), RU::kMaxPointLights);
+        for (int i = 0; i < point_count; ++i)
+        {
+            const auto& point = packet.lights.points[static_cast<size_t>(i)];
+            data.pointLights[static_cast<size_t>(i)].colorIntensity = glm::vec4(point.color, point.intensity);
+            data.pointLights[static_cast<size_t>(i)].positionRange = glm::vec4(point.position, point.range);
+        }
+
+        data.counts = glm::ivec4(point_count, 0, 0, 0);
+
+        m_LightUBO->setData(&data, sizeof(RU::LightUBOData));
+        m_LightUBO->bindBase(RU::kLightUBOBinding);
     }
 
     void RenderSystem::ensureFramebuffer(std::shared_ptr<Framebuffer>& framebuffer, const FramebufferSpec& spec)
@@ -291,12 +394,12 @@ namespace Hybrid
 
     uint32_t RenderSystem::getSceneColorTexture() const
     {
-        return m_SceneFB ? m_SceneFB->getColorAttachmentRendererID() : 0;
+        return m_SceneFB ? m_SceneFB->getColorAttachmentRendererID(RenderTargets::kSceneColorAttachment) : 0;
     }
 
     uint32_t RenderSystem::getGameColorTexture() const
     {
-        return m_GameFB ? m_GameFB->getColorAttachmentRendererID() : 0;
+        return m_GameFB ? m_GameFB->getColorAttachmentRendererID(RenderTargets::kSceneColorAttachment) : 0;
     }
 
     void RenderSystem::onWindowResize(uint32_t width, uint32_t height)
@@ -406,7 +509,7 @@ namespace Hybrid
 
         // C) collect lights
         pkt.lights.dir.intensity = 0.0f;
-        pkt.lights.points.reserve(kMaxPointLights);
+        pkt.lights.points.reserve(RU::kMaxPointLights);
         if (scene)
         {
             auto &reg = scene->getRegistry();
@@ -427,7 +530,7 @@ namespace Hybrid
             auto ptView = reg.view<Hybrid::TransformComponent, Hybrid::PointLightComponent>();
             for (auto e : ptView)
             {
-                if ((int)pkt.lights.points.size() >= kMaxPointLights)
+                if ((int)pkt.lights.points.size() >= RU::kMaxPointLights)
                     break;
                 const auto &tc = ptView.get<Hybrid::TransformComponent>(e);
                 const auto &pl = ptView.get<Hybrid::PointLightComponent>(e);
@@ -552,6 +655,7 @@ namespace Hybrid
                 scene_context.framebuffer = m_SceneFB;
                 scene_context.scene_framebuffer = m_SceneFB;
                 scene_context.selection_framebuffer = m_SelectionFB;
+                scene_context.selection_overlay_style = &m_SelectionOverlayStyle;
                 scene_context.asset_manager = m_AssetManager;
                 scene_context.shader_library = &m_ShaderLibrary;
                 scene_context.material_system = &m_MaterialSystem;
@@ -561,6 +665,8 @@ namespace Hybrid
                 };
                 scene_context.scene_shader = m_SceneShader;
                 scene_context.collider_debug_shader = m_ColliderDebugShader;
+                updateFrameUBO(scene_packet, scene_frame.viewport_size);
+                updateLightUBO(scene_packet);
                 m_RenderPipeline.execute(scene_context, make_pipeline_callbacks());
                 rendered_any = true;
             }
@@ -589,6 +695,7 @@ namespace Hybrid
                 game_context.framebuffer = m_GameFB;
                 game_context.scene_framebuffer = m_GameFB;
                 game_context.selection_framebuffer = nullptr;
+                game_context.selection_overlay_style = &m_SelectionOverlayStyle;
                 game_context.asset_manager = m_AssetManager;
                 game_context.shader_library = &m_ShaderLibrary;
                 game_context.material_system = &m_MaterialSystem;
@@ -598,6 +705,8 @@ namespace Hybrid
                 };
                 game_context.scene_shader = m_SceneShader;
                 game_context.collider_debug_shader = m_ColliderDebugShader;
+                updateFrameUBO(game_packet, game_frame.viewport_size);
+                updateLightUBO(game_packet);
                 m_RenderPipeline.execute(game_context, make_pipeline_callbacks());
                 rendered_any = true;
             }
@@ -622,6 +731,7 @@ namespace Hybrid
         context.framebuffer = m_SceneFB;
         context.scene_framebuffer = m_SceneFB;
         context.selection_framebuffer = m_SelectionFB;
+        context.selection_overlay_style = &m_SelectionOverlayStyle;
         context.asset_manager = m_AssetManager;
         context.shader_library = &m_ShaderLibrary;
         context.material_system = &m_MaterialSystem;
@@ -631,6 +741,8 @@ namespace Hybrid
         };
         context.scene_shader = m_SceneShader;
         context.collider_debug_shader = m_ColliderDebugShader;
+        updateFrameUBO(packet, frame_context.viewport_size);
+        updateLightUBO(packet);
         m_RenderPipeline.execute(context, make_pipeline_callbacks());
     }
     uint32_t RenderSystem::readEntityID(int x, int y) const
@@ -643,15 +755,7 @@ namespace Hybrid
             y >= static_cast<int>(m_SceneFB->getHeight()))
             return kInvalidEntityID;
 
-        m_SceneFB->bind();
-
-        // Ensure the picking pass writes to the second color attachment (entity ID buffer).Q
-        glReadBuffer(GL_COLOR_ATTACHMENT1);
-
-        uint32_t encoded_id = 0;
-        glReadPixels(x, y, 1, 1, GL_RED_INTEGER, GL_UNSIGNED_INT, &encoded_id);
-
-        m_SceneFB->unbind();
+        const uint32_t encoded_id = m_SceneFB->readPixelUInt(RenderTargets::kSceneEntityIDAttachment, x, y);
         return decodeEntityID(encoded_id);
     }
 

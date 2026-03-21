@@ -29,4 +29,15 @@ namespace Hybrid {
         static std::shared_ptr<IndexBuffer> Create(const uint32_t* indices, uint32_t count);
     };
 
+    // UniformBuffer: GPU buffer for frame/global uniform blocks.
+    class UniformBuffer {
+    public:
+        virtual ~UniformBuffer() = default;
+
+        virtual void setData(const void* data, uint32_t size, uint32_t offset = 0) = 0;
+        virtual void bindBase(uint32_t binding) const = 0;
+
+        static std::shared_ptr<UniformBuffer> Create(uint32_t size);
+    };
+
 } // namespace Hybrid

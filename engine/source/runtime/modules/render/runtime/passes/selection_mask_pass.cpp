@@ -2,12 +2,11 @@
 
 #include <unordered_set>
 
-#include <glad/gl.h>
-
 #include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/vertex_array.h"
+#include "runtime/modules/render/runtime/render_uniforms.h"
 
 namespace Hybrid
 {
@@ -30,16 +29,17 @@ namespace Hybrid
 
         framebuffer->bind();
         RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
-        glDisable(GL_BLEND);
-        glEnable(GL_DEPTH_TEST);
-        glDepthMask(GL_TRUE);
-        glEnable(GL_CULL_FACE);
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClearDepth(1.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        RenderCommand::setBlendEnabled(false);
+        RenderCommand::setDepthTestEnabled(true);
+        RenderCommand::setDepthWriteEnabled(true);
+        RenderCommand::setCullEnabled(true);
+        RenderCommand::setClearColor(glm::vec4(0.0f));
+        RenderCommand::setClearDepth(1.0f);
+        RenderCommand::clear();
 
         shader->bind();
-        shader->setMat4("u_ViewProjection", packet.frame.viewProj);
+        shader->setUniformBlockBinding(RenderUniforms::kFrameBlockName,
+                                       RenderUniforms::kFrameUBOBinding);
 
         const std::unordered_set<uint32_t> selected_entities(selection->selected_entities.begin(),
                                                              selection->selected_entities.end());
