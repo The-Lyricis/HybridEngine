@@ -1,4 +1,7 @@
-# Hybrid Engine
+<h1 align="center">
+  <img src="docs/images/app_icon.png" alt="Hybrid Engine Icon" width="42" />
+  Hybrid Engine
+</h1>
 
 [![README](https://img.shields.io/badge/README-English-111827?style=flat-square)](README.md)
 [![README](https://img.shields.io/badge/README-Simplified%20Chinese-374151?style=flat-square)](README_zh-CN.md)
