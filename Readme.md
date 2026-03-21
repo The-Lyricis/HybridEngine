@@ -1,10 +1,19 @@
-<h1>
-  <img src="docs/images/hybrid_icon.png" alt="Hybrid Engine Icon" width="42" valign="middle" />
-  Hybrid Engine
-</h1>
+<table width="100%">
+  <tr>
+    <td align="left" valign="middle">
+      <h1>
+        <img src="docs/images/hybrid_icon.png" alt="Hybrid Engine Icon" width="38" valign="middle" />
+        Hybrid Engine
+      </h1>
+    </td>
+    <td align="right" valign="middle">
+      <a href="README_zh-CN.md">
+        <img src="https://img.shields.io/badge/简体中文-374151?style=for-the-badge" alt="简体中文 README" />
+      </a>
+    </td>
+  </tr>
+</table>
 
-[![README](https://img.shields.io/badge/README-English-111827?style=flat-square)](README.md)
-[![README](https://img.shields.io/badge/README-Simplified%20Chinese-374151?style=flat-square)](README_zh-CN.md)
 [![C++](https://img.shields.io/badge/Language-C%2B%2B-00599C?logo=c%2B%2B&style=flat-square)](https://isocpp.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](./LICENSE)
 
