@@ -1,77 +1,121 @@
-# 下一步计划
+# Render ECS Asset Plan
 
-## 总体方向
+Updated: 2026-03-21
+Scope: `TDA572/engine/source/runtime/modules/render`, `TDA572/engine/source/runtime/modules/asset`, `TDA572/engine/source/editor`
 
-以“资源资产 + ECS 组件 + 渲染管线”三层来扩展：先定义资产类型（Mesh/Material），再给实体挂组件（MeshRenderer/Light），最后改 RenderSystem 收集并下发到 GPU。
+## Overall Direction
 
-先做“小而可跑”的版本：Blinn-Phong 或简化金属度/粗糙度 PBR，支持 1 个平行光 + 若干点光，网格/材质走 AssetManager 的加载与缓存。后续再逐步丰富。
+The render roadmap is now constrained by a staged platform and backend strategy.
 
-## 资产层设计
+The current staged goal is:
 
-Mesh 资产：顶点格式 pos/normal/tangent/uv，可含多个 submesh（索引范围 + 绑定材质 ID），附带包围盒球做 culling。文件优先支持 glTF，临时可写一个简单 OBJ loader。
+### Phase 1
 
-Material 资产：字段 albedoColor/metallic/roughness/ao/emissive + 贴图句柄（可为空，用默认纹理）。添加 AssetType::Mesh / AssetType::Material，写对应 Loader，并在 ResourceSystem::registerDefaultLoaders 注册。
+- runtime cross-platform
+- render backend stays OpenGL-only
 
-GPU 缓存：在 RenderSystem 维护 MeshGPUCache（VAO/VBO/IBO）和 MaterialGPUCache（纹理绑定、UBO 数据）。用 AssetID 作为 key，避免重复创建。
+### Phase 2
 
-## ECS 组件
+- isolate editor Windows-specific services behind platform interfaces
 
-MeshRenderer 组件扩展：
+### Phase 3
 
-AssetID Mesh; AssetID Material; int SubmeshIndex = 0;
+- move direct OpenGL usage out of runtime pass code and back into backend abstractions
 
-glm::vec4 OverrideTint（可选覆盖）。
+This means the near-term render roadmap should optimize for architecture that remains compatible with a future second backend, but it should not attempt to implement that second backend yet.
 
-光照组件：
+## Current Baseline
 
-DirectionalLight { vec3 color; float intensity; }
+The current baseline already includes:
 
-PointLight { vec3 color; float intensity; float range; }
+- asset-driven mesh/material render path
+- render packet extraction
+- pass-based pipeline execution
+- scene/game viewport split
+- picking attachment path
+- selection highlight path based on projected selected-union mask
+- Frame UBO and Light UBO for the scene shader, with shared protocol definitions moved into dedicated runtime headers
 
-可后续加 SpotLight { inner/outer angle }。
+## Planning Constraints
 
-继续复用已有 Transform / Camera；渲染时用 Transform 生成 model 矩阵。
+The following rules should guide future work.
 
-## 渲染管线最小实现
+### 1. Runtime render work should avoid new Windows-only assumptions
 
-帧级 UBO：视图/投影矩阵、相机位置、时间等。
+Runtime code should remain portable where possible.
 
-光照 UBO：固定上限，如 MAX_DIR_LIGHTS=1, MAX_POINT_LIGHTS=16，不足部分填 0。
+### 2. Render feature work should not deepen OpenGL coupling inside pass code
 
-材质绑定：采样器绑定（albedo/normal/metalRough/AO/emissive），无贴图用默认白/中灰。
+If a new feature requires OpenGL-only work, prefer putting that work behind:
 
-绘制遍历：
+- render backend classes
+- render command abstractions
+- framebuffer/texture abstractions
 
-从 Scene registry 按组件 Transform + MeshRenderer 收集，过滤缺失资源的实体。
+rather than placing more raw OpenGL calls directly into pass code.
 
-按 Shader/Material 分组以减少切换（初期可以不分组，先跑通）。
+### 3. Editor portability is a separate stage
 
-为每个 renderable 设置 model 矩阵，提交 VAO & index count。
+Editor functionality may still be Windows-first for now, but platform-specific editor capabilities should gradually move behind platform interfaces.
 
-Shader：先做一套基础 shader：
+## Current Priority Order
 
-Vertex：u_ViewProj * u_Model，输出世界空间 position/normal/uv。
+### Priority 1: Runtime stability and portability under OpenGL
 
-Fragment：Lambert + Blinn-Phong 或简化 PBR（金属度/粗糙度）。支持一盏平行光、可选多点光。
+Continue improving runtime rendering while keeping the backend OpenGL-only.
 
-## 与现有结构的衔接
+This includes:
 
-RenderSystem 里新增：
+- scene rendering correctness
+- asset-path stability
+- viewport correctness
+- UBO path stability
+- selection overlay stability
 
-uploadFrameData(...)、uploadLights(...)、drawRenderable(...) 等私有函数。
+### Priority 2: Editor platform-service isolation
 
-初始化阶段创建基础 PBR/Phong shader 和默认材质。
+Create platform interfaces for editor-only functionality such as:
 
-资源系统：在初始化时挂载 Mesh/Material loader，像现有 Texture 一样 setDefault。
+- file dialogs
+- show-in-explorer or open-directory behavior
+- shell or icon integration
 
-Event & Editor：EditorUI 后续可加材质/光源面板，不影响首轮实现。
+### Priority 3: Runtime backend decoupling
 
-## 实现顺序（建议三小步）
+Gradually reduce direct OpenGL usage in runtime pass code.
 
-资产与组件：定义 Mesh/Material 资产类型 + Loader stub，扩展 MeshRenderer 组件与默认材质。
+Main targets included:
 
-光源与 UBO：新增光照组件与 RenderSystem 中的光数据收集/上传，Shader 支持 1 个平行光 + N 个点光。
+- draw-buffer control
+- texture copy operations
+- GPU readback paths
+- direct texture binding in passes
+- direct state toggles in passes
 
-Mesh 渲染替换立方体：加载一个 Mesh 资产（或内置立方体 mesh）走新的提交流程，验证帧通路和窗口缩放后的尺寸同步。
+Current status:
 
-按这个路线走，可以先把 cube 渲染切换到“Mesh+Material+光照”路径，再逐步接入实际模型文件与编辑器面板。
+- runtime pass code no longer contains direct `gl*` calls
+- the next backend-decoupling work should focus on remaining coupling points outside runtime pass code
+
+## Execution Order
+
+I plan to continue in this order:
+
+1. I will keep stabilizing the current runtime render path under OpenGL.
+2. I will isolate editor platform services before claiming broader editor portability.
+3. I will gradually move runtime pass GL calls behind backend abstractions.
+4. Only after those steps are in place will I treat a second graphics backend as an active implementation goal.
+
+## Short-Term Follow-Up Work
+
+The most reasonable next steps are:
+
+1. continue prepare / sort cleanup in the render pipeline
+2. keep the centralized render protocols stable and avoid turning them into generic constant dumps
+3. document the current runtime/backend boundary clearly so future work does not reintroduce pass-level GL coupling
+4. identify the next highest-value backend coupling points outside runtime pass code, especially asset-side GPU upload
+
+## Notes
+
+This file is a live planning document.
+It should stay aligned with `docs/systems/render_system.md`.

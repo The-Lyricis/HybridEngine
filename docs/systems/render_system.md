@@ -96,6 +96,32 @@ Current builtin shader names are:
 - `SelectionMask`
 - `SelectionOverlay`
 
+## Centralized Render Protocols
+
+The render runtime now keeps long-lived shared protocols in dedicated headers instead of scattering them through passes or `RenderSystem` internals.
+
+Current protocol headers are:
+
+- `render_uniforms.h`
+  - Frame and Light UBO block names
+  - UBO binding indices
+  - `FrameUBOData` and `LightUBOData` layouts
+- `render_bindings.h`
+  - Scene material texture slots
+  - Scene material uniform names
+  - Selection overlay sampler slots and sampler uniform names
+- `render_targets.h`
+  - framebuffer attachment semantics such as scene color, scene EntityID, and selection mask attachment indices
+- `render_shaders.h`
+  - builtin shader registration names and shader file mapping
+- `render_selection_style.h`
+  - selection overlay style data such as visible color, occluded color, fill color, and depth epsilon
+
+Rule:
+
+- only cross-module, long-lived render contracts belong in these headers
+- pass-local constants or temporary debug values should stay local
+
 ## Frame and Light Upload Path
 
 The scene shader now uses two global UBOs:
@@ -103,10 +129,15 @@ The scene shader now uses two global UBOs:
 - `FrameBlock`
 - `LightBlock`
 
+The UBO protocol is centralized in:
+
+- `render_uniforms.h`
+
 Current responsibility split:
 
 - `RenderSystem` owns the UBO objects and updates them before pipeline execution
-- `ScenePass` no longer uploads frame/light data through per-uniform calls
+- `ScenePass`, `SelectionMaskPass`, and `GizmoPass` consume `FrameBlock`
+- `ScenePass` consumes `LightBlock`
 - per-draw data still uses regular uniforms:
   - `u_Model`
   - `u_TintColor`
@@ -147,6 +178,11 @@ Examples:
 Render-backend preparation goal:
 
 - move direct OpenGL calls out of runtime pass code and back into backend or render-command abstractions
+
+Current status:
+
+- `runtime/modules/render/runtime` no longer contains direct `gl*` calls
+- draw-buffer control, attachment clear/readback/copy, state toggles, and selection-overlay attachment binding now go through backend or render abstractions
 
 This is the real prerequisite for any future second graphics backend.
 
@@ -202,16 +238,18 @@ The current rules are:
 ## Current Open Issues
 
 - prepare / sort layering is still thin
-- selection overlay style parameters are still hard-coded in the pass
-- runtime pass code still contains OpenGL calls that should eventually move behind backend abstractions
+- shader-binding registration is now centralized, but `configureShaderBindings()` should not grow into a large catch-all registration function
+- the asset texture upload path still contains an OpenGL-specific texture loader and remains a known backend-coupling point
+- runtime still exposes framebuffer renderer IDs for some editor-facing usage, and that boundary should not spread back into runtime pass logic
 
 ## Future Improvement Plan
 
 I plan to continue with these steps:
 
 1. I will keep the runtime target OpenGL-only while continuing to remove avoidable platform-specific assumptions.
-2. I will isolate editor platform services behind interfaces before attempting broader editor portability.
-3. I will gradually move direct OpenGL usage out of runtime pass code so the renderer becomes structurally ready for a second backend later.
+2. I will keep the new render protocols stable and avoid turning the protocol headers into general constant dumps.
+3. I will isolate editor platform services behind interfaces before attempting broader editor portability.
+4. I will keep backend-facing work focused on remaining coupling points such as asset-side GPU upload and renderer-ID leakage, rather than reopening runtime pass GL usage.
 
 ## Related Documents
 

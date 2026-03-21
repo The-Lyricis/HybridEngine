@@ -1,6 +1,6 @@
 # Render ECS Asset Chain
 
-Updated: 2026-03-19
+Updated: 2026-03-21
 Scope: `TDA572/engine/source/runtime/modules/render/runtime`, `TDA572/engine/source/runtime/modules/asset`, `TDA572/engine/source/editor`
 
 ## Purpose
@@ -86,12 +86,24 @@ The current render pass set is:
 - `ShadowPass`
 - `PostProcessPass`
 
-Current builtin shader registrations are:
+Current builtin shader registrations are centralized through `render_shaders.h`:
 
 - `Scene`
 - `ColliderDebug`
 - `SelectionMask`
 - `SelectionOverlay`
+
+### 6. Shared render protocols
+
+The current render path now centralizes the main shared contracts in dedicated headers:
+
+- `render_uniforms.h`
+- `render_bindings.h`
+- `render_targets.h`
+- `render_shaders.h`
+- `render_selection_style.h`
+
+This keeps UBO layout, sampler slots, target semantics, builtin shader identifiers, and selection-overlay style data out of pass-local magic numbers.
 
 ## Editor and Runtime Integration
 
@@ -218,14 +230,14 @@ Fix:
 
 ## Current Open Issues
 
-- frame/light data still uses per-uniform uploads
 - prepare / sort layering is still thin
-- the current overlay path is correct for editor selection semantics, but configurable styling is still hard-coded in the pass
+- the runtime render path is cleaner now, but asset-side OpenGL texture upload is still a backend-coupling point
+- shader binding and render protocol registration are now centralized, and future work should avoid turning those registration points into catch-all systems
 
 ## Future Improvement Plan
 
 I plan to continue in this order:
 
-1. I will implement Frame UBO + Light UBO first.
-2. I will continue to fill in the prepare / sort layer.
-3. After those two steps are stable, I will move selection overlay styling out of hard-coded pass constants and make it editor-configurable.
+1. I will continue to fill in the prepare / sort layer.
+2. I will keep the centralized render protocols stable while avoiding new runtime/pass OpenGL leakage.
+3. After that, I will decide whether the next structural priority is asset-side GPU upload separation or further editor/platform isolation.
