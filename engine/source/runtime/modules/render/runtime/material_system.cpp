@@ -29,12 +29,15 @@ namespace Hybrid
     void MaterialSystem::initialize(std::shared_ptr<AssetManager> asset_manager)
     {
         m_AssetManager = std::move(asset_manager);
+        m_TextureUploader = TextureUploader::Create();
         m_Initialized = true;
     }
 
     void MaterialSystem::shutdown()
     {
         invalidateAll();
+        m_TextureCache.clear();
+        m_TextureUploader.reset();
         m_AssetManager.reset();
         m_Initialized = false;
     }
@@ -42,8 +45,10 @@ namespace Hybrid
     void MaterialSystem::setAssetManager(std::shared_ptr<AssetManager> asset_manager)
     {
         m_AssetManager = std::move(asset_manager);
+        m_TextureUploader = TextureUploader::Create();
         m_Initialized = true;
         invalidateAll();
+        m_TextureCache.clear();
     }
 
     MaterialSystem::MaterialGPU* MaterialSystem::getOrCreate(AssetID material_id, const std::shared_ptr<Material>& material)
@@ -61,7 +66,7 @@ namespace Hybrid
             if (!m_AssetManager || texture_id.value == 0)
                 return fallback;
 
-            auto texture = m_AssetManager->loadSync<Texture>(texture_id);
+            auto texture = getOrCreateTexture(texture_id);
             return texture ? texture : fallback;
         };
 
@@ -89,6 +94,7 @@ namespace Hybrid
     {
         if (texture_id.value == 0)
             return;
+        m_TextureCache.erase(texture_id);
         invalidateAll();
     }
 
@@ -121,5 +127,25 @@ namespace Hybrid
         desc.mipLevels = 1;
         uint8_t data[4] = {r, g, b, a};
         return Texture::Create(desc, data, sizeof(data));
+    }
+
+    TexturePtr MaterialSystem::getOrCreateTexture(AssetID texture_id)
+    {
+        if (texture_id.value == 0 || !m_AssetManager || !m_TextureUploader)
+            return nullptr;
+
+        if (auto it = m_TextureCache.find(texture_id); it != m_TextureCache.end())
+            return it->second;
+
+        auto image = m_AssetManager->loadSync<TextureImageData>(texture_id);
+        if (!image || !image->isValid())
+            return nullptr;
+
+        auto texture = m_TextureUploader->uploadTexture2D(*image);
+        if (!texture)
+            return nullptr;
+
+        m_TextureCache[texture_id] = texture;
+        return texture;
     }
 } // namespace Hybrid

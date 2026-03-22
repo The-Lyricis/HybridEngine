@@ -5,7 +5,9 @@
 
 #include "runtime/modules/asset/asset_manager.h"
 #include "runtime/modules/asset/material.h"
+#include "runtime/modules/asset/texture_image.h"
 #include "runtime/modules/render/public/texture.h"
+#include "runtime/modules/render/public/texture_uploader.h"
 
 namespace Hybrid
 {
@@ -38,12 +40,15 @@ namespace Hybrid
         void invalidateAll();
 
     private:
+        TexturePtr getOrCreateTexture(AssetID texture_id);
         void ensureDefaultTextures();
         TexturePtr createSolidColorTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 
     private:
         std::shared_ptr<AssetManager> m_AssetManager;
         std::unordered_map<AssetID, std::shared_ptr<MaterialGPU>, AssetID::Hasher> m_MaterialCache;
+        std::unordered_map<AssetID, TexturePtr, AssetID::Hasher> m_TextureCache;
+        std::unique_ptr<TextureUploader> m_TextureUploader;
 
         TexturePtr m_DefaultAlbedoTex;
         TexturePtr m_DefaultNormalTex;

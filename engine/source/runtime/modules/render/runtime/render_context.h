@@ -10,7 +10,7 @@
 #include "runtime/modules/render/runtime/mesh_gpu.h"
 #include "runtime/modules/render/runtime/render_flags.h"
 #include "runtime/modules/render/runtime/render_packet.h"
-#include "runtime/modules/render/runtime/render_selection_style.h"
+#include "runtime/modules/render/runtime/selection_overlay_style.h"
 #include "runtime/modules/render/runtime/shader_library.h"
 
 namespace Hybrid

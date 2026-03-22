@@ -6,7 +6,7 @@
 #include "builtin_assets.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/render/public/texture.h"
-#include "opengl_texture2d_loader.h"
+#include "texture_image_loader.h"
 #include "mesh_loader.h"
 #include "material_loader.h"
 #include "scene_loader.h"
@@ -36,7 +36,8 @@ namespace Hybrid
                       pathOrPlaceholder(m_project.cache),
                       pathOrPlaceholder(m_project.build));
 
-        // 1) 浣跨敤澶栭儴娉ㄥ叆鐨?VFS锛涗负绌哄垯鍥為€€鍒涘缓鏈湴 VFS锛堥伩鍏嶇┖鎸囬拡宕╂簝锛?
+        // 1) Resolve the runtime VFS. Use the injected implementation when provided,
+        //    otherwise fall back to NativeFileSystem.
         if (vfs)
         {
             m_vfs = std::move(vfs);
@@ -52,7 +53,7 @@ namespace Hybrid
         m_registry = std::make_shared<AssetRegistry>();
         m_metaStore = std::make_unique<AssetMetaStore>(m_registry);
 
-        // 3) 浠?ProjectContext 涓哄噯锛欰ssets 蹇呴』鏈夋晥
+        // 3) Resolve the runtime asset roots from ProjectContext.
         const auto& assetsRoot = m_project.assets;
         const auto& cacheRoot = m_project.cache;
         const auto& projRoot = m_project.root;
@@ -66,8 +67,7 @@ namespace Hybrid
             return;
         }
 
-        // 4) 鎸傝浇锛氫繚鎸佷笌浣?NativeFileSystem 鐨勪弗鏍兼牸寮忎竴鑷达紙alias:relative锛?
-        //    娉ㄦ剰锛歮ount 绗笁涓弬鏁版槸 priority
+        // 4) Mount the logical roots used by runtime asset resolution.
         m_vfs->mount("asset", assetsRoot, 0);
 
         if (!cacheRoot.empty())
@@ -103,7 +103,7 @@ namespace Hybrid
             m_vfs->mount("build", buildRoot, 0);
         }
 
-        // 5) Registry root 蹇呴』鎸囧悜椤圭洰 Assets锛圗ditorResourceSystem 淇濆瓨 meta 渚濊禆瀹冿級
+        // 5) Set the registry root so source paths stay normalized against Assets.
         m_registry->setRoot(assetsRoot);
 
         HBD_CORE_INFO("{} mounts_ready project_root={} assets_root={} cache_root={} build_root={}",
@@ -113,7 +113,7 @@ namespace Hybrid
                       pathOrPlaceholder(cacheRoot),
                       pathOrPlaceholder(buildRoot));
 
-        // 6) Meta 浠?Assets 涓嬪姞杞斤紙涓庝綘 Editor 淇濆瓨閫昏緫涓€鑷达級
+        // 6) Load all asset metadata from the Assets tree into the runtime registry.
         if (m_metaStore)
         {
             meta_load_result = m_metaStore->loadAll(assetsRoot);
@@ -145,14 +145,14 @@ namespace Hybrid
 
     void RuntimeResourceSystem::registerDefaultLoaders()
     {
-        auto texLoader = std::make_shared<GLTexture2DLoader>();
-        m_manager->registerLoader<Texture>(texLoader);
+        auto texLoader = std::make_shared<TextureImageLoader>();
+        m_manager->registerLoader<TextureImageData>(texLoader);
 
-        // Stub loaders for Mesh / Material锛堝悗缁浛鎹负瀹為檯瀹炵幇锛?
+        // Register the current CPU-side runtime loaders.
         m_manager->registerLoader<Mesh>(std::make_shared<MeshCookedLoader>());
         m_manager->registerLoader<Material>(std::make_shared<MaterialFileLoader>(m_registry));
         m_manager->registerLoader<Scene>(std::make_shared<SceneLoader>());
-        HBD_CORE_DEBUG("{} loaders_registered count=4 types=Texture,Mesh,Material,Scene",
+        HBD_CORE_DEBUG("{} loaders_registered count=4 types=TextureImageData,Mesh,Material,Scene",
                        kRuntimeResourceLogTag);
     }
 

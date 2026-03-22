@@ -601,10 +601,6 @@ namespace Hybrid
             {
                 m_GizmoPass.execute(context);
             };
-            // callbacks.grid = [this](RenderContext& context)
-            // {
-            //     m_GridPass.execute(context);
-            // };
             callbacks.shadow = [this](RenderContext& context)
             {
                 m_ShadowPass.execute(context);
@@ -613,10 +609,6 @@ namespace Hybrid
             {
                 m_PostProcessPass.execute(context);
             };
-            // callbacks.debug_normals = [this](RenderContext& context)
-            // {
-            //     m_DebugNormalsPass.execute(context);
-            // };
             return callbacks;
         };
 

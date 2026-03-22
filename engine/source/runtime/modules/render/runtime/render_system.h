@@ -14,7 +14,6 @@
 #include "runtime/modules/asset/material.h"
 #include "runtime/modules/asset/mesh.h"
 #include "runtime/modules/render/runtime/editor_render_ext.h"
-#include "runtime/modules/render/runtime/passes/grid_pass.h"
 #include "runtime/modules/render/runtime/passes/scene_pass.h"
 #include "runtime/modules/render/runtime/passes/gizmo_pass.h"
 #include "runtime/modules/render/runtime/passes/picking_pass.h"
@@ -24,7 +23,7 @@
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/mesh_gpu.h"
 #include "runtime/modules/render/runtime/render_uniforms.h"
-#include "runtime/modules/render/runtime/render_selection_style.h"
+#include "runtime/modules/render/runtime/selection_overlay_style.h"
 #include "runtime/modules/render/runtime/passes/selection_overlay_pass.h"
 #include "runtime/modules/render/runtime/passes/selection_mask_pass.h"
 #include "runtime/modules/render/runtime/render_packet.h"
@@ -32,7 +31,6 @@
 #include "runtime/modules/render/runtime/render_flags.h"
 #include "runtime/modules/render/runtime/shader_library.h"
 #include "runtime/modules/render/runtime/passes/shadow_pass.h"
-#include "runtime/modules/render/runtime/passes/debug_normals_pass.h"
 #include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/texture.h"
 
@@ -104,10 +102,8 @@ namespace Hybrid
         ScenePass m_ScenePass;
         PickingPass m_PickingPass;
         GizmoPass m_GizmoPass;
-        //GridPass m_GridPass;
         ShadowPass m_ShadowPass;
         PostProcessPass m_PostProcessPass;
-        //DebugNormalsPass m_DebugNormalsPass;
         SelectionMaskPass m_SelectionMaskPass;
         SelectionOverlayPass m_SelectionOverlayPass;
 

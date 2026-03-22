@@ -1,14 +1,11 @@
-﻿#include <glad/gl.h>
+#include "texture_image_loader.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 #include <cstring>
-#include <vector>
 
 #include "runtime/core/base/macro.h"
-#include "runtime/core/log/log_system.h"
-#include "runtime/modules/render/backend/opengl/opengl_texture.h"
-#include "opengl_texture2d_loader.h"
 #include "texture_cooked_format.h"
 
 #if !defined(HYBRID_ALLOW_SOURCE_FALLBACK)
@@ -23,90 +20,41 @@ namespace Hybrid
 {
     namespace
     {
-        constexpr const char* kGLTexture2DLoaderLogTag = "[GLTexture2DLoader]";
+        constexpr const char* kTextureImageLoaderLogTag = "[TextureImageLoader]";
 
-        GLenum DrainGLErrors()
-        {
-            GLenum last_error = GL_NO_ERROR;
-            while (true)
-            {
-                const GLenum error = glGetError();
-                if (error == GL_NO_ERROR)
-                    return last_error;
-                last_error = error;
-            }
-        }
-
-        TextureHandle CreateTextureFromRgba8(const uint8_t* pixels, int w, int h)
+        std::shared_ptr<TextureImageData> makeTextureImageFromRgba8(const uint8_t* pixels, int w, int h)
         {
             if (!pixels || w <= 0 || h <= 0)
                 return nullptr;
 
-            std::vector<uint8_t> flipped(static_cast<size_t>(w) * static_cast<size_t>(h) * 4u);
+            auto image = std::make_shared<TextureImageData>();
+            image->width = static_cast<uint32_t>(w);
+            image->height = static_cast<uint32_t>(h);
+            image->format = TextureFormat::RGBA8;
+            image->generate_mips = true;
+            image->pixels.resize(static_cast<size_t>(w) * static_cast<size_t>(h) * 4u);
+
             const size_t row_bytes = static_cast<size_t>(w) * 4u;
             for (int y = 0; y < h; ++y)
             {
                 const uint8_t* src_row = pixels + static_cast<size_t>(y) * row_bytes;
-                uint8_t* dst_row = flipped.data() + static_cast<size_t>(h - 1 - y) * row_bytes;
+                uint8_t* dst_row = image->pixels.data() + static_cast<size_t>(h - 1 - y) * row_bytes;
                 std::memcpy(dst_row, src_row, row_bytes);
             }
 
-            GLuint tex = 0;
-            glGenTextures(1, &tex);
-            glBindTexture(GL_TEXTURE_2D, tex);
-
-            GLint prev_align = 0;
-            glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align);
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, flipped.data());
-            glGenerateMipmap(GL_TEXTURE_2D);
-
-            glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
-            glBindTexture(GL_TEXTURE_2D, 0);
-
-            TextureDesc desc;
-            desc.type = TextureType::Tex2D;
-            desc.format = TextureFormat::RGBA8;
-            desc.width = static_cast<uint32_t>(w);
-            desc.height = static_cast<uint32_t>(h);
-            desc.layers = 1;
-            desc.mipLevels = 1;
-            return std::make_shared<GLTexture>(tex, desc);
+            return image;
         }
     } // namespace
 
-    std::vector<char> GLTexture2DLoader::readBytes(const IVirtualFileSystem& vfs, const std::string& path) const
+    std::vector<char> TextureImageLoader::readBytes(const IVirtualFileSystem& vfs, const std::string& path) const
     {
         if (path.empty())
             return {};
         return vfs.readAll(path);
     }
 
-    TextureHandle GLTexture2DLoader::load(const AssetMetadata& meta, IVirtualFileSystem& vfs)
+    std::shared_ptr<TextureImageData> TextureImageLoader::load(const AssetMetadata& meta, IVirtualFileSystem& vfs)
     {
-        // Drain any unrelated earlier GL errors so this loader only reports
-        // errors caused by its own context probe / upload work.
-        (void)DrainGLErrors();
-
-        GLint current_tex = 0;
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &current_tex);
-        const GLenum probe_error = DrainGLErrors();
-        if (probe_error != GL_NO_ERROR)
-        {
-            HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=gl_probe_failed gl_error=0x{:X}",
-                           kGLTexture2DLoaderLogTag,
-                           meta.id.value,
-                           meta.source_path.empty() ? "<empty>" : meta.source_path,
-                           static_cast<uint32_t>(probe_error));
-            return nullptr;
-        }
-
         const std::string cooked = meta.cooked_path;
         const std::string source = meta.source_path;
         constexpr bool kAllowSourceFallback = HYBRID_ALLOW_SOURCE_FALLBACK != 0;
@@ -114,7 +62,7 @@ namespace Hybrid
         if (cooked.empty() && !kAllowSourceFallback)
         {
             HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=empty_cooked_path_fallback_disabled",
-                           kGLTexture2DLoaderLogTag,
+                           kTextureImageLoaderLogTag,
                            meta.id.value,
                            source.empty() ? "<empty>" : source);
             return nullptr;
@@ -126,38 +74,38 @@ namespace Hybrid
             if (cooked_bytes.empty())
             {
                 HBD_CORE_WARN("{} cooked_missing asset_id={} cooked_path={}",
-                              kGLTexture2DLoaderLogTag,
+                              kTextureImageLoaderLogTag,
                               meta.id.value,
                               cooked);
             }
             else
             {
-                HtexImage image{};
+                HtexImage decoded{};
                 std::string decode_error;
-                if (HtexDecode(cooked_bytes, image, &decode_error))
+                if (HtexDecode(cooked_bytes, decoded, &decode_error))
                 {
-                    TextureHandle tex = CreateTextureFromRgba8(image.pixels.data(),
-                                                               static_cast<int>(image.width),
-                                                               static_cast<int>(image.height));
-                    if (!tex)
+                    auto image = makeTextureImageFromRgba8(decoded.pixels.data(),
+                                                          static_cast<int>(decoded.width),
+                                                          static_cast<int>(decoded.height));
+                    if (!image)
                     {
-                        HBD_CORE_ERROR("{} load_failed asset_id={} cooked_path={} reason=upload_failed",
-                                       kGLTexture2DLoaderLogTag,
+                        HBD_CORE_ERROR("{} load_failed asset_id={} cooked_path={} reason=image_build_failed",
+                                       kTextureImageLoaderLogTag,
                                        meta.id.value,
                                        cooked);
                     }
-                    return tex;
+                    return image;
                 }
 
                 HBD_CORE_ERROR("{} load_failed asset_id={} cooked_path={} reason=decode_failed error={}",
-                               kGLTexture2DLoaderLogTag,
+                               kTextureImageLoaderLogTag,
                                meta.id.value,
                                cooked,
                                decode_error.empty() ? "<empty>" : decode_error);
                 if (!HtexLooksLikeFile(cooked_bytes))
                 {
                     HBD_CORE_ERROR("{} load_failed asset_id={} cooked_path={} reason=format_mismatch",
-                                   kGLTexture2DLoaderLogTag,
+                                   kTextureImageLoaderLogTag,
                                    meta.id.value,
                                    cooked);
                 }
@@ -166,7 +114,7 @@ namespace Hybrid
             if (!kAllowSourceFallback)
             {
                 HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=cooked_unusable_fallback_disabled",
-                               kGLTexture2DLoaderLogTag,
+                               kTextureImageLoaderLogTag,
                                meta.id.value,
                                source.empty() ? "<empty>" : source);
                 return nullptr;
@@ -177,13 +125,15 @@ namespace Hybrid
         if (source_bytes.empty())
         {
             HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=missing_source_data",
-                           kGLTexture2DLoaderLogTag,
+                           kTextureImageLoaderLogTag,
                            meta.id.value,
                            source.empty() ? "<empty>" : source);
             return nullptr;
         }
 
-        int w = 0, h = 0, comp = 0;
+        int w = 0;
+        int h = 0;
+        int comp = 0;
         stbi_uc* pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(source_bytes.data()),
                                                 static_cast<int>(source_bytes.size()),
                                                 &w,
@@ -193,7 +143,7 @@ namespace Hybrid
         if (!pixels || w <= 0 || h <= 0)
         {
             HBD_CORE_ERROR("{} load_failed asset_id={} source_path={} reason=source_decode_failed",
-                           kGLTexture2DLoaderLogTag,
+                           kTextureImageLoaderLogTag,
                            meta.id.value,
                            source.empty() ? "<empty>" : source);
             if (pixels)
@@ -201,17 +151,16 @@ namespace Hybrid
             return nullptr;
         }
 
-        TextureHandle out = CreateTextureFromRgba8(reinterpret_cast<const uint8_t*>(pixels), w, h);
+        auto image = makeTextureImageFromRgba8(reinterpret_cast<const uint8_t*>(pixels), w, h);
         stbi_image_free(pixels);
 
-        if (out)
+        if (image)
         {
             HBD_CORE_WARN("{} source_fallback_succeeded asset_id={} source_path={}",
-                          kGLTexture2DLoaderLogTag,
+                          kTextureImageLoaderLogTag,
                           meta.id.value,
                           source.empty() ? "<empty>" : source);
         }
-        return out;
+        return image;
     }
 } // namespace Hybrid
-
