@@ -9,6 +9,7 @@
 
 #include "editor/core/editor_context.h"
 #include "editor/services/import/import_types.h"
+#include "editor/services/platform/editor_platform_services.h"
 #include "runtime/core/base/intersection.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/asset/asset_registry.h"
@@ -123,6 +124,14 @@ namespace Hybrid
                     m_editor_ui.context().selection.clear();
                 syncContextDocumentState();
             };
+        ctx.request_open_scene = [this]() -> bool
+            {
+                const bool opened = m_scene_io.requestOpen();
+                if (opened)
+                    m_editor_ui.context().selection.clear();
+                syncContextDocumentState();
+                return opened;
+            };
         ctx.request_reimport_asset = [this](const std::string& asset_vpath) -> bool
             {
                 const bool ok = m_asset_hot_reload_controller.requestReimport(asset_vpath);
@@ -154,6 +163,10 @@ namespace Hybrid
                 const bool saved = m_scene_io.requestSaveAs();
                 syncContextDocumentState();
                 return saved;
+            };
+        ctx.reveal_in_file_browser = [this](const std::filesystem::path& path) -> bool
+            {
+                return m_services.platform ? m_services.platform->revealInFileBrowser(path) : false;
             };
         ctx.find_asset_by_vpath = [this](const std::string& asset_vpath) -> AssetID
             {
@@ -204,11 +217,13 @@ namespace Hybrid
         auto& ctx = m_editor_ui.context();
         ctx.notify_asset_source_event = {};
         ctx.open_scene = {};
+        ctx.request_open_scene = {};
         ctx.request_reimport_asset = {};
         ctx.request_rename_folder = {};
         ctx.request_new_scene = {};
         ctx.request_save_scene = {};
         ctx.request_save_scene_as = {};
+        ctx.reveal_in_file_browser = {};
         ctx.find_asset_by_vpath = {};
         ctx.describe_mesh_renderer_material = {};
         ctx.instantiate_scene_asset = {};

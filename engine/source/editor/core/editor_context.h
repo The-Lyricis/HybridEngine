@@ -136,11 +136,13 @@ namespace Hybrid
 
         std::function<void(const AssetSourceEvent&)> notify_asset_source_event;
         std::function<void(const std::string& scene_vpath)> open_scene;
+        std::function<bool()> request_open_scene;
         std::function<bool(const std::string& asset_vpath)> request_reimport_asset;
         std::function<bool(const std::string& old_folder_vpath, const std::string& new_folder_vpath)> request_rename_folder;
         std::function<bool()> request_new_scene;
         std::function<bool()> request_save_scene;
         std::function<bool()> request_save_scene_as;
+        std::function<bool(const std::filesystem::path&)> reveal_in_file_browser;
         std::function<AssetID(const std::string& asset_vpath)> find_asset_by_vpath;
         std::function<std::string(entt::entity)> describe_mesh_renderer_material;
         std::function<bool(AssetID, const ImVec2& drop_mouse_pos)> instantiate_scene_asset;

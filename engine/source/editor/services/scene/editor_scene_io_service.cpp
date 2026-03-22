@@ -12,8 +12,8 @@
 
 #include <nlohmann/json.hpp>
 
-#include "editor/platform/windows/file_dialogs_win32.h"
 #include "editor/services/asset/editor_resource_system.h"
+#include "editor/services/platform/editor_platform_services.h"
 #include "editor/services/state/editor_camera_state_serde.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/asset/runtime_resource_system.h"
@@ -263,6 +263,17 @@ namespace Hybrid
         return true;
     }
 
+    bool EditorSceneIOService::requestOpen()
+    {
+        // TODO(editor): Before replacing the active document, prompt for unsaved changes
+        // once there is a shared editor message box / modal confirmation path.
+        std::string selected_vpath;
+        if (!chooseOpenVPath(selected_vpath))
+            return false;
+
+        return open(selected_vpath);
+    }
+
     bool EditorSceneIOService::requestSave()
     {
         if (!m_active_document || !m_active_document->scene)
@@ -296,10 +307,25 @@ namespace Hybrid
         if (default_file.extension() != ".scene")
             default_file.replace_extension(".scene");
 
-        auto selected_path = ShowSaveSceneDialogWin32(
+        if (!m_services.platform)
+        {
+            m_status_message = "Platform file dialog service is unavailable";
+            return false;
+        }
+
+        SaveFileDialogDesc dialog_desc{};
+        dialog_desc.title = "Save Scene";
+        dialog_desc.initial_dir = initial_dir;
+        dialog_desc.default_name = default_file.string();
+        dialog_desc.default_extension = "scene";
+        dialog_desc.filters = {
+            FileDialogFilter{"Scene Files", "*.scene"},
+            FileDialogFilter{"All Files", "*.*"},
+        };
+
+        auto selected_path = m_services.platform->showSaveFileDialog(
             m_services.window ? m_services.window->getNativeWindow() : nullptr,
-            initial_dir,
-            default_file.wstring());
+            dialog_desc);
         if (!selected_path)
         {
             m_status_message.clear();
@@ -309,6 +335,56 @@ namespace Hybrid
         if (!toAssetVPath(*selected_path, out_vpath))
         {
             m_status_message = "保存路径必须位于 Assets 目录下";
+            return false;
+        }
+
+        return true;
+    }
+
+    bool EditorSceneIOService::chooseOpenVPath(std::string& out_vpath)
+    {
+        out_vpath.clear();
+
+        std::filesystem::path initial_dir = m_assets_root.empty() ? std::filesystem::path{} : (m_assets_root / "Scenes");
+        if (m_active_document && !m_active_document->native_path.empty())
+            initial_dir = m_active_document->native_path.parent_path();
+        else if (!std::filesystem::exists(initial_dir))
+            initial_dir = m_assets_root;
+
+        if (!m_services.platform)
+        {
+            m_status_message = "Platform file dialog service is unavailable";
+            return false;
+        }
+
+        OpenFileDialogDesc dialog_desc{};
+        dialog_desc.title = "Open Scene";
+        dialog_desc.initial_dir = initial_dir;
+        dialog_desc.filters = {
+            FileDialogFilter{"Scene Files", "*.scene"},
+            FileDialogFilter{"All Files", "*.*"},
+        };
+        dialog_desc.allow_multi_select = false;
+
+        const auto selected_paths = m_services.platform->showOpenFileDialog(
+            m_services.window ? m_services.window->getNativeWindow() : nullptr,
+            dialog_desc);
+        if (selected_paths.empty())
+        {
+            m_status_message.clear();
+            return false;
+        }
+
+        const std::filesystem::path& selected_path = selected_paths.front();
+        if (selected_path.extension() != ".scene")
+        {
+            m_status_message = "Selected file must use the .scene extension";
+            return false;
+        }
+
+        if (!toAssetVPath(selected_path, out_vpath))
+        {
+            m_status_message = "Selected scene must be located under Assets";
             return false;
         }
 

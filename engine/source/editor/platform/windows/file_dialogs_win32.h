@@ -2,16 +2,24 @@
 
 #include <filesystem>
 #include <optional>
-#include <string>
+
+#include "editor/services/platform/editor_platform_services.h"
 
 struct GLFWwindow;
 
 namespace Hybrid
 {
-    std::optional<std::filesystem::path> ShowSaveSceneDialogWin32(
+    std::optional<std::filesystem::path> ShowSaveFileDialogWin32(
         GLFWwindow* window,
-        const std::filesystem::path& initial_directory,
-        const std::wstring& default_file_name);
+        const SaveFileDialogDesc& desc);
 
-    bool ShowInExplorerWin32(const std::filesystem::path& path);
+    std::vector<std::filesystem::path> ShowOpenFileDialogWin32(
+        GLFWwindow* window,
+        const OpenFileDialogDesc& desc);
+
+    std::optional<std::filesystem::path> ShowSelectFolderDialogWin32(
+        GLFWwindow* window,
+        const SelectFolderDialogDesc& desc);
+
+    bool RevealInFileBrowserWin32(const std::filesystem::path& path);
 }

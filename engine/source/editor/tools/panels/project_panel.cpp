@@ -2,7 +2,6 @@
 
 #include "editor/core/editor_context.h"
 #include "editor/core/editor_drag_drop.h"
-#include "editor/platform/windows/file_dialogs_win32.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -113,7 +112,10 @@ namespace Hybrid
         ImGui::Separator();
 
         if (ImGui::MenuItem("Show in Explorer", nullptr, false, can_show_in_explorer))
-            (void)ShowInExplorerWin32(has_target ? target->physical : m_currentDir);
+        {
+            if (ctx.reveal_in_file_browser)
+                (void)ctx.reveal_in_file_browser(has_target ? target->physical : m_currentDir);
+        }
 
         if (ImGui::MenuItem("Copy Asset Path", nullptr, false, can_copy_asset_path))
         {

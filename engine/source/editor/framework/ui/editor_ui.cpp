@@ -279,11 +279,18 @@ namespace Hybrid
             return;
 
         const bool is_playing = m_ctx && m_ctx->is_play_mode ? m_ctx->is_play_mode() : false;
+        const bool request_open_shortcut =
+            !is_playing && m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false);
         const bool request_save_shortcut =
             !is_playing && m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false);
         const bool request_save_as_shortcut = request_save_shortcut && ImGui::GetIO().KeyShift;
 
-        if (request_save_as_shortcut)
+        if (request_open_shortcut)
+        {
+            if (m_ctx && m_ctx->request_open_scene)
+                m_ctx->request_open_scene();
+        }
+        else if (request_save_as_shortcut)
         {
             if (m_ctx && m_ctx->request_save_scene_as)
                 m_ctx->request_save_scene_as();
@@ -298,6 +305,12 @@ namespace Hybrid
         {
             if (!is_playing)
             {
+                const bool can_open_scene = m_ctx && static_cast<bool>(m_ctx->request_open_scene);
+                if (ImGui::MenuItem("Open Scene...", "Ctrl+O", false, can_open_scene))
+                    m_ctx->request_open_scene();
+
+                ImGui::Separator();
+
                 const bool can_save = m_ctx && static_cast<bool>(m_ctx->request_save_scene);
                 if (ImGui::MenuItem("Save", "Ctrl+S", false, can_save))
                     m_ctx->request_save_scene();

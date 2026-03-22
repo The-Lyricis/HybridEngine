@@ -6,6 +6,7 @@
 #include "editor/core/engine_services.h"
 #include "editor/framework/layers/editor_layer.h"
 #include "editor/framework/layers/imgui_layer.h"
+#include "editor/platform/windows/editor_platform_services_win32.h"
 #include "editor/services/asset/editor_resource_system.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/runtime/engine.h"
@@ -24,6 +25,7 @@ namespace Hybrid
         HBD_CORE_INFO("{} run_started", kEditorAppLogTag);
 
         auto editor_resources = std::make_shared<EditorResourceSystem>();
+        auto platform_services = std::make_unique<EditorPlatformServicesWin32>();
         if (!editor_resources->initialize(engine.getResourceSystem()))
         {
             HBD_CORE_ERROR("{} editor_resources_initialize_failed", kEditorAppLogTag);
@@ -37,6 +39,7 @@ namespace Hybrid
         services.scene = &engine.getSceneManager();
         services.resources = &engine.getResourceSystem();
         services.editor_resources = editor_resources.get();
+        services.platform = platform_services.get();
         services.input = &engine.getInputLayer();
         services.frame_context = &engine.getFrameContext();
         services.render_flags = &engine.getRenderFlags();

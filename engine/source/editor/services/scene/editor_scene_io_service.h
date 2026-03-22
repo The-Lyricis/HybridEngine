@@ -28,6 +28,7 @@ namespace Hybrid
         void clearStatusMessage();
 
         bool open(const std::string& scene_vpath, OpenSceneOptions options = {});
+        bool requestOpen();
         bool requestSave();
         bool requestSaveAs();
         bool restoreStartupScene();
@@ -39,6 +40,7 @@ namespace Hybrid
         bool activateDocument(std::shared_ptr<SceneDocument> document);
         bool saveToVPath(const std::string& scene_vpath);
         std::shared_ptr<SceneDocument> loadDocumentFromVPath(const std::string& scene_vpath);
+        bool chooseOpenVPath(std::string& out_vpath);
         bool chooseSaveAsVPath(std::string& out_vpath);
         bool tryOpenProjectDefaultScene();
         bool tryOpenScannedScene();
