@@ -101,7 +101,7 @@ The current render path now centralizes the main shared contracts in dedicated h
 - `render_bindings.h`
 - `render_targets.h`
 - `render_shaders.h`
-- `render_selection_style.h`
+- `selection_overlay_style.h`
 
 This keeps UBO layout, sampler slots, target semantics, builtin shader identifiers, and selection-overlay style data out of pass-local magic numbers.
 

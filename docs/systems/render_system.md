@@ -114,7 +114,7 @@ Current protocol headers are:
   - framebuffer attachment semantics such as scene color, scene EntityID, and selection mask attachment indices
 - `render_shaders.h`
   - builtin shader registration names and shader file mapping
-- `render_selection_style.h`
+- `selection_overlay_style.h`
   - selection overlay style data such as visible color, occluded color, fill color, and depth epsilon
 
 Rule:
