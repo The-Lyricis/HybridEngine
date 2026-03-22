@@ -152,6 +152,10 @@ namespace Hybrid
                 syncContextDocumentState();
                 return created;
             };
+        ctx.request_reset_layout = [this]()
+            {
+                m_editor_ui.requestResetLayout();
+            };
         ctx.request_save_scene = [this]() -> bool
             {
                 const bool saved = m_scene_io.requestSave();
@@ -163,6 +167,14 @@ namespace Hybrid
                 const bool saved = m_scene_io.requestSaveAs();
                 syncContextDocumentState();
                 return saved;
+            };
+        ctx.execute_command = [this](EditorCommandId id) -> bool
+            {
+                return executeCommand(id);
+            };
+        ctx.can_execute_command = [this](EditorCommandId id) -> bool
+            {
+                return canExecuteCommand(id);
             };
         ctx.reveal_in_file_browser = [this](const std::filesystem::path& path) -> bool
             {
@@ -221,8 +233,11 @@ namespace Hybrid
         ctx.request_reimport_asset = {};
         ctx.request_rename_folder = {};
         ctx.request_new_scene = {};
+        ctx.request_reset_layout = {};
         ctx.request_save_scene = {};
         ctx.request_save_scene_as = {};
+        ctx.execute_command = {};
+        ctx.can_execute_command = {};
         ctx.reveal_in_file_browser = {};
         ctx.find_asset_by_vpath = {};
         ctx.describe_mesh_renderer_material = {};
@@ -248,6 +263,23 @@ namespace Hybrid
         m_active_scene_view_document.reset();
         m_initialized = false;
         HBD_CORE_INFO("{} detach_completed", kEditorLayerLogTag);
+    }
+
+    EditorCommandContext EditorLayer::makeCommandContext()
+    {
+        return EditorCommandContext{&m_editor_ui.context()};
+    }
+
+    bool EditorLayer::executeCommand(EditorCommandId id)
+    {
+        auto ctx = makeCommandContext();
+        return m_command_dispatcher.execute(id, ctx);
+    }
+
+    bool EditorLayer::canExecuteCommand(EditorCommandId id) const
+    {
+        auto& ui_ctx = m_editor_ui.context();
+        return m_command_dispatcher.canExecute(id, EditorCommandContext{const_cast<EditorContext*>(&ui_ctx)});
     }
 
     void EditorLayer::syncContextDocumentState()

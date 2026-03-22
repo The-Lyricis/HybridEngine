@@ -7,6 +7,7 @@
 #include <glad/gl.h>
 #include <stb_image.h>
 
+#include "editor/core/editor_commands.h"
 #include "editor/core/editor_context.h"
 #include "editor/tools/panels/game_view_panel.h"
 #include "editor/tools/panels/hierarchy_panel.h"
@@ -242,6 +243,17 @@ namespace Hybrid
         return *m_ctx;
     }
 
+    const EditorContext& EditorUI::context() const
+    {
+        return *m_ctx;
+    }
+
+    void EditorUI::requestResetLayout()
+    {
+        m_RequestResetLayout = true;
+        m_DefaultLayoutBuilt = false;
+    }
+
     void EditorUI::drawDockSpaceRoot()
     {
         ImGuiViewport* vp = ImGui::GetMainViewport();
@@ -279,45 +291,60 @@ namespace Hybrid
             return;
 
         const bool is_playing = m_ctx && m_ctx->is_play_mode ? m_ctx->is_play_mode() : false;
+        const bool request_new_scene_shortcut =
+            m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N, false);
         const bool request_open_shortcut =
-            !is_playing && m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false);
+            m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false);
         const bool request_save_shortcut =
-            !is_playing && m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false);
+            m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false);
         const bool request_save_as_shortcut = request_save_shortcut && ImGui::GetIO().KeyShift;
 
-        if (request_open_shortcut)
+        if (request_new_scene_shortcut)
         {
-            if (m_ctx && m_ctx->request_open_scene)
-                m_ctx->request_open_scene();
+            if (m_ctx && m_ctx->execute_command)
+                m_ctx->execute_command(EditorCommandId::NewScene);
+        }
+        else if (request_open_shortcut)
+        {
+            if (m_ctx && m_ctx->execute_command)
+                m_ctx->execute_command(EditorCommandId::OpenScene);
         }
         else if (request_save_as_shortcut)
         {
-            if (m_ctx && m_ctx->request_save_scene_as)
-                m_ctx->request_save_scene_as();
+            if (m_ctx && m_ctx->execute_command)
+                m_ctx->execute_command(EditorCommandId::SaveSceneAs);
         }
         else if (request_save_shortcut && m_ctx)
         {
-            if (m_ctx->request_save_scene)
-                m_ctx->request_save_scene();
+            if (m_ctx->execute_command)
+                m_ctx->execute_command(EditorCommandId::SaveScene);
         }
 
         if (ImGui::BeginMenu("File"))
         {
             if (!is_playing)
             {
-                const bool can_open_scene = m_ctx && static_cast<bool>(m_ctx->request_open_scene);
+                const bool can_new_scene = m_ctx && m_ctx->can_execute_command &&
+                    m_ctx->can_execute_command(EditorCommandId::NewScene);
+                if (ImGui::MenuItem("New Scene", "Ctrl+N", false, can_new_scene))
+                    m_ctx->execute_command(EditorCommandId::NewScene);
+
+                const bool can_open_scene = m_ctx && m_ctx->can_execute_command &&
+                    m_ctx->can_execute_command(EditorCommandId::OpenScene);
                 if (ImGui::MenuItem("Open Scene...", "Ctrl+O", false, can_open_scene))
-                    m_ctx->request_open_scene();
+                    m_ctx->execute_command(EditorCommandId::OpenScene);
 
                 ImGui::Separator();
 
-                const bool can_save = m_ctx && static_cast<bool>(m_ctx->request_save_scene);
+                const bool can_save = m_ctx && m_ctx->can_execute_command &&
+                    m_ctx->can_execute_command(EditorCommandId::SaveScene);
                 if (ImGui::MenuItem("Save", "Ctrl+S", false, can_save))
-                    m_ctx->request_save_scene();
+                    m_ctx->execute_command(EditorCommandId::SaveScene);
 
-                const bool can_save_as = m_ctx && static_cast<bool>(m_ctx->request_save_scene_as);
+                const bool can_save_as = m_ctx && m_ctx->can_execute_command &&
+                    m_ctx->can_execute_command(EditorCommandId::SaveSceneAs);
                 if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, can_save_as))
-                    m_ctx->request_save_scene_as();
+                    m_ctx->execute_command(EditorCommandId::SaveSceneAs);
 
                 ImGui::Separator();
             }
@@ -362,8 +389,8 @@ namespace Hybrid
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout"))
             {
-                m_RequestResetLayout = true;
-                m_DefaultLayoutBuilt = false;
+                if (m_ctx && m_ctx->execute_command)
+                    m_ctx->execute_command(EditorCommandId::ResetLayout);
             }
 
             ImGui::EndMenu();
@@ -473,28 +500,33 @@ namespace Hybrid
         {
             if (!is_playing)
             {
-                if (m_ctx->enter_play_mode)
+                if (m_ctx->execute_command &&
+                    m_ctx->can_execute_command &&
+                    m_ctx->can_execute_command(EditorCommandId::EnterPlayMode))
                 {
                     HBD_CORE_INFO("{} play_mode_enter_requested", kEditorUILogTag);
-                    m_ctx->enter_play_mode();
+                    m_ctx->execute_command(EditorCommandId::EnterPlayMode);
                 }
             }
-            else if (m_ctx->exit_play_mode)
+            else if (m_ctx->execute_command &&
+                     m_ctx->can_execute_command &&
+                     m_ctx->can_execute_command(EditorCommandId::ExitPlayMode))
             {
                 HBD_CORE_INFO("{} play_mode_exit_requested", kEditorUILogTag);
-                m_ctx->exit_play_mode();
+                m_ctx->execute_command(EditorCommandId::ExitPlayMode);
             }
         }
 
         ImGui::SameLine();
-        const bool pause_enabled = is_playing && static_cast<bool>(m_ctx->toggle_pause_mode);
+        const bool pause_enabled = m_ctx && m_ctx->can_execute_command &&
+            m_ctx->can_execute_command(EditorCommandId::TogglePauseMode);
         if (!pause_enabled)
             ImGui::BeginDisabled();
         if (drawTopToolbarButton("##TopToolbarPause", g_TopToolbarIcons.pause, is_paused ? "Resume" : "Pause", is_paused ? "Resume" : "Pause", is_paused, false) &&
-            m_ctx->toggle_pause_mode)
+            m_ctx->execute_command)
         {
             HBD_CORE_INFO("{} play_mode_pause_toggle_requested paused={}", kEditorUILogTag, !is_paused);
-            m_ctx->toggle_pause_mode();
+            m_ctx->execute_command(EditorCommandId::TogglePauseMode);
         }
         if (!pause_enabled)
             ImGui::EndDisabled();

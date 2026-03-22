@@ -35,6 +35,8 @@ namespace Hybrid
 
         void setActiveScene(Scene* scene);
         EditorContext& context();
+        const EditorContext& context() const;
+        void requestResetLayout();
 
     private:
         void drawDockSpaceRoot();

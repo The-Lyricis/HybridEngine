@@ -6,6 +6,7 @@
 
 #include <entt/entity/fwd.hpp>
 
+#include "editor/core/editor_commands.h"
 #include "editor/framework/camera/editor_camera.h"
 #include "editor/framework/controllers/editor_asset_hot_reload_controller.h"
 #include "editor/framework/ui/editor_ui.h"
@@ -41,6 +42,9 @@ namespace Hybrid
         void syncSceneViewState();
         void updateFrameContext();         // Push current editor state into FrameContext/Flags/Ext.
         void updateEditorCamera(float dt);
+        EditorCommandContext makeCommandContext();
+        bool executeCommand(EditorCommandId id);
+        bool canExecuteCommand(EditorCommandId id) const;
         AssetID findAssetByVPath(const std::string& asset_vpath) const;
         std::string describeMeshRendererMaterial(entt::entity entity_handle) const;
         bool instantiateSceneAsset(AssetID asset_id, const ImVec2& drop_mouse_pos);
@@ -54,6 +58,7 @@ namespace Hybrid
         EditorCamera m_editor_camera;      // Editor-only viewport camera.
         EditorAssetHotReloadController m_asset_hot_reload_controller;
         EditorSceneIOService m_scene_io;
+        EditorCommandDispatcher m_command_dispatcher;
         std::shared_ptr<SceneDocument> m_active_scene_view_document;
         bool m_initialized = false;        // Guard against partial startup/shutdown.
         EditorModeCallbacks m_mode_callbacks{};
