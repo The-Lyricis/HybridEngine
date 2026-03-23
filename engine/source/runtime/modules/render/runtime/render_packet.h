@@ -79,6 +79,8 @@ namespace Hybrid
         RenderEnvironmentData environment;
         std::vector<RenderDrawItem> opaque_items;
         std::vector<RenderDrawItem> transparent_items;
+        uint32_t tested_items = 0;
+        uint32_t culled_items = 0;
         bool showColliderDebug = false;
         uint32_t activeEntityID = kInvalidEntityID;
         std::shared_ptr<Scene> scene;

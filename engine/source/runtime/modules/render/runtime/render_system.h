@@ -36,6 +36,7 @@
 #include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/texture.h"
 #include "runtime/modules/render/public/texture_uploader.h"
+#include "runtime/core/base/intersection.h"
 
 namespace Hybrid
 {
@@ -44,12 +45,16 @@ namespace Hybrid
         float frame_time_ms = 0.0f;
         float fps = 0.0f;
         float render_cpu_time_ms = 0.0f;
-        uint32_t draw_calls = 0;
-        uint32_t triangles = 0;
-        uint32_t visible_entities = 0;
-        uint32_t opaque_items = 0;
-        uint32_t transparent_items = 0;
+        uint32_t scene_renderers = 0;
+        uint32_t scene_submeshes = 0;
+        uint32_t submitted_draw_calls = 0;
+        uint32_t submitted_triangles = 0;
+        uint32_t submitted_entities = 0;
+        uint32_t submitted_opaque_items = 0;
+        uint32_t submitted_transparent_items = 0;
         uint32_t point_lights = 0;
+        uint32_t tested_items = 0;
+        uint32_t culled_items = 0;
     };
 
     class Framebuffer;
@@ -95,7 +100,7 @@ namespace Hybrid
         void updateFrameUBO(const RenderPacket& packet, const glm::vec2& viewport_size);
         void updateLightUBO(const RenderPacket& packet);
         void collectPacketLights(RenderPacket& packet) const;
-        void collectPacketDrawItems(RenderPacket& packet);
+        void collectPacketDrawItems(RenderPacket& packet, const Frustum& frustum);
         void sortRenderPacket(RenderPacket& packet) const;
         void updateStatsFromPacket(const RenderPacket& packet, float render_cpu_time_ms);
         TexturePtr getOrCreateCubemapTexture(AssetID id);

@@ -6,6 +6,7 @@
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/vertex_array.h"
+#include "runtime/modules/render/runtime/render_bindings.h"
 #include "runtime/modules/render/runtime/render_uniforms.h"
 
 namespace Hybrid
@@ -38,6 +39,7 @@ namespace Hybrid
         shader->bind();
         shader->setUniformBlockBinding(RenderUniforms::kFrameBlockName,
                                        RenderUniforms::kFrameUBOBinding);
+        shader->setInt(RenderBindings::kSceneAlbedoUniform, RenderBindings::kSceneAlbedoSlot);
 
         const std::unordered_set<uint32_t> selected_entities(selection->selected_entities.begin(),
                                                              selection->selected_entities.end());
@@ -47,10 +49,12 @@ namespace Hybrid
             for (const auto& item : items)
             {
                 if (selected_entities.find(item.entityID) == selected_entities.end() ||
-                    !item.meshGPU || item.indexCount == 0)
+                    !item.meshGPU || !item.materialGPU || item.indexCount == 0)
                     continue;
 
                 shader->setMat4("u_Model", item.model);
+                shader->setVec4("u_TintColor", item.tint);
+                item.materialGPU->bind(*shader);
                 item.meshGPU->vao->bind();
                 RenderCommand::drawIndexed(item.indexCount, item.indexOffset);
             }

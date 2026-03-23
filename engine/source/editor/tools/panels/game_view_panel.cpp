@@ -7,6 +7,7 @@
 #include <imgui.h>
 
 #include <cstdio>
+#include <iterator>
 
 namespace Hybrid
 {
@@ -66,6 +67,7 @@ namespace Hybrid
             char line1[64] = {};
             char line2[64] = {};
             char line3[64] = {};
+            char line4[64] = {};
 
             std::snprintf(line0,
                           sizeof(line0),
@@ -76,20 +78,27 @@ namespace Hybrid
                           sizeof(line1),
                           "Render %.2f ms | Draws %u",
                           ctx.render_stats->render_cpu_time_ms,
-                          ctx.render_stats->draw_calls);
+                          ctx.render_stats->submitted_draw_calls);
             std::snprintf(line2,
                           sizeof(line2),
-                          "Opaque %u | Transparent %u",
-                          ctx.render_stats->opaque_items,
-                          ctx.render_stats->transparent_items);
+                          "Submitted O %u | T %u | Tris %u",
+                          ctx.render_stats->submitted_opaque_items,
+                          ctx.render_stats->submitted_transparent_items,
+                          ctx.render_stats->submitted_triangles);
             std::snprintf(line3,
                           sizeof(line3),
-                          "Tris %u | Entities %u | Lights %u",
-                          ctx.render_stats->triangles,
-                          ctx.render_stats->visible_entities,
+                          "Cull Tested %u | Culled %u | Lights %u",
+                          ctx.render_stats->tested_items,
+                          ctx.render_stats->culled_items,
                           ctx.render_stats->point_lights);
+            std::snprintf(line4,
+                          sizeof(line4),
+                          "Scene Renderers %u | Submeshes %u | Entities %u",
+                          ctx.render_stats->scene_renderers,
+                          ctx.render_stats->scene_submeshes,
+                          ctx.render_stats->submitted_entities);
 
-            const char* lines[] = {line0, line1, line2, line3};
+            const char* lines[] = {line0, line1, line2, line3, line4};
             float max_width = 0.0f;
             for (const char* line : lines)
                 max_width = std::max(max_width, ImGui::CalcTextSize(line).x);
@@ -99,10 +108,10 @@ namespace Hybrid
             const ImVec2 panel_min(viewport_max.x - max_width - padding.x * 2.0f - 8.0f,
                                    viewport_min.y + 8.0f);
             const ImVec2 panel_max(viewport_max.x - 8.0f,
-                                   panel_min.y + line_height * 4.0f + padding.y * 2.0f);
+                                   panel_min.y + line_height * static_cast<float>(std::size(lines)) + padding.y * 2.0f);
 
             draw_list->AddRectFilled(panel_min, panel_max, IM_COL32(18, 22, 28, 190), 6.0f);
-            for (int i = 0; i < 4; ++i)
+            for (int i = 0; i < static_cast<int>(std::size(lines)); ++i)
             {
                 const ImVec2 text_pos(panel_min.x + padding.x, panel_min.y + padding.y + line_height * static_cast<float>(i));
                 draw_list->AddText(text_pos, ImGui::GetColorU32(ImGuiCol_Text), lines[i]);

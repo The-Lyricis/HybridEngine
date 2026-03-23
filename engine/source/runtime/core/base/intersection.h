@@ -115,6 +115,29 @@ namespace Hybrid
         float Penetration = 0.0f;
     };
 
+    struct Plane
+    {
+        glm::vec3 Normal{0.0f, 1.0f, 0.0f};
+        float Distance = 0.0f;
+    };
+
+    struct Frustum
+    {
+        enum PlaneIndex : int
+        {
+            Left = 0,
+            Right,
+            Bottom,
+            Top,
+            Near,
+            Far,
+            Count
+        };
+
+        Plane Planes[Count]{};
+        bool Valid = false;
+    };
+
     inline Ray MakeRayFromInvViewProjection(const glm::mat4& inv_view_proj, float ndc_x, float ndc_y)
     {
         glm::vec4 near_world = inv_view_proj * glm::vec4(ndc_x, ndc_y, -1.0f, 1.0f);
@@ -194,6 +217,60 @@ namespace Hybrid
         const glm::vec3 world_extents = abs_linear * local_extents;
 
         return {world_center - world_extents, world_center + world_extents};
+    }
+
+    inline Plane NormalizePlane(const glm::vec4& plane)
+    {
+        const glm::vec3 normal(plane.x, plane.y, plane.z);
+        const float len = glm::length(normal);
+        if (len <= 1e-8f)
+            return {};
+        return {normal / len, plane.w / len};
+    }
+
+    inline Frustum BuildFrustum(const glm::mat4& view_proj)
+    {
+        Frustum frustum{};
+        const glm::mat4 rows = glm::transpose(view_proj);
+
+        frustum.Planes[Frustum::Left]   = NormalizePlane(rows[3] + rows[0]);
+        frustum.Planes[Frustum::Right]  = NormalizePlane(rows[3] - rows[0]);
+        frustum.Planes[Frustum::Bottom] = NormalizePlane(rows[3] + rows[1]);
+        frustum.Planes[Frustum::Top]    = NormalizePlane(rows[3] - rows[1]);
+        frustum.Planes[Frustum::Near]   = NormalizePlane(rows[3] + rows[2]);
+        frustum.Planes[Frustum::Far]    = NormalizePlane(rows[3] - rows[2]);
+
+        frustum.Valid = true;
+        for (const Plane& plane : frustum.Planes)
+        {
+            if (glm::dot(plane.Normal, plane.Normal) <= 1e-8f)
+            {
+                frustum.Valid = false;
+                break;
+            }
+        }
+
+        return frustum;
+    }
+
+    inline bool IntersectsFrustum(const Frustum& frustum, const AABB& bounds)
+    {
+        if (!frustum.Valid || !bounds.isValid())
+            return true;
+
+        const glm::vec3 center = bounds.center();
+        const glm::vec3 extents = bounds.extents();
+
+        for (const Plane& plane : frustum.Planes)
+        {
+            const glm::vec3 abs_normal = glm::abs(plane.Normal);
+            const float projected_radius = glm::dot(abs_normal, extents);
+            const float signed_distance = glm::dot(plane.Normal, center) + plane.Distance;
+            if (signed_distance + projected_radius < 0.0f)
+                return false;
+        }
+
+        return true;
     }
 
     inline AABBIntersection IntersectAABB(const AABB& a, const AABB& b)

@@ -29,6 +29,7 @@
 #include "runtime/modules/render/runtime/render_targets.h"
 #include "runtime/modules/scene/scene.h"
 #include "runtime/modules/scene/components.h"
+#include "runtime/core/base/intersection.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/core/base/math_util.h"
 #include "runtime/modules/asset/asset_manager.h"
@@ -326,6 +327,13 @@ namespace Hybrid
             m_SceneShader->setInt(RenderBindings::kSceneEmissiveUniform, RenderBindings::kSceneEmissiveSlot);
         }
 
+        if (auto selection_mask_shader = m_ShaderLibrary.get(std::string(RenderShaders::kSelectionMask.name)))
+        {
+            selection_mask_shader->bind();
+            selection_mask_shader->setUniformBlockBinding(RU::kFrameBlockName, RU::kFrameUBOBinding);
+            selection_mask_shader->setInt(RenderBindings::kSceneAlbedoUniform, RenderBindings::kSceneAlbedoSlot);
+        }
+
         if (m_SkyboxShader)
         {
             m_SkyboxShader->bind();
@@ -591,7 +599,8 @@ namespace Hybrid
         }
 
         collectPacketLights(pkt);
-        collectPacketDrawItems(pkt);
+        const Frustum frustum = has_camera ? BuildFrustum(pkt.frame.viewProj) : Frustum{};
+        collectPacketDrawItems(pkt, frustum);
         sortRenderPacket(pkt);
 
         return pkt;
@@ -642,10 +651,15 @@ namespace Hybrid
         }
     }
 
-    void RenderSystem::collectPacketDrawItems(RenderPacket& packet)
+    void RenderSystem::collectPacketDrawItems(RenderPacket& packet, const Frustum& frustum)
     {
         packet.opaque_items.clear();
         packet.transparent_items.clear();
+        packet.tested_items = 0;
+        packet.culled_items = 0;
+
+        m_Stats.scene_renderers = 0;
+        m_Stats.scene_submeshes = 0;
 
         if (!packet.scene || !m_AssetManager)
             return;
@@ -661,6 +675,8 @@ namespace Hybrid
             const auto& renderer = render_view.get<Hybrid::MeshRendererComponent>(entity);
             if (!renderer.Enabled || renderer.Mesh.value == 0)
                 continue;
+
+            ++m_Stats.scene_renderers;
 
             std::shared_ptr<Mesh> cpu_mesh = m_AssetManager->loadSync<Mesh>(renderer.Mesh);
             if (!cpu_mesh)
@@ -693,6 +709,17 @@ namespace Hybrid
 
             for (const auto& submesh : mesh_gpu->submeshes)
             {
+                ++m_Stats.scene_submeshes;
+                ++packet.tested_items;
+
+                const AABB local_bounds{submesh.aabb_min, submesh.aabb_max};
+                const AABB world_bounds = TransformAABB(local_bounds, transform.WorldMatrix);
+                if (!IntersectsFrustum(frustum, world_bounds))
+                {
+                    ++packet.culled_items;
+                    continue;
+                }
+
                 AssetID effective_material_id = base_material_id;
                 const MaterialSystem::MaterialGPU* effective_material_gpu = base_material_gpu;
 
@@ -759,13 +786,15 @@ namespace Hybrid
     void RenderSystem::updateStatsFromPacket(const RenderPacket& packet, float render_cpu_time_ms)
     {
         m_Stats.render_cpu_time_ms = std::max(0.0f, render_cpu_time_ms);
-        m_Stats.opaque_items = static_cast<uint32_t>(packet.opaque_items.size());
-        m_Stats.transparent_items = static_cast<uint32_t>(packet.transparent_items.size());
+        m_Stats.submitted_opaque_items = static_cast<uint32_t>(packet.opaque_items.size());
+        m_Stats.submitted_transparent_items = static_cast<uint32_t>(packet.transparent_items.size());
         m_Stats.point_lights = static_cast<uint32_t>(packet.lights.points.size());
+        m_Stats.tested_items = packet.tested_items;
+        m_Stats.culled_items = packet.culled_items;
 
         uint32_t draw_calls = 0;
         uint32_t triangles = 0;
-        std::unordered_set<uint32_t> visible_entities;
+        std::unordered_set<uint32_t> submitted_entities;
 
         auto accumulate_queue = [&](const std::vector<RenderDrawItem>& items)
         {
@@ -775,7 +804,7 @@ namespace Hybrid
                     continue;
                 ++draw_calls;
                 triangles += item.indexCount / 3;
-                visible_entities.insert(item.entityID);
+                submitted_entities.insert(item.entityID);
             }
         };
 
@@ -788,9 +817,9 @@ namespace Hybrid
             triangles += 12;
         }
 
-        m_Stats.draw_calls = draw_calls;
-        m_Stats.triangles = triangles;
-        m_Stats.visible_entities = static_cast<uint32_t>(visible_entities.size());
+        m_Stats.submitted_draw_calls = draw_calls;
+        m_Stats.submitted_triangles = triangles;
+        m_Stats.submitted_entities = static_cast<uint32_t>(submitted_entities.size());
     }
 
     void RenderSystem::renderFrame(const FrameContext& frame_context,
