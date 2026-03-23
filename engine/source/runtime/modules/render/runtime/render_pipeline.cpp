@@ -5,6 +5,7 @@ namespace Hybrid
     RenderPipeline::RenderPipeline()
         : m_pass_order
         {
+            RenderPassType::Shadow,
             RenderPassType::Scene,
             RenderPassType::Skybox,
             RenderPassType::Picking,
@@ -12,7 +13,6 @@ namespace Hybrid
             RenderPassType::SelectionOverlay,
             RenderPassType::Gizmo,
             //RenderPassType::Grid,
-            RenderPassType::Shadow,
             RenderPassType::PostProcess,
             //RenderPassType::DebugNormals
         }

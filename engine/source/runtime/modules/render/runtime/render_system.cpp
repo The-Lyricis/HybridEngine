@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <array>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <unordered_set>
 
@@ -71,6 +72,86 @@ namespace Hybrid
             return spec;
         }
 
+        FramebufferSpec makeShadowFramebufferSpec(uint32_t size)
+        {
+            FramebufferSpec spec{};
+            spec.width = size;
+            spec.height = size;
+            spec.attachment_spec = {
+                FramebufferTextureFormat::Depth32F
+            };
+            return spec;
+        }
+
+        std::array<glm::vec3, 8> buildCameraFrustumSliceCorners(const glm::mat4& view,
+                                                                const glm::mat4& proj,
+                                                                float near_distance,
+                                                                float far_distance)
+        {
+            std::array<glm::vec3, 8> corners{};
+            const glm::mat4 inv_view = glm::inverse(view);
+            const float tan_half_fov = 1.0f / std::max(proj[1][1], 1e-6f);
+            const float aspect = proj[1][1] / std::max(proj[0][0], 1e-6f);
+
+            const auto write_plane = [&](float distance, size_t base_index)
+            {
+                const float half_height = distance * tan_half_fov;
+                const float half_width = half_height * aspect;
+
+                const std::array<glm::vec3, 4> local = {
+                    glm::vec3(-half_width, -half_height, -distance),
+                    glm::vec3( half_width, -half_height, -distance),
+                    glm::vec3( half_width,  half_height, -distance),
+                    glm::vec3(-half_width,  half_height, -distance),
+                };
+
+                for (size_t i = 0; i < local.size(); ++i)
+                    corners[base_index + i] = glm::vec3(inv_view * glm::vec4(local[i], 1.0f));
+            };
+
+            write_plane(near_distance, 0);
+            write_plane(far_distance, 4);
+            return corners;
+        }
+
+        void computeLightSpaceBounds(const std::array<glm::vec3, 8>& corners,
+                                     const glm::mat4& light_view,
+                                     glm::vec3& out_min_ls,
+                                     glm::vec3& out_max_ls)
+        {
+            out_min_ls = glm::vec3(std::numeric_limits<float>::max());
+            out_max_ls = glm::vec3(std::numeric_limits<float>::lowest());
+            for (const glm::vec3& corner : corners)
+            {
+                const glm::vec3 ls = glm::vec3(light_view * glm::vec4(corner, 1.0f));
+                out_min_ls = glm::min(out_min_ls, ls);
+                out_max_ls = glm::max(out_max_ls, ls);
+            }
+        }
+        
+        std::array<glm::vec3, 8> buildWorldSpaceFrustumCorners(const glm::mat4& inv_view_proj)
+        {
+            std::array<glm::vec3, 8> corners{};
+            size_t index = 0;
+            for (int z = 0; z < 2; ++z)
+            {
+                const float ndc_z = (z == 0) ? -1.0f : 1.0f;
+                for (int y = 0; y < 2; ++y)
+                {
+                    const float ndc_y = (y == 0) ? -1.0f : 1.0f;
+                    for (int x = 0; x < 2; ++x)
+                    {
+                        const float ndc_x = (x == 0) ? -1.0f : 1.0f;
+                        glm::vec4 corner = inv_view_proj * glm::vec4(ndc_x, ndc_y, ndc_z, 1.0f);
+                        if (std::abs(corner.w) > 1e-6f)
+                            corner /= corner.w;
+                        corners[index++] = glm::vec3(corner);
+                    }
+                }
+            }
+            return corners;
+        }
+
         uint32_t encodeEntityID(uint32_t entity_id)
         {
             return entity_id + 1u;
@@ -79,6 +160,15 @@ namespace Hybrid
         uint32_t decodeEntityID(uint32_t encoded_id)
         {
             return (encoded_id == 0) ? kInvalidEntityID : (encoded_id - 1u);
+        }
+
+        bool sameDrawItemSubmesh(const RenderDrawItem& lhs, const RenderDrawItem& rhs)
+        {
+            return lhs.entityID == rhs.entityID &&
+                   lhs.meshId.value == rhs.meshId.value &&
+                   lhs.materialId.value == rhs.materialId.value &&
+                   lhs.indexOffset == rhs.indexOffset &&
+                   lhs.indexCount == rhs.indexCount;
         }
 
         static glm::vec3 lightDirectionFromTransform(const Hybrid::TransformComponent &tr)
@@ -176,6 +266,12 @@ namespace Hybrid
         const uint32_t height = static_cast<uint32_t>(std::max(1, h));
         ensureSceneViewRenderTargets(width, height);
         ensureFramebuffer(m_GameFB, makeMainFramebufferSpec(width, height));
+        const uint32_t shadow_cascade_count =
+            std::clamp(m_DirectionalShadowSettings.cascade_count, 1u, kMaxDirectionalShadowCascades);
+        for (uint32_t cascade_index = 0; cascade_index < shadow_cascade_count; ++cascade_index)
+            ensureFramebuffer(m_ShadowCascadeFBs[cascade_index], makeShadowFramebufferSpec(m_DirectionalShadowSettings.map_resolution));
+        for (uint32_t cascade_index = shadow_cascade_count; cascade_index < kMaxDirectionalShadowCascades; ++cascade_index)
+            m_ShadowCascadeFBs[cascade_index].reset();
         ensureGlobalUniformBuffers();
         if (!m_FrameUBO || !m_LightUBO)
         {
@@ -207,6 +303,7 @@ namespace Hybrid
 
         m_SceneShader = m_ShaderLibrary.get("Scene");
         m_SkyboxShader = m_ShaderLibrary.get("Skybox");
+        m_ShadowShader = m_ShaderLibrary.get("ShadowDepth");
         m_ColliderDebugShader = m_ShaderLibrary.get("ColliderDebug");
         configureShaderBindings();
     }
@@ -248,6 +345,7 @@ namespace Hybrid
 
         bool scene_ok = false;
         bool skybox_ok = false;
+        bool shadow_ok = false;
         bool collider_debug_ok = false;
         bool selection_mask_ok = false;
         bool selection_overlay_ok = false;
@@ -261,6 +359,8 @@ namespace Hybrid
                 scene_ok = loaded;
             else if (shader_desc.name == RenderShaders::kSkybox.name)
                 skybox_ok = loaded;
+            else if (shader_desc.name == RenderShaders::kShadowDepth.name)
+                shadow_ok = loaded;
             else if (shader_desc.name == RenderShaders::kColliderDebug.name)
                 collider_debug_ok = loaded;
             else if (shader_desc.name == RenderShaders::kSelectionMask.name)
@@ -271,20 +371,23 @@ namespace Hybrid
 
         m_SceneShader = m_ShaderLibrary.get(std::string(RenderShaders::kScene.name));
         m_SkyboxShader = m_ShaderLibrary.get(std::string(RenderShaders::kSkybox.name));
+        m_ShadowShader = m_ShaderLibrary.get(std::string(RenderShaders::kShadowDepth.name));
         m_ColliderDebugShader = m_ShaderLibrary.get(std::string(RenderShaders::kColliderDebug.name));
         configureShaderBindings();
-        HBD_CORE_INFO("{} builtin_shaders_loaded scene={} skybox={} collider_debug={} selection_mask={} selection_overlay={} scene_shader_ready={} skybox_shader_ready={} collider_debug_shader_ready={}",
+        HBD_CORE_INFO("{} builtin_shaders_loaded scene={} skybox={} shadow={} collider_debug={} selection_mask={} selection_overlay={} scene_shader_ready={} skybox_shader_ready={} shadow_shader_ready={} collider_debug_shader_ready={}",
                       kRenderSystemLogTag,
                       scene_ok ? "true" : "false",
                       skybox_ok ? "true" : "false",
+                      shadow_ok ? "true" : "false",
                       collider_debug_ok ? "true" : "false",
                       selection_mask_ok ? "true" : "false",
                       selection_overlay_ok ? "true" : "false",
                       m_SceneShader ? "true" : "false",
                       m_SkyboxShader ? "true" : "false",
+                      m_ShadowShader ? "true" : "false",
                       m_ColliderDebugShader ? "true" : "false");
-        return scene_ok && skybox_ok && collider_debug_ok && selection_mask_ok && selection_overlay_ok &&
-               m_SceneShader && m_SkyboxShader && m_ColliderDebugShader;
+        return scene_ok && skybox_ok && shadow_ok && collider_debug_ok && selection_mask_ok && selection_overlay_ok &&
+               m_SceneShader && m_SkyboxShader && m_ShadowShader && m_ColliderDebugShader;
     }
 
     void RenderSystem::ensureGlobalUniformBuffers()
@@ -325,6 +428,11 @@ namespace Hybrid
             m_SceneShader->setInt(RenderBindings::kSceneMRUniform, RenderBindings::kSceneMRSlot);
             m_SceneShader->setInt(RenderBindings::kSceneAOUniform, RenderBindings::kSceneAOSlot);
             m_SceneShader->setInt(RenderBindings::kSceneEmissiveUniform, RenderBindings::kSceneEmissiveSlot);
+            for (uint32_t cascade_index = 0; cascade_index < kMaxDirectionalShadowCascades; ++cascade_index)
+            {
+                m_SceneShader->setInt(std::string(RenderBindings::kSceneShadowMapUniform) + "[" + std::to_string(cascade_index) + "]",
+                                      static_cast<int>(RenderBindings::kSceneShadowMapSlot + cascade_index));
+            }
         }
 
         if (auto selection_mask_shader = m_ShaderLibrary.get(std::string(RenderShaders::kSelectionMask.name)))
@@ -339,6 +447,12 @@ namespace Hybrid
             m_SkyboxShader->bind();
             m_SkyboxShader->setUniformBlockBinding(RU::kFrameBlockName, RU::kFrameUBOBinding);
             m_SkyboxShader->setInt(RenderBindings::kSkyboxCubemapUniform, RenderBindings::kSkyboxCubemapSlot);
+        }
+
+        if (m_ShadowShader)
+        {
+            m_ShadowShader->bind();
+            m_ShadowShader->setInt(RenderBindings::kSceneAlbedoUniform, RenderBindings::kSceneAlbedoSlot);
         }
 
         if (auto selection_overlay_shader = m_ShaderLibrary.get(std::string(RenderShaders::kSelectionOverlay.name)))
@@ -398,6 +512,124 @@ namespace Hybrid
 
         m_LightUBO->setData(&data, sizeof(RU::LightUBOData));
         m_LightUBO->bindBase(RU::kLightUBOBinding);
+    }
+
+    void RenderSystem::prepareShadowData(RenderPacket& packet, RenderFlags flags) const
+    {
+        packet.shadow = {};
+
+        if (!HasFlag(flags, RenderFlags::Shadow))
+            return;
+
+        if (packet.lights.dir.intensity <= 0.0f)
+            return;
+
+        const glm::vec3 light_dir = MathUtil::normalize(packet.lights.dir.direction, glm::vec3(0.0f, -1.0f, 0.0f));
+
+        glm::vec3 up(0.0f, 1.0f, 0.0f);
+        if (std::abs(glm::dot(up, light_dir)) > 0.98f)
+            up = glm::vec3(0.0f, 0.0f, 1.0f);
+
+        packet.shadow.enabled = true;
+        packet.shadow.lightDirection = light_dir;
+        packet.shadow.strength = m_DirectionalShadowSettings.strength;
+        packet.shadow.biasConstant = m_DirectionalShadowSettings.bias_constant;
+        packet.shadow.biasSlope = m_DirectionalShadowSettings.bias_slope;
+
+        const uint32_t cascade_count =
+            std::clamp(m_DirectionalShadowSettings.cascade_count, 1u, kMaxDirectionalShadowCascades);
+        packet.shadow.cascadeCount = cascade_count;
+
+        float cascade_near = m_DirectionalShadowSettings.near_distance;
+        for (uint32_t cascade_index = 0; cascade_index < cascade_count; ++cascade_index)
+        {
+            const float split_ratio =
+                std::clamp(m_DirectionalShadowSettings.cascade_split_ratios[cascade_index], 0.0f, 1.0f);
+            float cascade_far = m_DirectionalShadowSettings.near_distance +
+                                (m_DirectionalShadowSettings.far_distance - m_DirectionalShadowSettings.near_distance) * split_ratio;
+            if (cascade_index == cascade_count - 1)
+                cascade_far = m_DirectionalShadowSettings.far_distance;
+            cascade_far = std::max(cascade_far, cascade_near + 0.01f);
+
+            const auto frustum_corners = buildCameraFrustumSliceCorners(packet.frame.view,
+                                                                        packet.frame.proj,
+                                                                        cascade_near,
+                                                                        cascade_far);
+            std::array<glm::vec3, 8> extruded_corners = frustum_corners;
+            for (glm::vec3& corner : extruded_corners)
+                corner -= light_dir * m_DirectionalShadowSettings.caster_back_padding;
+
+            glm::vec3 frustum_center(0.0f);
+            for (const glm::vec3& corner : frustum_corners)
+                frustum_center += corner;
+            frustum_center /= static_cast<float>(frustum_corners.size());
+
+            const float light_distance = m_DirectionalShadowSettings.light_distance;
+            const glm::vec3 eye = frustum_center - light_dir * light_distance;
+            glm::mat4 light_view = glm::lookAt(eye, frustum_center, up);
+
+            const glm::vec3 receiver_center_ls = glm::vec3(light_view * glm::vec4(frustum_center, 1.0f));
+            float receiver_radius_ls = 0.0f;
+            for (const glm::vec3& corner : frustum_corners)
+            {
+                const glm::vec3 corner_ls = glm::vec3(light_view * glm::vec4(corner, 1.0f));
+                const glm::vec2 delta = glm::vec2(corner_ls) - glm::vec2(receiver_center_ls);
+                receiver_radius_ls = std::max(receiver_radius_ls, std::max(std::abs(delta.x), std::abs(delta.y)));
+            }
+
+            receiver_radius_ls += m_DirectionalShadowSettings.receiver_margin_xy;
+            receiver_radius_ls += m_DirectionalShadowSettings.projection_margin_xy;
+            receiver_radius_ls = std::max(receiver_radius_ls, 0.5f);
+
+            const float ortho_extent = receiver_radius_ls * 2.0f;
+            const float texel_size = ortho_extent / static_cast<float>(m_DirectionalShadowSettings.map_resolution);
+
+            glm::vec3 snapped_center_ls = receiver_center_ls;
+            snapped_center_ls.x = std::round(snapped_center_ls.x / texel_size) * texel_size;
+            snapped_center_ls.y = std::round(snapped_center_ls.y / texel_size) * texel_size;
+
+            const glm::vec3 snap_offset_ls = snapped_center_ls - receiver_center_ls;
+            light_view = glm::translate(glm::mat4(1.0f), glm::vec3(snap_offset_ls.x, snap_offset_ls.y, 0.0f)) * light_view;
+
+            glm::vec3 receiver_min_ls{};
+            glm::vec3 receiver_max_ls{};
+            computeLightSpaceBounds(frustum_corners, light_view, receiver_min_ls, receiver_max_ls);
+
+            glm::vec3 snapped_receiver_min_ls(receiver_min_ls);
+            glm::vec3 snapped_receiver_max_ls(receiver_max_ls);
+            snapped_receiver_min_ls.x = snapped_center_ls.x - receiver_radius_ls;
+            snapped_receiver_max_ls.x = snapped_center_ls.x + receiver_radius_ls;
+            snapped_receiver_min_ls.y = snapped_center_ls.y - receiver_radius_ls;
+            snapped_receiver_max_ls.y = snapped_center_ls.y + receiver_radius_ls;
+
+            glm::vec3 extruded_min_ls{};
+            glm::vec3 extruded_max_ls{};
+            computeLightSpaceBounds(extruded_corners, light_view, extruded_min_ls, extruded_max_ls);
+
+            glm::vec3 snapped_caster_min_ls = glm::min(snapped_receiver_min_ls, extruded_min_ls);
+            glm::vec3 snapped_caster_max_ls = glm::max(snapped_receiver_max_ls, extruded_max_ls);
+            snapped_caster_max_ls.z += m_DirectionalShadowSettings.receiver_front_padding;
+
+            const glm::mat4 light_proj = glm::ortho(snapped_receiver_min_ls.x,
+                                                    snapped_receiver_max_ls.x,
+                                                    snapped_receiver_min_ls.y,
+                                                    snapped_receiver_max_ls.y,
+                                                    -snapped_caster_max_ls.z,
+                                                    -snapped_caster_min_ls.z);
+            auto& cascade = packet.shadow.cascades[cascade_index];
+            cascade.valid = true;
+            cascade.lightViewProjection = light_proj * light_view;
+            cascade.receiverMinLS = snapped_receiver_min_ls;
+            cascade.receiverMaxLS = snapped_receiver_max_ls;
+            cascade.casterMinLS = snapped_caster_min_ls;
+            cascade.casterMaxLS = snapped_caster_max_ls;
+            cascade.receiverCornersWS = frustum_corners;
+            cascade.casterExtrudedCornersWS = extruded_corners;
+            cascade.splitNear = cascade_near;
+            cascade.splitFar = cascade_far;
+
+            cascade_near = cascade_far;
+        }
     }
 
     void RenderSystem::ensureFramebuffer(std::shared_ptr<Framebuffer>& framebuffer, const FramebufferSpec& spec)
@@ -572,6 +804,7 @@ namespace Hybrid
 
         pkt.scene = scene;
         pkt.showColliderDebug = editor_ext ? editor_ext->show_collider_debug : false;
+        pkt.showShadowDebug = editor_ext ? editor_ext->show_shadow_debug : false;
         pkt.activeEntityID = resolveActiveSelectionEntityID(editor_ext);
         if (scene)
         {
@@ -591,6 +824,10 @@ namespace Hybrid
         pkt.frame.viewProj = projM * viewM;
         pkt.frame.cameraPos = cameraPos;
         pkt.frame.time = frame_context.dt;
+        if (editor_ext && editor_ext->game_viewport_size.x > 1.0f && editor_ext->game_viewport_size.y > 1.0f)
+            pkt.frame.gameAspect = editor_ext->game_viewport_size.x / editor_ext->game_viewport_size.y;
+        else
+            pkt.frame.gameAspect = (aspect > 0.0f) ? aspect : (16.0f / 9.0f);
 
         if (cache_editor_camera_state)
         {
@@ -599,8 +836,10 @@ namespace Hybrid
         }
 
         collectPacketLights(pkt);
+        prepareShadowData(pkt, flags);
         const Frustum frustum = has_camera ? BuildFrustum(pkt.frame.viewProj) : Frustum{};
         collectPacketDrawItems(pkt, frustum);
+        collectShadowCasterItems(pkt);
         sortRenderPacket(pkt);
 
         return pkt;
@@ -651,24 +890,21 @@ namespace Hybrid
         }
     }
 
-    void RenderSystem::collectPacketDrawItems(RenderPacket& packet, const Frustum& frustum)
+    void RenderSystem::collectItemsForFrustum(RenderPacket& packet,
+                                              const Frustum& frustum,
+                                              std::vector<RenderDrawItem>* opaque_items,
+                                              std::vector<RenderDrawItem>* transparent_items,
+                                              std::vector<RenderDrawItem>* shadow_items,
+                                              uint32_t* tested_items,
+                                              uint32_t* culled_items,
+                                              bool count_scene_totals)
     {
-        packet.opaque_items.clear();
-        packet.transparent_items.clear();
-        packet.tested_items = 0;
-        packet.culled_items = 0;
-
-        m_Stats.scene_renderers = 0;
-        m_Stats.scene_submeshes = 0;
-
         if (!packet.scene || !m_AssetManager)
             return;
 
         auto& registry = packet.scene->getRegistry();
         auto render_view = registry.view<Hybrid::TransformComponent, Hybrid::MeshRendererComponent>();
 
-        packet.opaque_items.reserve(render_view.size_hint());
-        packet.transparent_items.reserve(render_view.size_hint() / 4);
         for (auto entity : render_view)
         {
             const auto& transform = render_view.get<Hybrid::TransformComponent>(entity);
@@ -676,7 +912,8 @@ namespace Hybrid
             if (!renderer.Enabled || renderer.Mesh.value == 0)
                 continue;
 
-            ++m_Stats.scene_renderers;
+            if (count_scene_totals)
+                ++m_Stats.scene_renderers;
 
             std::shared_ptr<Mesh> cpu_mesh = m_AssetManager->loadSync<Mesh>(renderer.Mesh);
             if (!cpu_mesh)
@@ -709,14 +946,17 @@ namespace Hybrid
 
             for (const auto& submesh : mesh_gpu->submeshes)
             {
-                ++m_Stats.scene_submeshes;
-                ++packet.tested_items;
+                if (count_scene_totals)
+                    ++m_Stats.scene_submeshes;
+                if (tested_items)
+                    ++(*tested_items);
 
                 const AABB local_bounds{submesh.aabb_min, submesh.aabb_max};
                 const AABB world_bounds = TransformAABB(local_bounds, transform.WorldMatrix);
                 if (!IntersectsFrustum(frustum, world_bounds))
                 {
-                    ++packet.culled_items;
+                    if (culled_items)
+                        ++(*culled_items);
                     continue;
                 }
 
@@ -747,12 +987,186 @@ namespace Hybrid
                 item.tint = renderer.Tint;
                 item.entityID = static_cast<uint32_t>(entt::to_integral(entity));
 
-                if (effective_material_gpu->data.surface_mode == MaterialSurfaceMode::Transparent)
-                    packet.transparent_items.push_back(item);
+                const MaterialSurfaceMode surface_mode = effective_material_gpu->data.surface_mode;
+
+                if (shadow_items)
+                {
+                    if (surface_mode != MaterialSurfaceMode::Transparent)
+                        shadow_items->push_back(item);
+                    continue;
+                }
+
+                if (surface_mode == MaterialSurfaceMode::Transparent)
+                {
+                    if (transparent_items)
+                        transparent_items->push_back(item);
+                }
                 else
-                    packet.opaque_items.push_back(item);
+                {
+                    if (opaque_items)
+                        opaque_items->push_back(item);
+                }
             }
         }
+    }
+
+    void RenderSystem::collectPacketDrawItems(RenderPacket& packet, const Frustum& frustum)
+    {
+        packet.opaque_items.clear();
+        packet.transparent_items.clear();
+        packet.tested_items = 0;
+        packet.culled_items = 0;
+
+        m_Stats.scene_renderers = 0;
+        m_Stats.scene_submeshes = 0;
+
+        if (packet.scene)
+        {
+            auto& registry = packet.scene->getRegistry();
+            auto render_view = registry.view<Hybrid::TransformComponent, Hybrid::MeshRendererComponent>();
+            packet.opaque_items.reserve(render_view.size_hint());
+            packet.transparent_items.reserve(render_view.size_hint() / 4);
+        }
+
+        collectItemsForFrustum(packet,
+                               frustum,
+                               &packet.opaque_items,
+                               &packet.transparent_items,
+                               nullptr,
+                               &packet.tested_items,
+                               &packet.culled_items,
+                               true);
+    }
+
+    void RenderSystem::collectItemsForVolume(RenderPacket& packet,
+                                             const ConvexVolume& volume,
+                                             std::vector<RenderDrawItem>* shadow_items)
+    {
+        if (!packet.scene || !m_AssetManager || !shadow_items || !volume.Valid)
+            return;
+
+        auto& registry = packet.scene->getRegistry();
+        auto render_view = registry.view<Hybrid::TransformComponent, Hybrid::MeshRendererComponent>();
+
+        for (auto entity : render_view)
+        {
+            const auto& transform = render_view.get<Hybrid::TransformComponent>(entity);
+            const auto& renderer = render_view.get<Hybrid::MeshRendererComponent>(entity);
+            if (!renderer.Enabled || renderer.Mesh.value == 0)
+                continue;
+
+            std::shared_ptr<Mesh> cpu_mesh = m_AssetManager->loadSync<Mesh>(renderer.Mesh);
+            if (!cpu_mesh)
+                continue;
+
+            MeshGPU* mesh_gpu = getOrCreateMeshGPU(renderer.Mesh, cpu_mesh);
+            if (!mesh_gpu)
+                continue;
+
+            std::shared_ptr<Material> base_material;
+            AssetID base_material_id = renderer.Material;
+            if (base_material_id.value != 0)
+                base_material = m_AssetManager->loadSync<Material>(base_material_id);
+
+            if (!base_material && !mesh_gpu->submeshes.empty() && mesh_gpu->submeshes[0].material.value != 0)
+            {
+                base_material_id = mesh_gpu->submeshes[0].material;
+                base_material = m_AssetManager->loadSync<Material>(base_material_id);
+            }
+
+            if (!base_material)
+            {
+                base_material = m_AssetManager->getDefault<Material>();
+                base_material_id = AssetID{};
+            }
+
+            auto* base_material_gpu = m_MaterialSystem.getOrCreate(base_material_id, base_material);
+            if (!base_material_gpu)
+                continue;
+
+            for (const auto& submesh : mesh_gpu->submeshes)
+            {
+                const AABB local_bounds{submesh.aabb_min, submesh.aabb_max};
+                const AABB world_bounds = TransformAABB(local_bounds, transform.WorldMatrix);
+                if (!IntersectsConvexVolume(volume, world_bounds))
+                    continue;
+
+                AssetID effective_material_id = base_material_id;
+                const MaterialSystem::MaterialGPU* effective_material_gpu = base_material_gpu;
+
+                if (submesh.material.value != 0)
+                {
+                    auto sub_material = m_AssetManager->loadSync<Material>(submesh.material);
+                    if (sub_material)
+                    {
+                        if (auto* sub_material_gpu = m_MaterialSystem.getOrCreate(submesh.material, sub_material))
+                        {
+                            effective_material_id = submesh.material;
+                            effective_material_gpu = sub_material_gpu;
+                        }
+                    }
+                }
+
+                if (effective_material_gpu->data.surface_mode == MaterialSurfaceMode::Transparent)
+                    continue;
+
+                RenderDrawItem item{};
+                item.meshId = renderer.Mesh;
+                item.materialId = effective_material_id;
+                item.meshGPU = mesh_gpu;
+                item.materialGPU = effective_material_gpu;
+                item.indexOffset = submesh.index_offset;
+                item.indexCount = submesh.index_count;
+                item.model = transform.WorldMatrix;
+                item.tint = renderer.Tint;
+                item.entityID = static_cast<uint32_t>(entt::to_integral(entity));
+                shadow_items->push_back(item);
+            }
+        }
+    }
+
+    void RenderSystem::collectShadowCasterItems(RenderPacket& packet)
+    {
+        packet.shadow_caster_items.clear();
+
+        if (!packet.shadow.enabled)
+            return;
+
+        std::vector<RenderDrawItem> gathered_items;
+        for (uint32_t cascade_index = 0; cascade_index < packet.shadow.cascadeCount; ++cascade_index)
+        {
+            const auto& cascade = packet.shadow.cascades[cascade_index];
+            if (!cascade.valid)
+                continue;
+
+            std::array<glm::vec3, 16> hull_points{};
+            for (size_t i = 0; i < 8; ++i)
+            {
+                hull_points[i] = cascade.receiverCornersWS[i];
+                hull_points[8 + i] = cascade.casterExtrudedCornersWS[i];
+            }
+
+            const ConvexVolume caster_volume = BuildConvexHullVolume(hull_points);
+            if (caster_volume.Valid)
+                collectItemsForVolume(packet, caster_volume, &gathered_items);
+        }
+
+        packet.shadow_caster_items = std::move(gathered_items);
+        auto& items = packet.shadow_caster_items;
+        std::sort(items.begin(), items.end(),
+                  [](const RenderDrawItem& lhs, const RenderDrawItem& rhs)
+                  {
+                      if (lhs.materialId.value != rhs.materialId.value)
+                          return lhs.materialId.value < rhs.materialId.value;
+                      if (lhs.meshId.value != rhs.meshId.value)
+                          return lhs.meshId.value < rhs.meshId.value;
+                      if (lhs.entityID != rhs.entityID)
+                          return lhs.entityID < rhs.entityID;
+                      if (lhs.indexOffset != rhs.indexOffset)
+                          return lhs.indexOffset < rhs.indexOffset;
+                      return lhs.indexCount < rhs.indexCount;
+                  });
+        items.erase(std::unique(items.begin(), items.end(), sameDrawItemSubmesh), items.end());
     }
 
     void RenderSystem::sortRenderPacket(RenderPacket& packet) const
@@ -781,6 +1195,8 @@ namespace Hybrid
                           return lhs_dist2 > rhs_dist2;
                       return lhs.entityID < rhs.entityID;
                   });
+
+        std::sort(packet.shadow_caster_items.begin(), packet.shadow_caster_items.end(), opaque_less);
     }
 
     void RenderSystem::updateStatsFromPacket(const RenderPacket& packet, float render_cpu_time_ms)
@@ -788,6 +1204,7 @@ namespace Hybrid
         m_Stats.render_cpu_time_ms = std::max(0.0f, render_cpu_time_ms);
         m_Stats.submitted_opaque_items = static_cast<uint32_t>(packet.opaque_items.size());
         m_Stats.submitted_transparent_items = static_cast<uint32_t>(packet.transparent_items.size());
+        m_Stats.shadow_caster_items = static_cast<uint32_t>(packet.shadow_caster_items.size());
         m_Stats.point_lights = static_cast<uint32_t>(packet.lights.points.size());
         m_Stats.tested_items = packet.tested_items;
         m_Stats.culled_items = packet.culled_items;
@@ -903,10 +1320,13 @@ namespace Hybrid
                 scene_context.framebuffer = m_SceneFB;
                 scene_context.scene_framebuffer = m_SceneFB;
                 scene_context.selection_framebuffer = m_SelectionFB;
+                scene_context.shadow_framebuffer = m_ShadowCascadeFBs[0];
+                scene_context.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
                 scene_context.selection_overlay_style = &m_SelectionOverlayStyle;
                 scene_context.shader_library = &m_ShaderLibrary;
                 scene_context.scene_shader = m_SceneShader;
                 scene_context.skybox_shader = m_SkyboxShader;
+                scene_context.shadow_shader = m_ShadowShader;
                 scene_context.collider_debug_shader = m_ColliderDebugShader;
                 updateFrameUBO(scene_packet, scene_frame.viewport_size);
                 updateLightUBO(scene_packet);
@@ -932,7 +1352,7 @@ namespace Hybrid
                 EditorRenderExt game_ext = *editor_ext;
                 game_ext.use_game_camera = true;
                 game_ext.has_editor_camera = false;
-                const RenderFlags game_flags = RenderFlags::Scene;
+                const RenderFlags game_flags = RenderFlags::Scene | RenderFlags::Shadow;
                 auto game_packet = buildRenderPacket(game_frame, game_flags, &game_ext, false);
                 RenderContext game_context{};
                 game_context.frame = &game_frame;
@@ -943,10 +1363,13 @@ namespace Hybrid
                 game_context.framebuffer = m_GameFB;
                 game_context.scene_framebuffer = m_GameFB;
                 game_context.selection_framebuffer = nullptr;
+                game_context.shadow_framebuffer = m_ShadowCascadeFBs[0];
+                game_context.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
                 game_context.selection_overlay_style = &m_SelectionOverlayStyle;
                 game_context.shader_library = &m_ShaderLibrary;
                 game_context.scene_shader = m_SceneShader;
                 game_context.skybox_shader = m_SkyboxShader;
+                game_context.shadow_shader = m_ShadowShader;
                 game_context.collider_debug_shader = m_ColliderDebugShader;
                 updateFrameUBO(game_packet, game_frame.viewport_size);
                 updateLightUBO(game_packet);
@@ -979,10 +1402,13 @@ namespace Hybrid
         context.framebuffer = m_SceneFB;
         context.scene_framebuffer = m_SceneFB;
         context.selection_framebuffer = m_SelectionFB;
+        context.shadow_framebuffer = m_ShadowCascadeFBs[0];
+        context.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
         context.selection_overlay_style = &m_SelectionOverlayStyle;
         context.shader_library = &m_ShaderLibrary;
         context.scene_shader = m_SceneShader;
         context.skybox_shader = m_SkyboxShader;
+        context.shadow_shader = m_ShadowShader;
         context.collider_debug_shader = m_ColliderDebugShader;
         updateFrameUBO(packet, frame_context.viewport_size);
         updateLightUBO(packet);

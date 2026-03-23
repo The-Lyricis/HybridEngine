@@ -169,6 +169,7 @@ namespace Hybrid
         std::function<bool()> is_play_mode;
 
         bool show_collider_debug = true;
+        bool show_shadow_debug = false;
         std::function<bool()> is_pause_mode;
 
         void setActiveDocument(std::shared_ptr<SceneDocument> document)

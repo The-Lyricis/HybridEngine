@@ -25,9 +25,18 @@ namespace Hybrid
         };
 
         DebugLineMeshGPU* getOrCreateDebugBoxMeshGPU();
+        DebugLineMeshGPU* getOrCreateDebugSphereMeshGPU();
+        DebugLineMeshGPU* getOrCreateShadowHullMeshGPU();
+        DebugLineMeshGPU* getOrCreateDebugQuadMeshGPU();
 
     private:
         DebugLineMeshGPU m_DebugBoxMeshGPU;
+        DebugLineMeshGPU m_DebugSphereMeshGPU;
+        DebugLineMeshGPU m_ShadowHullMeshGPU;
+        DebugLineMeshGPU m_DebugQuadMeshGPU;
         bool m_HasDebugBoxMeshGPU = false;
+        bool m_HasDebugSphereMeshGPU = false;
+        bool m_HasShadowHullMeshGPU = false;
+        bool m_HasDebugQuadMeshGPU = false;
     };
 } // namespace Hybrid

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 
 #include <glm/common.hpp>
@@ -138,6 +140,15 @@ namespace Hybrid
         bool Valid = false;
     };
 
+    struct ConvexVolume
+    {
+        static constexpr uint32_t MaxPlanes = 32;
+
+        std::array<Plane, MaxPlanes> Planes{};
+        uint32_t PlaneCount = 0;
+        bool Valid = false;
+    };
+
     inline Ray MakeRayFromInvViewProjection(const glm::mat4& inv_view_proj, float ndc_x, float ndc_y)
     {
         glm::vec4 near_world = inv_view_proj * glm::vec4(ndc_x, ndc_y, -1.0f, 1.0f);
@@ -228,6 +239,136 @@ namespace Hybrid
         return {normal / len, plane.w / len};
     }
 
+    inline Plane BuildPlaneFromPoints(const glm::vec3& a,
+                                      const glm::vec3& b,
+                                      const glm::vec3& c,
+                                      const glm::vec3& inside_point)
+    {
+        glm::vec3 normal = glm::cross(b - a, c - a);
+        const float len = glm::length(normal);
+        if (len <= 1e-8f)
+            return {};
+
+        normal /= len;
+        float distance = -glm::dot(normal, a);
+        if (glm::dot(normal, inside_point) + distance < 0.0f)
+        {
+            normal = -normal;
+            distance = -distance;
+        }
+
+        return {normal, distance};
+    }
+
+    inline ConvexVolume BuildExtrudedQuadPrism(const std::array<glm::vec3, 4>& receiver_quad,
+                                               const std::array<glm::vec3, 4>& extruded_quad)
+    {
+        ConvexVolume volume{};
+        glm::vec3 center(0.0f);
+        for (const glm::vec3& point : receiver_quad)
+            center += point;
+        for (const glm::vec3& point : extruded_quad)
+            center += point;
+        center /= 8.0f;
+
+        volume.Planes[0] = BuildPlaneFromPoints(receiver_quad[0], receiver_quad[1], receiver_quad[2], center);
+        volume.Planes[1] = BuildPlaneFromPoints(extruded_quad[0], extruded_quad[3], extruded_quad[2], center);
+        volume.Planes[2] = BuildPlaneFromPoints(receiver_quad[0], receiver_quad[1], extruded_quad[1], center);
+        volume.Planes[3] = BuildPlaneFromPoints(receiver_quad[1], receiver_quad[2], extruded_quad[2], center);
+        volume.Planes[4] = BuildPlaneFromPoints(receiver_quad[2], receiver_quad[3], extruded_quad[3], center);
+        volume.Planes[5] = BuildPlaneFromPoints(receiver_quad[3], receiver_quad[0], extruded_quad[0], center);
+        volume.PlaneCount = 6;
+        volume.Valid = true;
+
+        for (uint32_t i = 0; i < volume.PlaneCount; ++i)
+        {
+            if (glm::dot(volume.Planes[i].Normal, volume.Planes[i].Normal) <= 1e-8f)
+            {
+                volume.Valid = false;
+                break;
+            }
+        }
+
+        return volume;
+    }
+
+    template <size_t N>
+    inline ConvexVolume BuildConvexHullVolume(const std::array<glm::vec3, N>& points,
+                                              float epsilon = 1e-4f)
+    {
+        ConvexVolume volume{};
+        if constexpr (N < 4)
+            return volume;
+
+        auto plane_exists = [&](const Plane& plane)
+        {
+            for (uint32_t i = 0; i < volume.PlaneCount; ++i)
+            {
+                const Plane& existing = volume.Planes[i];
+                if (glm::dot(existing.Normal, plane.Normal) > 0.999f &&
+                    std::abs(existing.Distance - plane.Distance) < 1e-3f)
+                {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            for (size_t j = i + 1; j < N; ++j)
+            {
+                for (size_t k = j + 1; k < N; ++k)
+                {
+                    glm::vec3 normal = glm::cross(points[j] - points[i], points[k] - points[i]);
+                    const float len = glm::length(normal);
+                    if (len <= 1e-6f)
+                        continue;
+                    normal /= len;
+
+                    float distance = -glm::dot(normal, points[i]);
+                    bool has_positive = false;
+                    bool has_negative = false;
+                    for (size_t p = 0; p < N; ++p)
+                    {
+                        const float signed_distance = glm::dot(normal, points[p]) + distance;
+                        if (signed_distance > epsilon)
+                            has_positive = true;
+                        else if (signed_distance < -epsilon)
+                            has_negative = true;
+
+                        if (has_positive && has_negative)
+                            break;
+                    }
+
+                    if (has_positive && has_negative)
+                        continue;
+
+                    if (!has_positive)
+                    {
+                        normal = -normal;
+                        distance = -distance;
+                    }
+
+                    const Plane candidate{normal, distance};
+                    if (plane_exists(candidate))
+                        continue;
+
+                    if (volume.PlaneCount >= ConvexVolume::MaxPlanes)
+                    {
+                        volume.Valid = false;
+                        return volume;
+                    }
+
+                    volume.Planes[volume.PlaneCount++] = candidate;
+                }
+            }
+        }
+
+        volume.Valid = volume.PlaneCount >= 4;
+        return volume;
+    }
+
     inline Frustum BuildFrustum(const glm::mat4& view_proj)
     {
         Frustum frustum{};
@@ -263,6 +404,27 @@ namespace Hybrid
 
         for (const Plane& plane : frustum.Planes)
         {
+            const glm::vec3 abs_normal = glm::abs(plane.Normal);
+            const float projected_radius = glm::dot(abs_normal, extents);
+            const float signed_distance = glm::dot(plane.Normal, center) + plane.Distance;
+            if (signed_distance + projected_radius < 0.0f)
+                return false;
+        }
+
+        return true;
+    }
+
+    inline bool IntersectsConvexVolume(const ConvexVolume& volume, const AABB& bounds)
+    {
+        if (!volume.Valid || !bounds.isValid())
+            return true;
+
+        const glm::vec3 center = bounds.center();
+        const glm::vec3 extents = bounds.extents();
+
+        for (uint32_t i = 0; i < volume.PlaneCount; ++i)
+        {
+            const Plane& plane = volume.Planes[i];
             const glm::vec3 abs_normal = glm::abs(plane.Normal);
             const float projected_radius = glm::dot(abs_normal, extents);
             const float signed_distance = glm::dot(plane.Normal, center) + plane.Distance;

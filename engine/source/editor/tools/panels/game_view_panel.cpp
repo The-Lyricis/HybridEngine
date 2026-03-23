@@ -87,16 +87,16 @@ namespace Hybrid
                           ctx.render_stats->submitted_triangles);
             std::snprintf(line3,
                           sizeof(line3),
-                          "Cull Tested %u | Culled %u | Lights %u",
+                          "Cull Tested %u | Culled %u | Shadow %u",
                           ctx.render_stats->tested_items,
                           ctx.render_stats->culled_items,
-                          ctx.render_stats->point_lights);
+                          ctx.render_stats->shadow_caster_items);
             std::snprintf(line4,
                           sizeof(line4),
-                          "Scene Renderers %u | Submeshes %u | Entities %u",
+                          "Scene Renderers %u | Submeshes %u | Lights %u",
                           ctx.render_stats->scene_renderers,
                           ctx.render_stats->scene_submeshes,
-                          ctx.render_stats->submitted_entities);
+                          ctx.render_stats->point_lights);
 
             const char* lines[] = {line0, line1, line2, line3, line4};
             float max_width = 0.0f;

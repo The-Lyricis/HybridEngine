@@ -1,9 +1,12 @@
 #include "scene_pass.h"
 
+#include <string>
+
 #include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/renderer.h"
 #include "runtime/modules/render/public/shader.h"
+#include "runtime/modules/render/runtime/render_bindings.h"
 #include "runtime/modules/render/runtime/render_targets.h"
 
 namespace Hybrid
@@ -37,6 +40,31 @@ namespace Hybrid
         if (scene_shader)
         {
             scene_shader->bind();
+            const bool has_shadow_cascade = packet.shadow.enabled && packet.shadow.cascadeCount > 0 &&
+                                            packet.shadow.cascades[0].valid;
+            scene_shader->setInt("u_ShadowCascadeCount", has_shadow_cascade ? static_cast<int>(packet.shadow.cascadeCount) : 0);
+            for (uint32_t cascade_index = 0; cascade_index < kMaxDirectionalShadowCascades; ++cascade_index)
+            {
+                const bool valid = cascade_index < packet.shadow.cascadeCount && packet.shadow.cascades[cascade_index].valid;
+                scene_shader->setMat4("u_LightViewProjections[" + std::to_string(cascade_index) + "]",
+                                      valid ? packet.shadow.cascades[cascade_index].lightViewProjection : glm::mat4(1.0f));
+                scene_shader->setFloat("u_ShadowCascadeSplits[" + std::to_string(cascade_index) + "]",
+                                       valid ? packet.shadow.cascades[cascade_index].splitFar : 0.0f);
+            }
+            scene_shader->setInt("u_ShadowsEnabled",
+                                 (has_shadow_cascade && context.shadow_cascade_framebuffers != nullptr) ? 1 : 0);
+            scene_shader->setFloat("u_ShadowStrength", packet.shadow.strength);
+            scene_shader->setFloat("u_ShadowBiasConst", packet.shadow.biasConstant);
+            scene_shader->setFloat("u_ShadowBiasSlope", packet.shadow.biasSlope);
+            if (has_shadow_cascade && context.shadow_cascade_framebuffers)
+            {
+                for (uint32_t cascade_index = 0; cascade_index < packet.shadow.cascadeCount; ++cascade_index)
+                {
+                    const std::shared_ptr<Framebuffer>& shadow_fb = (*context.shadow_cascade_framebuffers)[cascade_index];
+                    if (shadow_fb)
+                        shadow_fb->bindDepthAttachmentTexture(RenderBindings::kSceneShadowMapSlot + cascade_index);
+                }
+            }
 
             auto draw_queue = [&](const std::vector<RenderDrawItem>& items)
             {
@@ -58,6 +86,7 @@ namespace Hybrid
             RenderCommand::setBlendEnabled(false);
             RenderCommand::setDepthTestEnabled(true);
             RenderCommand::setDepthWriteEnabled(true);
+            RenderCommand::setDepthCompareFunc(DepthCompareFunc::Less);
             RenderCommand::setCullEnabled(true);
             draw_queue(packet.opaque_items);
 

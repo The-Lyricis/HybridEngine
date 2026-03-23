@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <array>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -25,6 +26,7 @@
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/mesh_gpu.h"
 #include "runtime/modules/render/runtime/render_uniforms.h"
+#include "runtime/modules/render/runtime/render_shadow_settings.h"
 #include "runtime/modules/render/runtime/selection_overlay_style.h"
 #include "runtime/modules/render/runtime/passes/selection_overlay_pass.h"
 #include "runtime/modules/render/runtime/passes/selection_mask_pass.h"
@@ -52,6 +54,7 @@ namespace Hybrid
         uint32_t submitted_entities = 0;
         uint32_t submitted_opaque_items = 0;
         uint32_t submitted_transparent_items = 0;
+        uint32_t shadow_caster_items = 0;
         uint32_t point_lights = 0;
         uint32_t tested_items = 0;
         uint32_t culled_items = 0;
@@ -99,8 +102,21 @@ namespace Hybrid
         void configureShaderBindings();
         void updateFrameUBO(const RenderPacket& packet, const glm::vec2& viewport_size);
         void updateLightUBO(const RenderPacket& packet);
+        void prepareShadowData(RenderPacket& packet, RenderFlags flags) const;
         void collectPacketLights(RenderPacket& packet) const;
+        void collectItemsForFrustum(RenderPacket& packet,
+                                    const Frustum& frustum,
+                                    std::vector<RenderDrawItem>* opaque_items,
+                                    std::vector<RenderDrawItem>* transparent_items,
+                                    std::vector<RenderDrawItem>* shadow_items,
+                                    uint32_t* tested_items,
+                                    uint32_t* culled_items,
+                                    bool count_scene_totals);
+        void collectItemsForVolume(RenderPacket& packet,
+                                   const ConvexVolume& volume,
+                                   std::vector<RenderDrawItem>* shadow_items);
         void collectPacketDrawItems(RenderPacket& packet, const Frustum& frustum);
+        void collectShadowCasterItems(RenderPacket& packet);
         void sortRenderPacket(RenderPacket& packet) const;
         void updateStatsFromPacket(const RenderPacket& packet, float render_cpu_time_ms);
         TexturePtr getOrCreateCubemapTexture(AssetID id);
@@ -119,11 +135,13 @@ namespace Hybrid
         std::shared_ptr<Framebuffer> m_SceneFB;
         std::shared_ptr<Framebuffer> m_SelectionFB;
         std::shared_ptr<Framebuffer> m_GameFB;
+        std::array<std::shared_ptr<Framebuffer>, kMaxDirectionalShadowCascades> m_ShadowCascadeFBs{};
         std::shared_ptr<UniformBuffer> m_FrameUBO;
         std::shared_ptr<UniformBuffer> m_LightUBO;
         SelectionOverlayStyle m_SelectionOverlayStyle;
         std::shared_ptr<Shader> m_SceneShader;
         std::shared_ptr<Shader> m_SkyboxShader;
+        std::shared_ptr<Shader> m_ShadowShader;
         std::shared_ptr<Shader> m_ColliderDebugShader;
         ShaderLibrary m_ShaderLibrary;
         MaterialSystem m_MaterialSystem;
@@ -142,6 +160,7 @@ namespace Hybrid
         std::unordered_map<AssetID, TexturePtr, AssetID::Hasher> m_CubemapCache;
         TexturePtr m_DefaultCubemapTexture;
         std::unique_ptr<TextureUploader> m_TextureUploader;
+        DirectionalShadowSettings m_DirectionalShadowSettings{};
 
         bool m_Initialized = false; // Render backend init state.
         float m_ShaderReloadTimer = 0.0f;

@@ -30,6 +30,12 @@ namespace Hybrid::RenderShaders
         "Skybox.frag"
     };
 
+    inline constexpr ShaderSourceDesc kShadowDepth{
+        "ShadowDepth",
+        "ShadowDepth.vert",
+        "ShadowDepth.frag"
+    };
+
     inline constexpr ShaderSourceDesc kSelectionMask{
         "SelectionMask",
         "SelectionMask.vert",
@@ -42,10 +48,11 @@ namespace Hybrid::RenderShaders
         "SelectionOverlay.frag"
     };
 
-    inline constexpr std::array<ShaderSourceDesc, 5> kBuiltinShaders = {
+    inline constexpr std::array<ShaderSourceDesc, 6> kBuiltinShaders = {
         kScene,
         kColliderDebug,
         kSkybox,
+        kShadowDepth,
         kSelectionMask,
         kSelectionOverlay
     };

@@ -33,6 +33,7 @@ namespace Hybrid
 
         bool request_pick = false;         // Request one ID-buffer readback this frame.
         bool show_collider_debug = false;
+        bool show_shadow_debug = false;
         int pick_x = 0;                    // Pixel x in render target space.
         int pick_y = 0;                    // Pixel y in render target space.
 

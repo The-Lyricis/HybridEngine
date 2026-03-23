@@ -532,6 +532,7 @@ namespace Hybrid
         editor_ext->selection.hovered_entity = kInvalidEntityID;
         editor_ext->pan_tool = ctx.pan_tool;
         editor_ext->show_collider_debug = ctx.show_collider_debug;
+        editor_ext->show_shadow_debug = ctx.show_shadow_debug;
 
         if (editor_ext->render_scene_view)
         {
@@ -545,7 +546,7 @@ namespace Hybrid
             editor_ext->has_editor_camera = false;
         }
 
-        *render_flags = RenderFlags::Scene | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmo;
+        *render_flags = RenderFlags::Scene | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmo | RenderFlags::Shadow;
         if (!editor_ext->selection.selected_entities.empty())
             *render_flags |= RenderFlags::SelectionHighlight;
 

@@ -27,6 +27,10 @@ namespace Hybrid::RenderBindings
     inline constexpr uint32_t kSkyboxCubemapSlot = 5;
     inline constexpr const char* kSkyboxCubemapUniform = "u_SkyboxCubemap";
 
+    inline constexpr uint32_t kSceneShadowMapSlot = 6;
+    inline constexpr uint32_t kSceneShadowMapSlotCount = 4;
+    inline constexpr const char* kSceneShadowMapUniform = "u_ShadowMaps";
+
     inline constexpr uint32_t kSelectionOverlaySceneColorSlot = 0;
     inline constexpr uint32_t kSelectionOverlaySceneDepthSlot = 1;
     inline constexpr uint32_t kSelectionOverlayMaskSlot = 2;

@@ -1,5 +1,6 @@
 #version 330 core
 const int MAX_POINT_LIGHTS = 16;
+const int MAX_SHADOW_CASCADES = 4;
 
 struct PointLightData
 {
@@ -46,9 +47,59 @@ uniform sampler2D u_NormalMap;
 uniform sampler2D u_MRMap;
 uniform sampler2D u_AOMap;
 uniform sampler2D u_EmissiveMap;
+uniform sampler2D u_ShadowMaps[MAX_SHADOW_CASCADES];
 uniform int u_HasNormalMap;
 uniform int u_SurfaceMode;
 uniform float u_AlphaCutoff;
+uniform int u_ShadowsEnabled;
+uniform int u_ShadowCascadeCount;
+uniform mat4 u_LightViewProjections[MAX_SHADOW_CASCADES];
+uniform float u_ShadowCascadeSplits[MAX_SHADOW_CASCADES];
+uniform float u_ShadowStrength;
+uniform float u_ShadowBiasConst;
+uniform float u_ShadowBiasSlope;
+
+int selectShadowCascade(float viewDepth)
+{
+    if (u_ShadowCascadeCount <= 0)
+        return -1;
+
+    for (int i = 0; i < u_ShadowCascadeCount && i < MAX_SHADOW_CASCADES; ++i)
+    {
+        if (viewDepth <= u_ShadowCascadeSplits[i])
+            return i;
+    }
+
+    return u_ShadowCascadeCount - 1;
+}
+
+float sampleShadow(int cascadeIndex, vec3 normal, vec3 lightDir)
+{
+    if (u_ShadowsEnabled == 0 || cascadeIndex < 0 || cascadeIndex >= u_ShadowCascadeCount)
+        return 0.0;
+
+    vec4 lightSpacePos = u_LightViewProjections[cascadeIndex] * vec4(vWorldPos, 1.0);
+    vec3 projCoords = lightSpacePos.xyz / max(lightSpacePos.w, 1e-6);
+    projCoords = projCoords * 0.5 + 0.5;
+
+    if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
+        return 0.0;
+
+    float bias = max(u_ShadowBiasSlope * (1.0 - dot(normal, lightDir)), u_ShadowBiasConst);
+    vec2 texelSize = 1.0 / vec2(textureSize(u_ShadowMaps[cascadeIndex], 0));
+    float shadow = 0.0;
+
+    for (int x = -1; x <= 1; ++x)
+    {
+        for (int y = -1; y <= 1; ++y)
+        {
+            float pcfDepth = texture(u_ShadowMaps[cascadeIndex], projCoords.xy + vec2(x, y) * texelSize).r;
+            shadow += (projCoords.z - bias > pcfDepth) ? 1.0 : 0.0;
+        }
+    }
+
+    return shadow / 9.0;
+}
 
 vec3 getNormal() {
     vec3 N = normalize(vNormal);
@@ -96,7 +147,10 @@ void main() {
     float ndl = max(dot(N, Ld), 0.0);
     vec3 H = normalize(Ld + V);
     float spec = pow(max(dot(N, H), 0.0), specPow);
-    color += (kd * ndl * albedo + ks * spec) * u_DirLightColorIntensity.rgb * u_DirLightColorIntensity.a;
+    float viewDepth = -(u_View * vec4(vWorldPos, 1.0)).z;
+    int shadowCascadeIndex = selectShadowCascade(viewDepth);
+    float shadow = sampleShadow(shadowCascadeIndex, N, Ld);
+    color += (1.0 - shadow * u_ShadowStrength) * (kd * ndl * albedo + ks * spec) * u_DirLightColorIntensity.rgb * u_DirLightColorIntensity.a;
 
     for (int i = 0; i < u_LightCounts.x && i < MAX_POINT_LIGHTS; ++i) {
         vec3 lightColor = u_PointLights[i].colorIntensity.rgb;
