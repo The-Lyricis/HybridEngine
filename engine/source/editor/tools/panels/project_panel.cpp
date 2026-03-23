@@ -1126,7 +1126,7 @@ namespace Hybrid
 
     void ProjectPanel::onImGuiRender(EditorContext& ctx)
     {
-        if (!m_open)
+        if (!m_state.open)
             return;
 
         ensureRootInit();
@@ -1151,7 +1151,7 @@ namespace Hybrid
             }
         }
 
-        ImGui::Begin(getName(), &m_open);
+        ImGui::Begin(getName(), &m_state.open);
 
         const float panel_width = ImGui::GetContentRegionAvail().x;
         const float panel_height = ImGui::GetContentRegionAvail().y;

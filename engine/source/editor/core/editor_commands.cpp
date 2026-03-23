@@ -15,6 +15,38 @@ namespace Hybrid
         {
             return ctx.active_document && ctx.active_document->scene != nullptr;
         }
+
+        bool hasUnsavedSceneChanges(const EditorContext& ctx)
+        {
+            return ctx.active_document && ctx.active_document->dirty;
+        }
+
+        void queueUnsavedChangesConfirm(EditorContext& editor,
+                                       std::string discard_label,
+                                       std::function<bool()> on_save,
+                                       std::function<void()> on_discard)
+        {
+            if (!editor.request_confirm_dialog)
+            {
+                if (on_discard)
+                    on_discard();
+                return;
+            }
+
+            EditorConfirmDialog dialog{};
+            dialog.title = "Unsaved Changes";
+            dialog.message = "The current scene has unsaved changes. Save before continuing?";
+            dialog.confirm_label = "Save";
+            dialog.secondary_label = std::move(discard_label);
+            dialog.cancel_label = "Cancel";
+            dialog.on_confirm = [on_save = std::move(on_save), on_discard = std::move(on_discard)]() mutable
+            {
+                if (on_save && on_save() && on_discard)
+                    on_discard();
+            };
+            dialog.on_secondary = std::move(on_discard);
+            editor.request_confirm_dialog(std::move(dialog));
+        }
     } // namespace
 
     bool EditorCommandDispatcher::canExecute(EditorCommandId id, const EditorCommandContext& ctx) const
@@ -56,8 +88,28 @@ namespace Hybrid
         switch (id)
         {
         case EditorCommandId::NewScene:
+            if (hasUnsavedSceneChanges(*editor))
+            {
+                queueUnsavedChangesConfirm(*editor,
+                                           "Discard",
+                                           [editor]() -> bool { return editor->request_save_scene(); },
+                                           [editor]() {
+                    editor->request_new_scene();
+                });
+                return true;
+            }
             return editor->request_new_scene();
         case EditorCommandId::OpenScene:
+            if (hasUnsavedSceneChanges(*editor))
+            {
+                queueUnsavedChangesConfirm(*editor,
+                                           "Discard",
+                                           [editor]() -> bool { return editor->request_save_scene(); },
+                                           [editor]() {
+                    editor->request_open_scene();
+                });
+                return true;
+            }
             return editor->request_open_scene();
         case EditorCommandId::SaveScene:
             return editor->request_save_scene();

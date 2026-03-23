@@ -10,6 +10,7 @@
 #include <imgui.h>
 
 #include "editor/core/editor_commands.h"
+#include "editor/core/editor_dialogs.h"
 #include "editor/core/editor_types.h"
 #include "editor/core/scene_document.h"
 #include "runtime/modules/asset/asset_type.h"
@@ -146,6 +147,7 @@ namespace Hybrid
         std::function<bool()> request_save_scene_as;
         std::function<bool(EditorCommandId)> execute_command;
         std::function<bool(EditorCommandId)> can_execute_command;
+        std::function<void(EditorConfirmDialog)> request_confirm_dialog;
         std::function<bool(const std::filesystem::path&)> reveal_in_file_browser;
         std::function<AssetID(const std::string& asset_vpath)> find_asset_by_vpath;
         std::function<std::string(entt::entity)> describe_mesh_renderer_material;

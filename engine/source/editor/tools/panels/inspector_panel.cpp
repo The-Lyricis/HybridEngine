@@ -151,9 +151,9 @@ namespace Hybrid
 
     void InspectorPanel::onImGuiRender(EditorContext& ctx)
     {
-        if (!m_open) return;
+        if (!m_state.open) return;
 
-        ImGui::Begin(getName(), &m_open);
+        ImGui::Begin(getName(), &m_state.open);
 
         if (!ctx.active_scene)
         {

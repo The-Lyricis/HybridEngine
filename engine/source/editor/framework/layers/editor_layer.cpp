@@ -176,6 +176,10 @@ namespace Hybrid
             {
                 return canExecuteCommand(id);
             };
+        ctx.request_confirm_dialog = [this](EditorConfirmDialog dialog)
+            {
+                m_editor_ui.queueConfirmDialog(std::move(dialog));
+            };
         ctx.reveal_in_file_browser = [this](const std::filesystem::path& path) -> bool
             {
                 return m_services.platform ? m_services.platform->revealInFileBrowser(path) : false;
@@ -238,6 +242,7 @@ namespace Hybrid
         ctx.request_save_scene_as = {};
         ctx.execute_command = {};
         ctx.can_execute_command = {};
+        ctx.request_confirm_dialog = {};
         ctx.reveal_in_file_browser = {};
         ctx.find_asset_by_vpath = {};
         ctx.describe_mesh_renderer_material = {};

@@ -2,13 +2,14 @@
 
 #include <algorithm>
 #include <string>
+#include <vector>
 
 #include "runtime/core/base/macro.h"
 #include "runtime/core/base/math_util.h"
 #include "runtime/core/log/log_system.h"
 
 #include <filesystem>
-#include <fstream>
+#include "runtime/modules/project/project_creator.h"
 #include "runtime/modules/project/project_loader.h"
 #include "runtime/modules/project/project_context.h"
 #include "runtime/modules/scene/scene_serializer.h"
@@ -32,133 +33,137 @@ namespace Hybrid
                 return "<unnamed>";
             return scene->getName().c_str();
         }
+
+        ProjectCreateDesc makeDebugBootstrapProjectDesc(const std::filesystem::path& output_dir)
+        {
+            ProjectCreateDesc desc{};
+            desc.project_root = output_dir / "GameProject";
+            desc.project_name = "GameProject";
+            return desc;
+        }
+
+        bool resolveProjectFilePath(const std::filesystem::path& requested_path, std::filesystem::path& out_hyproj_path, std::string& out_error)
+        {
+            namespace fs = std::filesystem;
+
+            if (requested_path.empty())
+            {
+                out_error = "project path is empty";
+                return false;
+            }
+
+            const fs::path absolute_path = fs::absolute(requested_path);
+            if (fs::is_regular_file(absolute_path))
+            {
+                if (absolute_path.extension() != ".hyproj")
+                {
+                    out_error = "project file must use the .hyproj extension: " + absolute_path.string();
+                    return false;
+                }
+
+                out_hyproj_path = absolute_path;
+                return true;
+            }
+
+            if (fs::is_directory(absolute_path))
+            {
+                std::vector<fs::path> hyproj_files;
+                std::error_code ec;
+                for (const auto& entry : fs::directory_iterator(absolute_path, ec))
+                {
+                    if (ec)
+                    {
+                        out_error = "failed to enumerate project directory: " + absolute_path.string() + " (" + ec.message() + ")";
+                        return false;
+                    }
+
+                    if (entry.is_regular_file() && entry.path().extension() == ".hyproj")
+                        hyproj_files.push_back(entry.path());
+                }
+
+                if (hyproj_files.empty())
+                {
+                    out_error = "no .hyproj file found in directory: " + absolute_path.string();
+                    return false;
+                }
+
+                std::sort(hyproj_files.begin(), hyproj_files.end());
+                out_hyproj_path = hyproj_files.front();
+                return true;
+            }
+
+            out_error = "project path does not exist: " + absolute_path.string();
+            return false;
+        }
     } // namespace
 
-    void HybridEngine::initialize()
+    bool HybridEngine::initialize(const std::filesystem::path& project_path)
     {
         LogSystem::initialize();
 
-        // ===== Project Bootstrap (CWD/GameProject) =====
         namespace fs = std::filesystem;
-
-        const fs::path outputDir = fs::current_path();
-        const fs::path projectRoot = outputDir / "GameProject";
-        const fs::path hyprojPath = projectRoot / "GameProject.hyproj";
-
-        const fs::path assetsDir = projectRoot / "Assets";
-        const fs::path cacheDir = projectRoot / "Cache";
-        const fs::path buildDir = projectRoot / "Build";
-        const fs::path settingsDir = projectRoot / "ProjectSettings";
-
-        std::error_code ec;
-        HBD_CORE_INFO("{} initialize_started cwd={} project_root={}",
-                      kEngineLogTag,
-                      pathOrPlaceholder(outputDir),
-                      pathOrPlaceholder(projectRoot));
-
-        const auto logDirectoryCreateFailure = [](const char* target, const fs::path& path, const std::error_code& error)
+        const fs::path cwd = fs::current_path();
+        fs::path hyproj_path;
+        if (project_path.empty())
         {
-            HBD_CORE_ERROR("{} project_bootstrap_failed target={} path={} reason=create_directory_failed error={}",
-                           kEngineLogTag,
-                           target,
-                           pathOrPlaceholder(path),
-                           error.message());
-        };
+            const ProjectCreateDesc bootstrap_desc = makeDebugBootstrapProjectDesc(cwd);
+            HBD_CORE_INFO("{} debug_project_bootstrap_started cwd={} project_root={}",
+                          kEngineLogTag,
+                          pathOrPlaceholder(cwd),
+                          pathOrPlaceholder(bootstrap_desc.project_root));
 
-        // 1) Create required directories.
-        fs::create_directories(projectRoot, ec);
-        if (ec)
-        {
-            logDirectoryCreateFailure("project_root", projectRoot, ec);
-            LogSystem::shutdown();
-            return;
-        }
-
-        ec.clear();
-        fs::create_directories(assetsDir, ec);
-        if (ec)
-        {
-            logDirectoryCreateFailure("assets_root", assetsDir, ec);
-            LogSystem::shutdown();
-            return;
-        }
-
-        ec.clear();
-        fs::create_directories(cacheDir, ec);
-        if (ec)
-        {
-            logDirectoryCreateFailure("cache_root", cacheDir, ec);
-            LogSystem::shutdown();
-            return;
-        }
-
-        ec.clear();
-        fs::create_directories(buildDir, ec);
-        if (ec)
-        {
-            logDirectoryCreateFailure("build_root", buildDir, ec);
-            LogSystem::shutdown();
-            return;
-        }
-
-        ec.clear();
-        fs::create_directories(settingsDir, ec);
-        if (ec)
-        {
-            logDirectoryCreateFailure("settings_root", settingsDir, ec);
-            LogSystem::shutdown();
-            return;
-        }
-
-        // 2) Generate a default hyproj if missing.
-        if (!fs::exists(hyprojPath))
-        {
-            std::ofstream ofs(hyprojPath, std::ios::out | std::ios::binary);
-            if (!ofs)
+            std::string create_error;
+            if (!ProjectCreator::CreateProject(bootstrap_desc, hyproj_path, create_error))
             {
-                HBD_CORE_ERROR("{} project_file_create_failed path={} reason=open_failed",
+                HBD_CORE_ERROR("{} project_bootstrap_failed cwd={} reason={}",
                                kEngineLogTag,
-                               pathOrPlaceholder(hyprojPath));
+                               pathOrPlaceholder(cwd),
+                               create_error);
                 LogSystem::shutdown();
-                return;
+                return false;
+            }
+        }
+        else
+        {
+            std::string resolve_error;
+            if (!resolveProjectFilePath(project_path, hyproj_path, resolve_error))
+            {
+                HBD_CORE_ERROR("{} project_path_resolve_failed requested_path={} reason={}",
+                               kEngineLogTag,
+                               pathOrPlaceholder(project_path),
+                               resolve_error);
+                LogSystem::shutdown();
+                return false;
             }
 
-            ofs << "# Auto-generated project file (debug)\n";
-            ofs << "name=GameProject\n";
-            ofs << "assets=Assets\n";
-            ofs << "cache=Cache\n";
-            ofs << "build=Build\n";
-            ofs << "settings=ProjectSettings\n";
-            ofs.close();
-
-            HBD_CORE_INFO("{} project_file_created path={}",
+            HBD_CORE_INFO("{} initialize_started cwd={} requested_project={} resolved_hyproj={}",
                           kEngineLogTag,
-                          pathOrPlaceholder(fs::absolute(hyprojPath)));
+                          pathOrPlaceholder(cwd),
+                          pathOrPlaceholder(project_path),
+                          pathOrPlaceholder(hyproj_path));
         }
 
-        // 3) Load hyproj into ProjectContext and publish ProjectService.
         Hybrid::ProjectContext pctx;
         std::string perr;
-        if (!Hybrid::ProjectLoader::LoadFromFile(hyprojPath, pctx, perr))
+        if (!Hybrid::ProjectLoader::LoadFromFile(hyproj_path, pctx, perr))
         {
             HBD_CORE_ERROR("{} project_load_failed hyproj={} reason={}",
                            kEngineLogTag,
-                           pathOrPlaceholder(fs::absolute(hyprojPath)),
+                           pathOrPlaceholder(fs::absolute(hyproj_path)),
                            perr);
             LogSystem::shutdown();
-            return;
+            return false;
         }
 
         Hybrid::ProjectService::Set(pctx);
         HBD_CORE_INFO("{} project_loaded hyproj={} project_root={} assets_root={} cache_root={} build_root={} settings_root={}",
                       kEngineLogTag,
-                      pathOrPlaceholder(fs::absolute(hyprojPath)),
+                      pathOrPlaceholder(fs::absolute(hyproj_path)),
                       pathOrPlaceholder(pctx.root),
                       pathOrPlaceholder(pctx.assets),
                       pathOrPlaceholder(pctx.cache),
                       pathOrPlaceholder(pctx.build),
                       pathOrPlaceholder(pctx.settings));
-        // =============================================
 
         // ===== Window / Graphics =====
         m_Window = std::make_shared<WindowSystem>();
@@ -171,7 +176,7 @@ namespace Hybrid
                            kEngineLogTag);
             m_Window->cleanup();
             LogSystem::shutdown();
-            return;
+            return false;
         }
 
         m_GraphicsContext = GraphicsContext::Create(window);
@@ -181,7 +186,7 @@ namespace Hybrid
                            kEngineLogTag);
             m_Window->cleanup();
             LogSystem::shutdown();
-            return;
+            return false;
         }
         m_GraphicsContext->init();
 
@@ -221,7 +226,7 @@ namespace Hybrid
                            sceneNameOrPlaceholder(scene));
             m_Window->cleanup();
             LogSystem::shutdown();
-            return;
+            return false;
         }
         m_FrameContext.window_handle = window;
 
@@ -239,6 +244,7 @@ namespace Hybrid
                       sceneNameOrPlaceholder(m_EditorScene),
                       static_cast<int>(m_FrameContext.viewport_size.x),
                       static_cast<int>(m_FrameContext.viewport_size.y));
+        return true;
     }
 
     bool HybridEngine::setEditorScene(std::shared_ptr<Scene> scene)

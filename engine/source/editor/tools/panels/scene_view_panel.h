@@ -11,7 +11,7 @@ namespace Hybrid
     class SceneViewPanel final : public IEditorPanel
     {
     public:
-        const char* getName() const override { return "Scene"; }
+        SceneViewPanel() : IEditorPanel(EditorPanelId::SceneView, "Scene") {}
 
         void setTexture(uint32_t colorTex) { m_colorTextureID = colorTex; }
         void updateViewportState(EditorContext& ctx);

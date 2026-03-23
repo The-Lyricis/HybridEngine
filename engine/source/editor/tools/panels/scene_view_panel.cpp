@@ -194,7 +194,7 @@ namespace Hybrid
 
     void SceneViewPanel::updateViewportState(EditorContext& ctx)
     {
-        if (!m_open)
+        if (!m_state.open)
         {
             ctx.scene_viewport_image_hovered = false;
             ctx.scene_viewport_hovered = false;
@@ -204,11 +204,11 @@ namespace Hybrid
 
     void SceneViewPanel::onImGuiRender(EditorContext& ctx)
     {
-        if (!m_open)
+        if (!m_state.open)
             return;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0, 0});
-        ImGui::Begin(getName(), &m_open);
+        ImGui::Begin(getName(), &m_state.open);
 
         if (!g_ToolIcons.loaded)
         {

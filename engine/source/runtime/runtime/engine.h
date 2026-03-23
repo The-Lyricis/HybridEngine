@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 
 #include "runtime/core/event/application_event.h"
@@ -31,7 +32,7 @@ namespace Hybrid
         };
 
     public:
-        void initialize(); // Create window, graphics context, scene and runtime systems.
+        bool initialize(const std::filesystem::path& project_path = {}); // Create window, graphics context, scene and runtime systems.
         void run();        // Main loop: poll -> begin-frame -> update -> render -> UI -> end-frame -> present.
         void shutdown();   // Tear down layers and core systems.
 

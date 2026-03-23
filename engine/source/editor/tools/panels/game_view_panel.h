@@ -11,7 +11,7 @@ namespace Hybrid
     class GameViewPanel final : public IEditorPanel
     {
     public:
-        const char* getName() const override { return "Game"; }
+        GameViewPanel() : IEditorPanel(EditorPanelId::GameView, "Game") {}
 
         void setTexture(uint32_t colorTex) { m_colorTextureID = colorTex; }
         void updateViewportState(EditorContext& ctx);

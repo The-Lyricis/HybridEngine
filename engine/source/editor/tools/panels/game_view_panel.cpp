@@ -14,7 +14,7 @@ namespace Hybrid
 
     void GameViewPanel::updateViewportState(EditorContext& ctx)
     {
-        if (!m_open)
+        if (!m_state.open)
         {
             ctx.game_viewport_image_hovered = false;
             ctx.game_viewport_hovered = false;
@@ -24,11 +24,11 @@ namespace Hybrid
 
     void GameViewPanel::onImGuiRender(EditorContext& ctx)
     {
-        if (!m_open)
+        if (!m_state.open)
             return;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0, 0});
-        ImGui::Begin(getName(), &m_open);
+        ImGui::Begin(getName(), &m_state.open);
 
         if (m_colorTextureID == 0)
         {

@@ -14,7 +14,7 @@ namespace Hybrid
     class HierarchyPanel final : public IEditorPanel
     {
     public:
-        const char* getName() const override { return "Hierarchy"; }
+        HierarchyPanel() : IEditorPanel(EditorPanelId::Hierarchy, "Hierarchy") {}
         void onImGuiRender(EditorContext& ctx) override;
 
     private:

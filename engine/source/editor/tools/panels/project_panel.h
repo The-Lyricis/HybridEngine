@@ -14,9 +14,7 @@ namespace Hybrid
     class ProjectPanel final : public IEditorPanel
     {
     public:
-        ProjectPanel() = default;
-
-        const char* getName() const override { return "Project"; }
+        ProjectPanel() : IEditorPanel(EditorPanelId::Project, "Project") {}
         void onImGuiRender(EditorContext& ctx) override;
 
     private:

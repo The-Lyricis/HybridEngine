@@ -6,7 +6,7 @@ namespace Hybrid
     class InspectorPanel final : public IEditorPanel
     {
     public:
-        const char* getName() const override { return "Inspector"; }
+        InspectorPanel() : IEditorPanel(EditorPanelId::Inspector, "Inspector") {}
         void onImGuiRender(EditorContext& ctx) override;
     };
 }

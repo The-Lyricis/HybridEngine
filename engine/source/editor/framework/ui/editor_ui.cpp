@@ -8,6 +8,7 @@
 #include <stb_image.h>
 
 #include "editor/core/editor_commands.h"
+#include "editor/core/editor_dialogs.h"
 #include "editor/core/editor_context.h"
 #include "editor/tools/panels/game_view_panel.h"
 #include "editor/tools/panels/hierarchy_panel.h"
@@ -22,7 +23,46 @@ namespace Hybrid
     {
         constexpr const char* kEditorUILogTag = "[EditorUI]";
         static bool g_TopToolbarIconLoadFailedLogged = false;
+        enum class EditorLayoutNode
+        {
+            Main,
+            Right,
+            LeftArea,
+            LeftBottom,
+            LeftTop,
+            LeftTopLeft,
+            Count,
+        };
 
+        enum class EditorLayoutSplitDirection
+        {
+            Left,
+            Right,
+            Up,
+            Down,
+        };
+
+        struct EditorLayoutSplitDesc
+        {
+            EditorLayoutNode source = EditorLayoutNode::Main;
+            EditorLayoutSplitDirection direction = EditorLayoutSplitDirection::Right;
+            float ratio = 0.5f;
+            EditorLayoutNode out_primary = EditorLayoutNode::Main;
+            EditorLayoutNode out_secondary = EditorLayoutNode::Main;
+        };
+
+        constexpr EditorPanelDescriptor kPanelDescriptors[] = {
+            {EditorPanelId::Hierarchy, "Hierarchy", true, true, false, EditorDockSlot::LeftTopLeft},
+            {EditorPanelId::Inspector, "Inspector", true, true, false, EditorDockSlot::Right},
+            {EditorPanelId::Project, "Project", true, true, false, EditorDockSlot::LeftBottom},
+            {EditorPanelId::SceneView, "Scene", true, true, true, EditorDockSlot::Main},
+            {EditorPanelId::GameView, "Game", true, true, true, EditorDockSlot::Main},
+        };
+        constexpr EditorLayoutSplitDesc kDefaultLayoutSplits[] = {
+            {EditorLayoutNode::Main, EditorLayoutSplitDirection::Right, 0.25f, EditorLayoutNode::Right, EditorLayoutNode::LeftArea},
+            {EditorLayoutNode::LeftArea, EditorLayoutSplitDirection::Down, 0.30f, EditorLayoutNode::LeftBottom, EditorLayoutNode::LeftTop},
+            {EditorLayoutNode::LeftTop, EditorLayoutSplitDirection::Left, 0.22f, EditorLayoutNode::LeftTopLeft, EditorLayoutNode::Main},
+        };
         static GLuint LoadTextureRGBA8(const std::string& path)
         {
             int w = 0, h = 0, comp = 0;
@@ -94,6 +134,23 @@ namespace Hybrid
             if (active)
                 ImGui::PopStyleColor(3);
         }
+
+        ImGuiDir toImGuiDir(EditorLayoutSplitDirection direction)
+        {
+            switch (direction)
+            {
+            case EditorLayoutSplitDirection::Left:
+                return ImGuiDir_Left;
+            case EditorLayoutSplitDirection::Right:
+                return ImGuiDir_Right;
+            case EditorLayoutSplitDirection::Up:
+                return ImGuiDir_Up;
+            case EditorLayoutSplitDirection::Down:
+                return ImGuiDir_Down;
+            }
+
+            return ImGuiDir_Right;
+        }
     }
 
     EditorUI::EditorUI() = default;
@@ -121,6 +178,7 @@ namespace Hybrid
         m_ProjectPanel = std::make_unique<ProjectPanel>();
         m_SceneViewportPanel = std::make_unique<SceneViewPanel>();
         m_GameViewportPanel = std::make_unique<GameViewPanel>();
+        registerPanels();
 
         m_initialized = true;
         HBD_CORE_INFO("{} initialize_completed", kEditorUILogTag);
@@ -136,6 +194,7 @@ namespace Hybrid
         m_ProjectPanel.reset();
         m_InspectorPanel.reset();
         m_HierarchyPanel.reset();
+        m_panels.fill(nullptr);
         m_ctx.reset();
         g_TopToolbarIcons.destroy();
 
@@ -144,6 +203,9 @@ namespace Hybrid
         m_DockSpaceID = 0;
         m_DefaultLayoutBuilt = false;
         m_RequestResetLayout = false;
+        m_OpenConfirmDialog = false;
+        m_active_confirm_dialog.reset();
+        m_confirm_dialog_queue.clear();
         HBD_CORE_INFO("{} shutdown_completed", kEditorUILogTag);
     }
 
@@ -175,12 +237,16 @@ namespace Hybrid
             m_DefaultLayoutBuilt = true;
         }
 
-        if (m_HierarchyPanel)
-            m_HierarchyPanel->onImGuiRender(*m_ctx);
-        if (m_InspectorPanel)
-            m_InspectorPanel->onImGuiRender(*m_ctx);
-        if (m_ProjectPanel)
-            m_ProjectPanel->onImGuiRender(*m_ctx);
+        for (const EditorPanelDescriptor& descriptor : kPanelDescriptors)
+        {
+            if (descriptor.is_viewport)
+                continue;
+
+            if (IEditorPanel* panel = getPanel(descriptor.id))
+                panel->onImGuiRender(*m_ctx);
+        }
+
+        drawConfirmDialogs();
     }
 
     void EditorUI::drawViewports(uint32_t sceneColorTexID, uint32_t gameColorTexID)
@@ -188,16 +254,22 @@ namespace Hybrid
         if (!m_initialized || !m_ctx)
             return;
 
-        if (m_SceneViewportPanel && m_SceneViewportPanel->isOpen())
+        for (const EditorPanelDescriptor& descriptor : kPanelDescriptors)
         {
-            m_SceneViewportPanel->setTexture(sceneColorTexID);
-            m_SceneViewportPanel->onImGuiRender(*m_ctx);
-        }
+            if (!descriptor.is_viewport)
+                continue;
 
-        if (m_GameViewportPanel && m_GameViewportPanel->isOpen())
-        {
-            m_GameViewportPanel->setTexture(gameColorTexID);
-            m_GameViewportPanel->onImGuiRender(*m_ctx);
+            switch (descriptor.id)
+            {
+            case EditorPanelId::SceneView:
+                renderViewportPanel(descriptor.id, sceneColorTexID);
+                break;
+            case EditorPanelId::GameView:
+                renderViewportPanel(descriptor.id, gameColorTexID);
+                break;
+            default:
+                break;
+            }
         }
     }
 
@@ -206,28 +278,10 @@ namespace Hybrid
         if (!m_initialized || !m_ctx)
             return;
 
-        if (!m_SceneViewportPanel || !m_SceneViewportPanel->isOpen())
+        for (const EditorPanelDescriptor& descriptor : kPanelDescriptors)
         {
-            m_ctx->scene_viewport_hovered = false;
-            m_ctx->scene_viewport_image_hovered = false;
-            m_ctx->scene_viewport_focused = false;
-            m_ctx->scene_viewport_size = {0.0f, 0.0f};
-        }
-        else
-        {
-            m_SceneViewportPanel->updateViewportState(*m_ctx);
-        }
-
-        if (!m_GameViewportPanel || !m_GameViewportPanel->isOpen())
-        {
-            m_ctx->game_viewport_hovered = false;
-            m_ctx->game_viewport_image_hovered = false;
-            m_ctx->game_viewport_focused = false;
-            m_ctx->game_viewport_size = {0.0f, 0.0f};
-        }
-        else
-        {
-            m_GameViewportPanel->updateViewportState(*m_ctx);
+            if (descriptor.is_viewport)
+                updateViewportPanelState(descriptor.id);
         }
     }
 
@@ -252,6 +306,27 @@ namespace Hybrid
     {
         m_RequestResetLayout = true;
         m_DefaultLayoutBuilt = false;
+    }
+
+    void EditorUI::queueConfirmDialog(EditorConfirmDialog dialog)
+    {
+        m_confirm_dialog_queue.push_back(std::move(dialog));
+    }
+
+    void EditorUI::registerPanels()
+    {
+        m_panels.fill(nullptr);
+        m_panels[static_cast<size_t>(EditorPanelId::Hierarchy)] = m_HierarchyPanel.get();
+        m_panels[static_cast<size_t>(EditorPanelId::Inspector)] = m_InspectorPanel.get();
+        m_panels[static_cast<size_t>(EditorPanelId::Project)] = m_ProjectPanel.get();
+        m_panels[static_cast<size_t>(EditorPanelId::SceneView)] = m_SceneViewportPanel.get();
+        m_panels[static_cast<size_t>(EditorPanelId::GameView)] = m_GameViewportPanel.get();
+
+        for (const EditorPanelDescriptor& descriptor : kPanelDescriptors)
+        {
+            if (IEditorPanel* panel = getPanel(descriptor.id))
+                panel->setOpen(descriptor.default_open);
+        }
     }
 
     void EditorUI::drawDockSpaceRoot()
@@ -355,35 +430,10 @@ namespace Hybrid
 
         if (ImGui::BeginMenu("Window"))
         {
-            if (m_HierarchyPanel)
+            for (const EditorPanelDescriptor& descriptor : kPanelDescriptors)
             {
-                bool open = m_HierarchyPanel->isOpen();
-                if (ImGui::MenuItem("Hierarchy", nullptr, &open))
-                    m_HierarchyPanel->setOpen(open);
-            }
-            if (m_InspectorPanel)
-            {
-                bool open = m_InspectorPanel->isOpen();
-                if (ImGui::MenuItem("Inspector", nullptr, &open))
-                    m_InspectorPanel->setOpen(open);
-            }
-            if (m_ProjectPanel)
-            {
-                bool open = m_ProjectPanel->isOpen();
-                if (ImGui::MenuItem("Project", nullptr, &open))
-                    m_ProjectPanel->setOpen(open);
-            }
-            if (m_SceneViewportPanel)
-            {
-                bool open = m_SceneViewportPanel->isOpen();
-                if (ImGui::MenuItem("Scene", nullptr, &open))
-                    m_SceneViewportPanel->setOpen(open);
-            }
-            if (m_GameViewportPanel)
-            {
-                bool open = m_GameViewportPanel->isOpen();
-                if (ImGui::MenuItem("Game", nullptr, &open))
-                    m_GameViewportPanel->setOpen(open);
+                if (descriptor.show_in_window_menu)
+                    drawPanelToggleMenuItem(descriptor.id);
             }
 
             ImGui::Separator();
@@ -543,19 +593,204 @@ namespace Hybrid
         ImGui::DockBuilderAddNode(m_DockSpaceID, ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(m_DockSpaceID, ImGui::GetMainViewport()->Size);
 
-        ImGuiID dock_main = m_DockSpaceID;
-        ImGuiID dock_right = 0, dock_left_area = 0, dock_project = 0, dock_top = 0, dock_hierarchy = 0;
+        std::array<ImGuiID, static_cast<size_t>(EditorLayoutNode::Count)> nodes{};
+        nodes[static_cast<size_t>(EditorLayoutNode::Main)] = m_DockSpaceID;
 
-        ImGui::DockBuilderSplitNode(dock_main, ImGuiDir_Right, 0.25f, &dock_right, &dock_left_area);
-        ImGui::DockBuilderSplitNode(dock_left_area, ImGuiDir_Down, 0.30f, &dock_project, &dock_top);
-        ImGui::DockBuilderSplitNode(dock_top, ImGuiDir_Left, 0.22f, &dock_hierarchy, &dock_main);
+        for (const EditorLayoutSplitDesc& split : kDefaultLayoutSplits)
+        {
+            ImGuiID& source = nodes[static_cast<size_t>(split.source)];
+            ImGuiID& primary = nodes[static_cast<size_t>(split.out_primary)];
+            ImGuiID& secondary = nodes[static_cast<size_t>(split.out_secondary)];
+            ImGui::DockBuilderSplitNode(source, toImGuiDir(split.direction), split.ratio, &primary, &secondary);
+        }
 
-        ImGui::DockBuilderDockWindow("Inspector", dock_right);
-        ImGui::DockBuilderDockWindow("Project", dock_project);
-        ImGui::DockBuilderDockWindow("Hierarchy", dock_hierarchy);
-        ImGui::DockBuilderDockWindow("Scene", dock_main);
-        ImGui::DockBuilderDockWindow("Game", dock_main);
+        for (const EditorPanelDescriptor& descriptor : kPanelDescriptors)
+        {
+            const char* window_name = getPanelWindowName(descriptor.id);
+            ImGuiID dock_target = nodes[static_cast<size_t>(EditorLayoutNode::Main)];
+            switch (descriptor.default_dock_slot)
+            {
+            case EditorDockSlot::Right:
+                dock_target = nodes[static_cast<size_t>(EditorLayoutNode::Right)];
+                break;
+            case EditorDockSlot::LeftBottom:
+                dock_target = nodes[static_cast<size_t>(EditorLayoutNode::LeftBottom)];
+                break;
+            case EditorDockSlot::LeftTopLeft:
+                dock_target = nodes[static_cast<size_t>(EditorLayoutNode::LeftTopLeft)];
+                break;
+            case EditorDockSlot::Main:
+            default:
+                dock_target = nodes[static_cast<size_t>(EditorLayoutNode::Main)];
+                break;
+            }
+            ImGui::DockBuilderDockWindow(window_name, dock_target);
+        }
 
         ImGui::DockBuilderFinish(m_DockSpaceID);
+    }
+
+    const EditorPanelDescriptor* EditorUI::getPanelDescriptor(EditorPanelId id) const
+    {
+        for (const EditorPanelDescriptor& descriptor : kPanelDescriptors)
+        {
+            if (descriptor.id == id)
+                return &descriptor;
+        }
+        return nullptr;
+    }
+
+    IEditorPanel* EditorUI::getPanel(EditorPanelId id) const
+    {
+        const size_t index = static_cast<size_t>(id);
+        return index < m_panels.size() ? m_panels[index] : nullptr;
+    }
+
+    void EditorUI::drawPanelToggleMenuItem(EditorPanelId id)
+    {
+        IEditorPanel* panel = getPanel(id);
+        const EditorPanelDescriptor* descriptor = getPanelDescriptor(id);
+        if (panel == nullptr || descriptor == nullptr)
+            return;
+
+        bool open = panel->isOpen();
+        if (ImGui::MenuItem(descriptor->title, nullptr, &open))
+            panel->setOpen(open);
+    }
+
+    const char* EditorUI::getPanelWindowName(EditorPanelId id) const
+    {
+        IEditorPanel* panel = getPanel(id);
+        return panel ? panel->getName() : "";
+    }
+
+    void EditorUI::renderViewportPanel(EditorPanelId id, uint32_t colorTexID)
+    {
+        if (!m_ctx)
+            return;
+
+        switch (id)
+        {
+        case EditorPanelId::SceneView:
+            if (m_SceneViewportPanel && m_SceneViewportPanel->isOpen())
+            {
+                m_SceneViewportPanel->setTexture(colorTexID);
+                m_SceneViewportPanel->onImGuiRender(*m_ctx);
+            }
+            break;
+        case EditorPanelId::GameView:
+            if (m_GameViewportPanel && m_GameViewportPanel->isOpen())
+            {
+                m_GameViewportPanel->setTexture(colorTexID);
+                m_GameViewportPanel->onImGuiRender(*m_ctx);
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    void EditorUI::updateViewportPanelState(EditorPanelId id)
+    {
+        if (!m_ctx)
+            return;
+
+        switch (id)
+        {
+        case EditorPanelId::SceneView:
+            if (!m_SceneViewportPanel || !m_SceneViewportPanel->isOpen())
+            {
+                m_ctx->scene_viewport_hovered = false;
+                m_ctx->scene_viewport_image_hovered = false;
+                m_ctx->scene_viewport_focused = false;
+                m_ctx->scene_viewport_size = {0.0f, 0.0f};
+            }
+            else
+            {
+                m_SceneViewportPanel->updateViewportState(*m_ctx);
+            }
+            break;
+        case EditorPanelId::GameView:
+            if (!m_GameViewportPanel || !m_GameViewportPanel->isOpen())
+            {
+                m_ctx->game_viewport_hovered = false;
+                m_ctx->game_viewport_image_hovered = false;
+                m_ctx->game_viewport_focused = false;
+                m_ctx->game_viewport_size = {0.0f, 0.0f};
+            }
+            else
+            {
+                m_GameViewportPanel->updateViewportState(*m_ctx);
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    void EditorUI::drawConfirmDialogs()
+    {
+        if (!m_active_confirm_dialog.has_value() && !m_confirm_dialog_queue.empty())
+        {
+            m_active_confirm_dialog = std::move(m_confirm_dialog_queue.front());
+            m_confirm_dialog_queue.pop_front();
+            m_OpenConfirmDialog = true;
+        }
+
+        if (!m_active_confirm_dialog.has_value())
+            return;
+
+        constexpr const char* kConfirmDialogPopupId = "##EditorConfirmDialog";
+        if (m_OpenConfirmDialog)
+        {
+            ImGui::OpenPopup(kConfirmDialogPopupId);
+            m_OpenConfirmDialog = false;
+        }
+
+        if (!ImGui::BeginPopupModal(kConfirmDialogPopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            return;
+
+        EditorConfirmDialog dialog = *m_active_confirm_dialog;
+        ImGui::TextUnformatted(dialog.title.c_str());
+        ImGui::Separator();
+        ImGui::PushTextWrapPos(420.0f);
+        ImGui::TextUnformatted(dialog.message.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+        bool close_dialog = false;
+        if (ImGui::Button(dialog.confirm_label.c_str(), ImVec2(140.0f, 0.0f)))
+        {
+            if (dialog.on_confirm)
+                dialog.on_confirm();
+            close_dialog = true;
+        }
+
+        if (!dialog.secondary_label.empty())
+        {
+            ImGui::SameLine();
+            if (ImGui::Button(dialog.secondary_label.c_str(), ImVec2(140.0f, 0.0f)))
+            {
+                if (dialog.on_secondary)
+                    dialog.on_secondary();
+                close_dialog = true;
+            }
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button(dialog.cancel_label.c_str(), ImVec2(140.0f, 0.0f)))
+        {
+            if (dialog.on_cancel)
+                dialog.on_cancel();
+            close_dialog = true;
+        }
+
+        if (close_dialog)
+        {
+            m_active_confirm_dialog.reset();
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
     }
 } // namespace Hybrid

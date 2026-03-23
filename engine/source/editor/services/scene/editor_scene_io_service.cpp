@@ -265,8 +265,6 @@ namespace Hybrid
 
     bool EditorSceneIOService::requestOpen()
     {
-        // TODO(editor): Before replacing the active document, prompt for unsaved changes
-        // once there is a shared editor message box / modal confirmation path.
         std::string selected_vpath;
         if (!chooseOpenVPath(selected_vpath))
             return false;
