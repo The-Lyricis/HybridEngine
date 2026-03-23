@@ -28,6 +28,7 @@ namespace Hybrid
 
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        io.ConfigWindowsMoveFromTitleBarOnly = true;
         ImGui::StyleColorsDark();
 
         ImGui_ImplGlfw_InitForOpenGL(m_window, true);
