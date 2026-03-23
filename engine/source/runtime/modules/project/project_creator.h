@@ -16,6 +16,8 @@ namespace Hybrid
         bool create_hyproj_if_missing = true;
     };
 
+    ProjectCreateDesc MakeDebugBootstrapProjectDesc(const std::filesystem::path& output_dir);
+
     class ProjectCreator
     {
     public:

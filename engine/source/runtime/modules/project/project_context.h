@@ -5,6 +5,7 @@ namespace Hybrid {
 
     struct ProjectContext
     {
+        std::filesystem::path project_file;
         std::filesystem::path root;
         std::filesystem::path assets;
         std::filesystem::path cache;
@@ -13,7 +14,7 @@ namespace Hybrid {
 
         bool valid() const
         {
-            return !root.empty() && !assets.empty() && !cache.empty();
+            return !project_file.empty() && !root.empty() && !assets.empty() && !cache.empty();
         }
     };
 

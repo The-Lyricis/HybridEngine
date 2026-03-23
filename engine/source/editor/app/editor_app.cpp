@@ -10,14 +10,26 @@
 #include "editor/framework/layers/imgui_layer.h"
 #include "editor/platform/windows/editor_platform_services_win32.h"
 #include "editor/services/asset/editor_resource_system.h"
+#include "editor/services/project/project_history.h"
+#include "editor/services/project/project_instance_lock.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/project/project_creator.h"
+#include "runtime/modules/project/project_paths.h"
 #include "runtime/runtime/engine.h"
 
 namespace Hybrid
 {
     namespace
     {
+        enum class ProjectLaunchSource
+        {
+            None = 0,
+            ExplicitOpen,
+            ExplicitCreate,
+            RecentProject,
+            FallbackProject
+        };
+
         struct EditorLaunchRequest
         {
             std::filesystem::path project_path;
@@ -65,11 +77,33 @@ namespace Hybrid
             return request;
         }
 
-        bool resolveEditorProjectPath(const EditorLaunchRequest& request,
-                                      std::filesystem::path& out_project_path,
-                                      std::string& out_error)
+        struct ProjectLaunchDecision
+        {
+            ProjectLaunchSource source = ProjectLaunchSource::None;
+            std::filesystem::path requested_path;
+            std::filesystem::path resolved_project_file;
+            bool should_persist_recent = false;
+        };
+
+        const char* toString(ProjectLaunchSource source)
+        {
+            switch (source)
+            {
+            case ProjectLaunchSource::ExplicitOpen:   return "explicit_open";
+            case ProjectLaunchSource::ExplicitCreate: return "explicit_create";
+            case ProjectLaunchSource::RecentProject:  return "recent_project";
+            case ProjectLaunchSource::FallbackProject:return "fallback_project";
+            default:                                  return "none";
+            }
+        }
+
+        bool decideProjectLaunch(const EditorLaunchRequest& request,
+                                 const IEditorPlatformServices& platform,
+                                 ProjectLaunchDecision& out_decision,
+                                 std::string& out_error)
         {
             namespace fs = std::filesystem;
+            out_decision = {};
 
             if (!request.new_project_root.empty() && !request.project_path.empty())
             {
@@ -77,54 +111,123 @@ namespace Hybrid
                 return false;
             }
 
-            if (request.new_project_root.empty())
+            if (!request.project_path.empty())
             {
-                out_project_path = request.project_path;
+                out_decision.source = ProjectLaunchSource::ExplicitOpen;
+                out_decision.requested_path = request.project_path;
+                out_decision.should_persist_recent = true;
+                if (!ResolveProjectFilePath(request.project_path, out_decision.resolved_project_file, out_error))
+                    return false;
                 return true;
             }
 
-            const fs::path project_root = fs::absolute(request.new_project_root);
-            std::string project_name = request.new_project_name;
-            if (project_name.empty())
+            if (!request.new_project_root.empty())
             {
-                project_name = project_root.filename().string();
+                const fs::path project_root = fs::absolute(request.new_project_root);
+                std::string project_name = request.new_project_name;
                 if (project_name.empty())
-                    project_name = "NewProject";
+                {
+                    project_name = project_root.filename().string();
+                    if (project_name.empty())
+                        project_name = "NewProject";
+                }
+
+                ProjectCreateDesc desc{};
+                desc.project_root = project_root;
+                desc.project_name = project_name;
+
+                out_decision.source = ProjectLaunchSource::ExplicitCreate;
+                out_decision.requested_path = project_root;
+                out_decision.should_persist_recent = true;
+                return ProjectCreator::CreateProject(desc, out_decision.resolved_project_file, out_error);
             }
 
-            ProjectCreateDesc desc{};
-            desc.project_root = project_root;
-            desc.project_name = project_name;
-            return ProjectCreator::CreateProject(desc, out_project_path, out_error);
+            RecentProjectState recent_state{};
+            if (ProjectHistory::loadRecentState(platform, recent_state) &&
+                !recent_state.recent_project_files.empty())
+            {
+                std::string resolve_error;
+                if (ResolveProjectFilePath(recent_state.recent_project_files.front(),
+                                           out_decision.resolved_project_file,
+                                           resolve_error))
+                {
+                    out_decision.source = ProjectLaunchSource::RecentProject;
+                    out_decision.requested_path = recent_state.recent_project_files.front();
+                    out_decision.should_persist_recent = true;
+                    return true;
+                }
+            }
+
+            out_decision.source = ProjectLaunchSource::FallbackProject;
+            const ProjectCreateDesc bootstrap_desc = MakeDebugBootstrapProjectDesc(fs::current_path());
+            out_decision.requested_path = bootstrap_desc.project_root;
+            if (!ProjectCreator::CreateProject(bootstrap_desc, out_decision.resolved_project_file, out_error))
+                return false;
+            out_decision.should_persist_recent = false;
+            return true;
         }
     }
 
     int EditorApp::run(int argc, char** argv)
     {
         constexpr const char* kEditorAppLogTag = "[EditorApp]";
+        auto platform_services = std::make_unique<EditorPlatformServicesWin32>();
         const EditorLaunchRequest launch_request = parseLaunchRequest(argc, argv);
-        std::filesystem::path project_path;
+        ProjectLaunchDecision launch_decision{};
         std::string project_error;
-        if (!resolveEditorProjectPath(launch_request, project_path, project_error))
+        if (!decideProjectLaunch(launch_request, *platform_services, launch_decision, project_error))
         {
             HBD_CORE_ERROR("{} launch_request_failed reason={}", kEditorAppLogTag, project_error);
             return 1;
         }
 
+        HBD_CORE_INFO("{} launch_decision source={} requested_path={} resolved_project={}",
+                      kEditorAppLogTag,
+                      toString(launch_decision.source),
+                      launch_decision.requested_path.generic_string(),
+                      launch_decision.resolved_project_file.generic_string());
+
+        ProjectInstanceLock project_lock;
+        if (!launch_decision.resolved_project_file.empty())
+        {
+            std::string lock_error;
+            if (!project_lock.acquire(launch_decision.resolved_project_file, lock_error))
+            {
+                HBD_CORE_ERROR("{} project_instance_lock_failed project={} reason={}",
+                               kEditorAppLogTag,
+                               launch_decision.resolved_project_file.generic_string(),
+                               lock_error);
+                return 1;
+            }
+        }
+
         HybridEngine engine;
-        if (!engine.initialize(project_path))
+        if (!engine.initialize(launch_decision.resolved_project_file))
+        {
+            project_lock.release();
             return 1;
+        }
         HBD_CORE_INFO("{} engine_initialized", kEditorAppLogTag);
-        if (!project_path.empty())
+        if (!launch_decision.resolved_project_file.empty())
         {
             HBD_CORE_INFO("{} project_path_requested path={}",
                           kEditorAppLogTag,
-                          project_path.generic_string());
+                          launch_decision.resolved_project_file.generic_string());
         }
+
+        if (launch_decision.should_persist_recent && !launch_decision.resolved_project_file.empty())
+        {
+            if (!ProjectHistory::addRecentProject(*platform_services, launch_decision.resolved_project_file))
+            {
+                HBD_CORE_WARN("{} recent_project_save_failed path={}",
+                              kEditorAppLogTag,
+                              launch_decision.resolved_project_file.generic_string());
+            }
+        }
+
         HBD_CORE_INFO("{} run_started", kEditorAppLogTag);
 
         auto editor_resources = std::make_shared<EditorResourceSystem>();
-        auto platform_services = std::make_unique<EditorPlatformServicesWin32>();
         if (!editor_resources->initialize(engine.getResourceSystem()))
         {
             HBD_CORE_ERROR("{} editor_resources_initialize_failed", kEditorAppLogTag);
@@ -181,6 +284,7 @@ namespace Hybrid
         engine.run();
         HBD_CORE_INFO("{} run_completed exit_code=0", kEditorAppLogTag);
         engine.shutdown();
+        project_lock.release();
         return 0;
     }
 } // namespace Hybrid

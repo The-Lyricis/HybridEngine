@@ -4,6 +4,14 @@
 
 namespace Hybrid
 {
+    ProjectCreateDesc MakeDebugBootstrapProjectDesc(const std::filesystem::path& output_dir)
+    {
+        ProjectCreateDesc desc{};
+        desc.project_root = output_dir / "GameProject";
+        desc.project_name = "GameProject";
+        return desc;
+    }
+
     namespace
     {
         std::string pathToString(const std::filesystem::path& path)

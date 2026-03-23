@@ -43,6 +43,11 @@ namespace Hybrid
     public:
         virtual ~IEditorPlatformServices() = default;
 
+        virtual std::filesystem::path getEditorUserDataDir() const = 0;
+        virtual std::filesystem::path getCurrentExecutablePath() const = 0;
+        virtual bool launchEditorProcess(const std::filesystem::path& editor_executable,
+                                         const std::vector<std::string>& args) const = 0;
+
         virtual std::optional<std::filesystem::path>
         showSaveFileDialog(GLFWwindow* parent, const SaveFileDialogDesc& desc) = 0;
 

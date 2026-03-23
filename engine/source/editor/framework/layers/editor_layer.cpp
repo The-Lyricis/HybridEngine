@@ -10,6 +10,8 @@
 #include "editor/core/editor_context.h"
 #include "editor/services/import/import_types.h"
 #include "editor/services/platform/editor_platform_services.h"
+#include "editor/services/project/project_history.h"
+#include "editor/services/project/project_instance_lock.h"
 #include "runtime/core/base/intersection.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/asset/asset_registry.h"
@@ -17,6 +19,8 @@
 #include "runtime/modules/asset/mesh.h"
 #include "runtime/modules/asset/runtime_resource_system.h"
 #include "runtime/modules/input/input_layer.h"
+#include "runtime/modules/project/project_context.h"
+#include "runtime/modules/project/project_paths.h"
 #include "runtime/modules/render/runtime/editor_render_ext.h"
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/render_flags.h"
@@ -123,6 +127,24 @@ namespace Hybrid
                 if (opened)
                     m_editor_ui.context().selection.clear();
                 syncContextDocumentState();
+            };
+        ctx.request_open_project = [this]() -> bool
+            {
+                return requestOpenProject();
+            };
+        ctx.request_open_recent_project = [this](const std::filesystem::path& project_path) -> bool
+            {
+                return openProjectInNewInstance(project_path);
+            };
+        ctx.list_recent_projects = [this]() -> std::vector<std::filesystem::path>
+            {
+                if (!m_services.platform)
+                    return {};
+
+                RecentProjectState state{};
+                if (!ProjectHistory::loadRecentState(*m_services.platform, state))
+                    return {};
+                return state.recent_project_files;
             };
         ctx.request_open_scene = [this]() -> bool
             {
@@ -233,6 +255,9 @@ namespace Hybrid
         auto& ctx = m_editor_ui.context();
         ctx.notify_asset_source_event = {};
         ctx.open_scene = {};
+        ctx.request_open_project = {};
+        ctx.request_open_recent_project = {};
+        ctx.list_recent_projects = {};
         ctx.request_open_scene = {};
         ctx.request_reimport_asset = {};
         ctx.request_rename_folder = {};
@@ -285,6 +310,85 @@ namespace Hybrid
     {
         auto& ui_ctx = m_editor_ui.context();
         return m_command_dispatcher.canExecute(id, EditorCommandContext{const_cast<EditorContext*>(&ui_ctx)});
+    }
+
+    bool EditorLayer::requestOpenProject()
+    {
+        auto& ctx = m_editor_ui.context();
+        if (!m_services.platform)
+        {
+            ctx.setStatusMessage("Platform file dialog service is unavailable.");
+            return false;
+        }
+
+        OpenFileDialogDesc dialog_desc{};
+        dialog_desc.title = "Open Project";
+        dialog_desc.filters = {{"Hybrid Project", "*.hyproj"}};
+        const ProjectContext& project = ProjectService::Get();
+        dialog_desc.initial_dir = project.project_file.empty() ? project.root : project.project_file.parent_path();
+
+        const auto selected_paths = m_services.platform->showOpenFileDialog(m_services.window ? m_services.window->getNativeWindow() : nullptr,
+                                                                            dialog_desc);
+        if (selected_paths.empty())
+            return false;
+
+        return openProjectInNewInstance(selected_paths.front());
+    }
+
+    bool EditorLayer::openProjectInNewInstance(const std::filesystem::path& requested_project_path)
+    {
+        auto& ctx = m_editor_ui.context();
+        const ProjectContext& project = ProjectService::Get();
+        if (!m_services.platform)
+        {
+            ctx.setStatusMessage("Platform services are unavailable.");
+            return false;
+        }
+
+        std::filesystem::path resolved_project_file;
+        std::string resolve_error;
+        if (!ResolveProjectFilePath(requested_project_path, resolved_project_file, resolve_error))
+        {
+            ctx.setStatusMessage("Failed to resolve selected project.");
+            return false;
+        }
+
+        std::error_code ec;
+        const std::filesystem::path current_project = std::filesystem::weakly_canonical(project.project_file, ec);
+        ec.clear();
+        const std::filesystem::path target_project = std::filesystem::weakly_canonical(resolved_project_file, ec);
+        if (!current_project.empty() && !target_project.empty() && current_project == target_project)
+        {
+            // TODO: Replace this status-message placeholder with a unified editor message box once available.
+            ctx.setStatusMessage("Project already open.");
+            return false;
+        }
+
+        ProjectInstanceLock target_lock;
+        std::string lock_error;
+        if (!target_lock.acquire(target_project, lock_error))
+        {
+            ctx.setStatusMessage("Project is already open in another editor instance.");
+            return false;
+        }
+        target_lock.release();
+
+        const std::filesystem::path editor_executable = m_services.platform->getCurrentExecutablePath();
+        if (editor_executable.empty())
+        {
+            ctx.setStatusMessage("Failed to resolve the editor executable path.");
+            return false;
+        }
+
+        if (!m_services.platform->launchEditorProcess(editor_executable,
+                                                      {"--project", target_project.string()}))
+        {
+            ctx.setStatusMessage("Failed to launch a new editor instance.");
+            return false;
+        }
+
+        ctx.setStatusMessage("Opened project in a new editor instance.");
+        return true;
     }
 
     void EditorLayer::syncContextDocumentState()

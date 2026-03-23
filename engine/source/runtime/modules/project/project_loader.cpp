@@ -55,6 +55,7 @@ namespace Hybrid {
         const fs::path buildRel = kv.count("build") ? kv["build"] : "Build";
         const fs::path settingsRel = kv.count("settings") ? kv["settings"] : "ProjectSettings";
 
+        outCtx.project_file = fs::weakly_canonical(absProj);
         outCtx.root = fs::weakly_canonical(root);
         outCtx.assets = fs::weakly_canonical(root / assetsRel);
         outCtx.cache = fs::weakly_canonical(root / cacheRel);

@@ -7,6 +7,7 @@ namespace Hybrid
     enum class EditorCommandId
     {
         NewScene,
+        OpenProject,
         OpenScene,
         SaveScene,
         SaveSceneAs,

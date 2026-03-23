@@ -368,6 +368,8 @@ namespace Hybrid
         const bool is_playing = m_ctx && m_ctx->is_play_mode ? m_ctx->is_play_mode() : false;
         const bool request_new_scene_shortcut =
             m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N, false);
+        const bool request_open_project_shortcut =
+            m_ctx && ImGui::GetIO().KeyCtrl && ImGui::GetIO().KeyShift && ImGui::IsKeyPressed(ImGuiKey_O, false);
         const bool request_open_shortcut =
             m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false);
         const bool request_save_shortcut =
@@ -378,6 +380,11 @@ namespace Hybrid
         {
             if (m_ctx && m_ctx->execute_command)
                 m_ctx->execute_command(EditorCommandId::NewScene);
+        }
+        else if (request_open_project_shortcut)
+        {
+            if (m_ctx && m_ctx->execute_command)
+                m_ctx->execute_command(EditorCommandId::OpenProject);
         }
         else if (request_open_shortcut)
         {
@@ -397,6 +404,48 @@ namespace Hybrid
 
         if (ImGui::BeginMenu("File"))
         {
+            const bool can_open_project = m_ctx && m_ctx->can_execute_command &&
+                m_ctx->can_execute_command(EditorCommandId::OpenProject);
+            if (ImGui::MenuItem("Open Project...", "Ctrl+Shift+O", false, can_open_project))
+                m_ctx->execute_command(EditorCommandId::OpenProject);
+
+            if (ImGui::BeginMenu("Open Recent Project"))
+            {
+                bool has_recent_projects = false;
+                if (m_ctx && m_ctx->list_recent_projects && m_ctx->request_open_recent_project)
+                {
+                    const std::vector<std::filesystem::path> recent_projects = m_ctx->list_recent_projects();
+                    for (const auto& project_path : recent_projects)
+                    {
+                        if (project_path.empty())
+                            continue;
+
+                        has_recent_projects = true;
+                        std::string label = project_path.stem().string();
+                        if (label.empty())
+                            label = project_path.filename().string();
+                        if (label.empty())
+                            label = project_path.generic_string();
+                        if (ImGui::MenuItem(label.c_str()))
+                            m_ctx->request_open_recent_project(project_path);
+
+                        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+                            ImGui::SetTooltip("%s", project_path.generic_string().c_str());
+                    }
+                }
+
+                if (!has_recent_projects)
+                {
+                    ImGui::BeginDisabled();
+                    ImGui::MenuItem("No Recent Projects");
+                    ImGui::EndDisabled();
+                }
+
+                ImGui::EndMenu();
+            }
+
+            ImGui::Separator();
+
             if (!is_playing)
             {
                 const bool can_new_scene = m_ctx && m_ctx->can_execute_command &&

@@ -10,6 +10,7 @@
 
 #include <filesystem>
 #include "runtime/modules/project/project_creator.h"
+#include "runtime/modules/project/project_paths.h"
 #include "runtime/modules/project/project_loader.h"
 #include "runtime/modules/project/project_context.h"
 #include "runtime/modules/scene/scene_serializer.h"
@@ -34,67 +35,6 @@ namespace Hybrid
             return scene->getName().c_str();
         }
 
-        ProjectCreateDesc makeDebugBootstrapProjectDesc(const std::filesystem::path& output_dir)
-        {
-            ProjectCreateDesc desc{};
-            desc.project_root = output_dir / "GameProject";
-            desc.project_name = "GameProject";
-            return desc;
-        }
-
-        bool resolveProjectFilePath(const std::filesystem::path& requested_path, std::filesystem::path& out_hyproj_path, std::string& out_error)
-        {
-            namespace fs = std::filesystem;
-
-            if (requested_path.empty())
-            {
-                out_error = "project path is empty";
-                return false;
-            }
-
-            const fs::path absolute_path = fs::absolute(requested_path);
-            if (fs::is_regular_file(absolute_path))
-            {
-                if (absolute_path.extension() != ".hyproj")
-                {
-                    out_error = "project file must use the .hyproj extension: " + absolute_path.string();
-                    return false;
-                }
-
-                out_hyproj_path = absolute_path;
-                return true;
-            }
-
-            if (fs::is_directory(absolute_path))
-            {
-                std::vector<fs::path> hyproj_files;
-                std::error_code ec;
-                for (const auto& entry : fs::directory_iterator(absolute_path, ec))
-                {
-                    if (ec)
-                    {
-                        out_error = "failed to enumerate project directory: " + absolute_path.string() + " (" + ec.message() + ")";
-                        return false;
-                    }
-
-                    if (entry.is_regular_file() && entry.path().extension() == ".hyproj")
-                        hyproj_files.push_back(entry.path());
-                }
-
-                if (hyproj_files.empty())
-                {
-                    out_error = "no .hyproj file found in directory: " + absolute_path.string();
-                    return false;
-                }
-
-                std::sort(hyproj_files.begin(), hyproj_files.end());
-                out_hyproj_path = hyproj_files.front();
-                return true;
-            }
-
-            out_error = "project path does not exist: " + absolute_path.string();
-            return false;
-        }
     } // namespace
 
     bool HybridEngine::initialize(const std::filesystem::path& project_path)
@@ -106,7 +46,7 @@ namespace Hybrid
         fs::path hyproj_path;
         if (project_path.empty())
         {
-            const ProjectCreateDesc bootstrap_desc = makeDebugBootstrapProjectDesc(cwd);
+            const ProjectCreateDesc bootstrap_desc = MakeDebugBootstrapProjectDesc(cwd);
             HBD_CORE_INFO("{} debug_project_bootstrap_started cwd={} project_root={}",
                           kEngineLogTag,
                           pathOrPlaceholder(cwd),
@@ -126,7 +66,7 @@ namespace Hybrid
         else
         {
             std::string resolve_error;
-            if (!resolveProjectFilePath(project_path, hyproj_path, resolve_error))
+            if (!ResolveProjectFilePath(project_path, hyproj_path, resolve_error))
             {
                 HBD_CORE_ERROR("{} project_path_resolve_failed requested_path={} reason={}",
                                kEngineLogTag,

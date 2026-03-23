@@ -45,6 +45,8 @@ namespace Hybrid
         EditorCommandContext makeCommandContext();
         bool executeCommand(EditorCommandId id);
         bool canExecuteCommand(EditorCommandId id) const;
+        bool requestOpenProject();
+        bool openProjectInNewInstance(const std::filesystem::path& requested_project_path);
         AssetID findAssetByVPath(const std::string& asset_vpath) const;
         std::string describeMeshRendererMaterial(entt::entity entity_handle) const;
         bool instantiateSceneAsset(AssetID asset_id, const ImVec2& drop_mouse_pos);

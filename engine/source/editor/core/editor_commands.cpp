@@ -60,6 +60,8 @@ namespace Hybrid
         {
         case EditorCommandId::NewScene:
             return !playing && static_cast<bool>(editor->request_new_scene);
+        case EditorCommandId::OpenProject:
+            return static_cast<bool>(editor->request_open_project);
         case EditorCommandId::OpenScene:
             return !playing && static_cast<bool>(editor->request_open_scene);
         case EditorCommandId::SaveScene:
@@ -99,6 +101,8 @@ namespace Hybrid
                 return true;
             }
             return editor->request_new_scene();
+        case EditorCommandId::OpenProject:
+            return editor->request_open_project();
         case EditorCommandId::OpenScene:
             if (hasUnsavedSceneChanges(*editor))
             {
