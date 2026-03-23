@@ -20,6 +20,7 @@
 #include "runtime/modules/render/runtime/render_uniforms.h"
 #include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/components/collider_component.h"
+#include "runtime/modules/scene/components/directional_light_component.h"
 #include "runtime/modules/scene/components/point_light_component.h"
 #include "runtime/modules/scene/scene.h"
 
@@ -93,9 +94,10 @@ namespace Hybrid
 
         auto* debug_box_mesh = getOrCreateDebugBoxMeshGPU();
         auto* debug_sphere_mesh = getOrCreateDebugSphereMeshGPU();
+        auto* directional_light_mesh = getOrCreateDirectionalLightMeshGPU();
         auto* shadow_hull_mesh = getOrCreateShadowHullMeshGPU();
         auto* debug_quad_mesh = getOrCreateDebugQuadMeshGPU();
-        if (!debug_box_mesh || !debug_sphere_mesh || !shadow_hull_mesh || !debug_quad_mesh)
+        if (!debug_box_mesh || !debug_sphere_mesh || !directional_light_mesh || !shadow_hull_mesh || !debug_quad_mesh)
             return;
 
         auto& registry = packet.scene->getRegistry();
@@ -114,127 +116,11 @@ namespace Hybrid
         collider_debug_shader->bind();
         collider_debug_shader->setUniformBlockBinding(RenderUniforms::kFrameBlockName,
                                                       RenderUniforms::kFrameUBOBinding);
-
-        for (auto e : view)
-        {
-            if (packet.activeEntityID == kInvalidEntityID || entt::to_integral(e) != packet.activeEntityID)
-                continue;
-
-            const auto& tr = view.get<TransformComponent>(e);
-            const auto& col = view.get<ColliderComponent>(e);
-            if (!col.Enabled || col.Type != ColliderType::Box)
-                continue;
-
-            glm::vec4 color = glm::vec4(0.2f, 0.95f, 0.35f, 1.0f);
-            if (col.IsTrigger)
-                color = glm::vec4(1.0f, 0.85f, 0.2f, 1.0f);
-
-            glm::mat4 collider_local =
-                glm::translate(glm::mat4(1.0f), col.Center) *
-                glm::scale(glm::mat4(1.0f), col.Box.HalfExtents * 2.0f);
-
-            const glm::mat4 model = tr.WorldMatrix * collider_local;
-            collider_debug_shader->setMat4("u_Model", model);
-            collider_debug_shader->setVec4("u_Color", color);
-
-            debug_box_mesh->vao->bind();
-            RenderCommand::drawLinesIndexed(debug_box_mesh->index_count);
-        }
-
-        if (packet.showShadowDebug && packet.shadow.enabled)
-        {
-            RenderCommand::setLineWidth(1.5f);
-            collider_debug_shader->setMat4("u_Model", glm::mat4(1.0f));
-
-            for (uint32_t cascade_index = 0; cascade_index < packet.shadow.cascadeCount; ++cascade_index)
-            {
-                const auto& cascade = packet.shadow.cascades[cascade_index];
-                if (!cascade.valid)
-                    continue;
-
-                std::array<glm::vec3, 16> line_vertices{};
-                for (size_t i = 0; i < 8; ++i)
-                {
-                    line_vertices[i] = cascade.receiverCornersWS[i];
-                    line_vertices[8 + i] = cascade.casterExtrudedCornersWS[i];
-                }
-
-                shadow_hull_mesh->vb->setData(line_vertices.data(),
-                                              static_cast<uint32_t>(line_vertices.size() * sizeof(glm::vec3)));
-
-                const float t = (packet.shadow.cascadeCount > 1)
-                                    ? static_cast<float>(cascade_index) / static_cast<float>(packet.shadow.cascadeCount - 1)
-                                    : 0.0f;
-                const glm::vec4 color = glm::mix(glm::vec4(0.10f, 0.90f, 1.0f, 1.0f),
-                                                 glm::vec4(1.0f, 0.45f, 0.10f, 1.0f),
-                                                 t);
-                collider_debug_shader->setVec4("u_Color", color);
-                shadow_hull_mesh->vao->bind();
-                RenderCommand::drawLinesIndexed(shadow_hull_mesh->index_count);
-            }
-        }
-
-        entt::entity selected_camera = entt::null;
-        if (context.editor_selection && context.editor_selection->active_entity != kInvalidEntityID)
-        {
-            const entt::entity candidate = static_cast<entt::entity>(context.editor_selection->active_entity);
-            if (registry.valid(candidate) && camera_view.contains(candidate))
-            {
-                const auto& camera = camera_view.get<CameraComponent>(candidate);
-                if (camera.Enabled)
-                    selected_camera = candidate;
-            }
-        }
-
-        if (selected_camera != entt::null)
-        {
-            const auto& camera_transform = camera_view.get<TransformComponent>(selected_camera);
-            const auto& camera = camera_view.get<CameraComponent>(selected_camera);
-            const std::array<glm::vec3, 8> frustum_vertices = buildCameraFrustumCorners(camera_transform, camera, aspect);
-
-            debug_box_mesh->vb->setData(frustum_vertices.data(),
-                                        static_cast<uint32_t>(frustum_vertices.size() * sizeof(glm::vec3)));
-            collider_debug_shader->setMat4("u_Model", glm::mat4(1.0f));
-            collider_debug_shader->setVec4("u_Color", glm::vec4(1.0f, 0.75f, 0.15f, 1.0f));
-            debug_box_mesh->vao->bind();
-            RenderCommand::drawLinesIndexed(debug_box_mesh->index_count);
-
-            std::array<glm::vec3, 4> near_plane_vertices{
-                frustum_vertices[0],
-                frustum_vertices[1],
-                frustum_vertices[2],
-                frustum_vertices[3],
-            };
-            debug_quad_mesh->vb->setData(near_plane_vertices.data(),
-                                         static_cast<uint32_t>(near_plane_vertices.size() * sizeof(glm::vec3)));
-            RenderCommand::setLineWidth(3.0f);
-            collider_debug_shader->setVec4("u_Color", glm::vec4(1.0f, 0.95f, 0.35f, 1.0f));
-            debug_quad_mesh->vao->bind();
-            RenderCommand::drawLinesIndexed(debug_quad_mesh->index_count);
-            RenderCommand::setLineWidth(1.5f);
-        }
-
-        if (context.editor_selection && context.editor_selection->active_entity != kInvalidEntityID)
-        {
-            const entt::entity selected_entity = static_cast<entt::entity>(context.editor_selection->active_entity);
-            if (registry.valid(selected_entity) &&
-                registry.all_of<TransformComponent, PointLightComponent>(selected_entity))
-            {
-                const auto& light_transform = registry.get<TransformComponent>(selected_entity);
-                const auto& point_light = registry.get<PointLightComponent>(selected_entity);
-                if (point_light.Enabled && point_light.Range > 0.0f)
-                {
-                    const glm::mat4 model =
-                        light_transform.WorldMatrix *
-                        glm::scale(glm::mat4(1.0f), glm::vec3(point_light.Range));
-                    collider_debug_shader->setMat4("u_Model", model);
-                    collider_debug_shader->setVec4("u_Color",
-                                                   glm::vec4(point_light.Color, 1.0f));
-                    debug_sphere_mesh->vao->bind();
-                    RenderCommand::drawLinesIndexed(debug_sphere_mesh->index_count);
-                }
-            }
-        }
+        drawSelectedColliderGizmo(context, *collider_debug_shader, *debug_box_mesh);
+        drawShadowDebugGizmos(packet, *collider_debug_shader, *shadow_hull_mesh);
+        drawSelectedCameraGizmo(context, *collider_debug_shader, *debug_box_mesh, *debug_quad_mesh);
+        drawSelectedDirectionalLightGizmo(context, *collider_debug_shader, *directional_light_mesh);
+        drawSelectedPointLightGizmo(context, *collider_debug_shader, *debug_sphere_mesh);
 
         RenderCommand::setCullEnabled(true);
         framebuffer->setDrawColorAttachments({
@@ -242,6 +128,176 @@ namespace Hybrid
             RenderTargets::kSceneEntityIDAttachment
         });
         framebuffer->unbind();
+    }
+
+    void GizmoPass::drawSelectedColliderGizmo(RenderContext& context,
+                                              Shader& shader,
+                                              DebugLineMeshGPU& debug_box_mesh) const
+    {
+        const RenderPacket& packet = *context.packet;
+        if (!packet.scene || packet.activeEntityID == kInvalidEntityID)
+            return;
+
+        auto& registry = packet.scene->getRegistry();
+        const entt::entity selected_entity = static_cast<entt::entity>(packet.activeEntityID);
+        if (!registry.valid(selected_entity) || !registry.all_of<TransformComponent, ColliderComponent>(selected_entity))
+            return;
+
+        const auto& tr = registry.get<TransformComponent>(selected_entity);
+        const auto& col = registry.get<ColliderComponent>(selected_entity);
+        if (!col.Enabled || col.Type != ColliderType::Box)
+            return;
+
+        glm::vec4 color = glm::vec4(0.2f, 0.95f, 0.35f, 1.0f);
+        if (col.IsTrigger)
+            color = glm::vec4(1.0f, 0.85f, 0.2f, 1.0f);
+
+        const glm::mat4 collider_local =
+            glm::translate(glm::mat4(1.0f), col.Center) *
+            glm::scale(glm::mat4(1.0f), col.Box.HalfExtents * 2.0f);
+
+        shader.setMat4("u_Model", tr.WorldMatrix * collider_local);
+        shader.setVec4("u_Color", color);
+        debug_box_mesh.vao->bind();
+        RenderCommand::drawLinesIndexed(debug_box_mesh.index_count);
+    }
+
+    void GizmoPass::drawSelectedCameraGizmo(RenderContext& context,
+                                            Shader& shader,
+                                            DebugLineMeshGPU& debug_box_mesh,
+                                            DebugLineMeshGPU& debug_quad_mesh) const
+    {
+        if (!context.packet || !context.packet->scene || !context.editor_selection ||
+            context.editor_selection->active_entity == kInvalidEntityID)
+            return;
+
+        auto& registry = context.packet->scene->getRegistry();
+        auto camera_view = registry.view<TransformComponent, CameraComponent>();
+        const entt::entity selected_entity = static_cast<entt::entity>(context.editor_selection->active_entity);
+        if (!registry.valid(selected_entity) || !camera_view.contains(selected_entity))
+            return;
+
+        const auto& camera_transform = camera_view.get<TransformComponent>(selected_entity);
+        const auto& camera = camera_view.get<CameraComponent>(selected_entity);
+        if (!camera.Enabled)
+            return;
+
+        const float aspect = (context.packet->frame.gameAspect > 0.0f)
+                                 ? context.packet->frame.gameAspect
+                                 : (16.0f / 9.0f);
+        const std::array<glm::vec3, 8> frustum_vertices = buildCameraFrustumCorners(camera_transform, camera, aspect);
+
+        debug_box_mesh.vb->setData(frustum_vertices.data(),
+                                   static_cast<uint32_t>(frustum_vertices.size() * sizeof(glm::vec3)));
+        shader.setMat4("u_Model", glm::mat4(1.0f));
+        shader.setVec4("u_Color", glm::vec4(1.0f, 0.75f, 0.15f, 1.0f));
+        debug_box_mesh.vao->bind();
+        RenderCommand::drawLinesIndexed(debug_box_mesh.index_count);
+
+        const std::array<glm::vec3, 4> near_plane_vertices{
+            frustum_vertices[0],
+            frustum_vertices[1],
+            frustum_vertices[2],
+            frustum_vertices[3],
+        };
+        debug_quad_mesh.vb->setData(near_plane_vertices.data(),
+                                    static_cast<uint32_t>(near_plane_vertices.size() * sizeof(glm::vec3)));
+        RenderCommand::setLineWidth(3.0f);
+        shader.setVec4("u_Color", glm::vec4(1.0f, 0.95f, 0.35f, 1.0f));
+        debug_quad_mesh.vao->bind();
+        RenderCommand::drawLinesIndexed(debug_quad_mesh.index_count);
+        RenderCommand::setLineWidth(1.5f);
+    }
+
+    void GizmoPass::drawSelectedPointLightGizmo(RenderContext& context,
+                                                Shader& shader,
+                                                DebugLineMeshGPU& debug_sphere_mesh) const
+    {
+        if (!context.packet || !context.packet->scene || !context.editor_selection ||
+            context.editor_selection->active_entity == kInvalidEntityID)
+            return;
+
+        auto& registry = context.packet->scene->getRegistry();
+        const entt::entity selected_entity = static_cast<entt::entity>(context.editor_selection->active_entity);
+        if (!registry.valid(selected_entity) ||
+            !registry.all_of<TransformComponent, PointLightComponent>(selected_entity))
+            return;
+
+        const auto& light_transform = registry.get<TransformComponent>(selected_entity);
+        const auto& point_light = registry.get<PointLightComponent>(selected_entity);
+        if (!point_light.Enabled || point_light.Range <= 0.0f)
+            return;
+
+        const glm::mat4 model =
+            light_transform.WorldMatrix *
+            glm::scale(glm::mat4(1.0f), glm::vec3(point_light.Range));
+        shader.setMat4("u_Model", model);
+        shader.setVec4("u_Color", glm::vec4(point_light.Color, 1.0f));
+        debug_sphere_mesh.vao->bind();
+        RenderCommand::drawLinesIndexed(debug_sphere_mesh.index_count);
+    }
+
+    void GizmoPass::drawSelectedDirectionalLightGizmo(RenderContext& context,
+                                                      Shader& shader,
+                                                      DebugLineMeshGPU& directional_light_mesh) const
+    {
+        if (!context.packet || !context.packet->scene || !context.editor_selection ||
+            context.editor_selection->active_entity == kInvalidEntityID)
+            return;
+
+        auto& registry = context.packet->scene->getRegistry();
+        const entt::entity selected_entity = static_cast<entt::entity>(context.editor_selection->active_entity);
+        if (!registry.valid(selected_entity) ||
+            !registry.all_of<TransformComponent, DirectionalLightComponent>(selected_entity))
+            return;
+
+        const auto& light_transform = registry.get<TransformComponent>(selected_entity);
+        const auto& directional_light = registry.get<DirectionalLightComponent>(selected_entity);
+        if (!directional_light.Enabled)
+            return;
+
+        shader.setMat4("u_Model", light_transform.WorldMatrix);
+        shader.setVec4("u_Color", glm::vec4(directional_light.Color, 1.0f));
+        directional_light_mesh.vao->bind();
+        RenderCommand::drawLinesIndexed(directional_light_mesh.index_count);
+    }
+
+    void GizmoPass::drawShadowDebugGizmos(const RenderPacket& packet,
+                                          Shader& shader,
+                                          DebugLineMeshGPU& shadow_hull_mesh) const
+    {
+        if (!packet.showShadowDebug || !packet.shadow.enabled)
+            return;
+
+        RenderCommand::setLineWidth(1.5f);
+        shader.setMat4("u_Model", glm::mat4(1.0f));
+
+        for (uint32_t cascade_index = 0; cascade_index < packet.shadow.cascadeCount; ++cascade_index)
+        {
+            const auto& cascade = packet.shadow.cascades[cascade_index];
+            if (!cascade.valid)
+                continue;
+
+            std::array<glm::vec3, 16> line_vertices{};
+            for (size_t i = 0; i < 8; ++i)
+            {
+                line_vertices[i] = cascade.receiverCornersWS[i];
+                line_vertices[8 + i] = cascade.casterExtrudedCornersWS[i];
+            }
+
+            shadow_hull_mesh.vb->setData(line_vertices.data(),
+                                         static_cast<uint32_t>(line_vertices.size() * sizeof(glm::vec3)));
+
+            const float t = (packet.shadow.cascadeCount > 1)
+                                ? static_cast<float>(cascade_index) / static_cast<float>(packet.shadow.cascadeCount - 1)
+                                : 0.0f;
+            const glm::vec4 color = glm::mix(glm::vec4(0.10f, 0.90f, 1.0f, 1.0f),
+                                             glm::vec4(1.0f, 0.45f, 0.10f, 1.0f),
+                                             t);
+            shader.setVec4("u_Color", color);
+            shadow_hull_mesh.vao->bind();
+            RenderCommand::drawLinesIndexed(shadow_hull_mesh.index_count);
+        }
     }
 
     GizmoPass::DebugLineMeshGPU* GizmoPass::getOrCreateDebugBoxMeshGPU()
@@ -336,6 +392,69 @@ namespace Hybrid
         m_DebugSphereMeshGPU.index_count = static_cast<uint32_t>(indices.size());
         m_HasDebugSphereMeshGPU = true;
         return &m_DebugSphereMeshGPU;
+    }
+
+    GizmoPass::DebugLineMeshGPU* GizmoPass::getOrCreateDirectionalLightMeshGPU()
+    {
+        if (m_HasDirectionalLightMeshGPU)
+            return &m_DirectionalLightMeshGPU;
+
+        constexpr float kPlaneHalfExtent = 0.75f;
+        constexpr float kArrowStartZ = -0.35f;
+        constexpr float kArrowEndZ = -1.85f;
+        constexpr float kArrowHeadLength = 0.22f;
+        constexpr float kArrowHeadWidth = 0.12f;
+        constexpr std::array<float, 3> kArrowOffsets = {-0.45f, 0.0f, 0.45f};
+
+        std::vector<glm::vec3> vertices = {
+            {-kPlaneHalfExtent, -kPlaneHalfExtent, 0.0f},
+            { kPlaneHalfExtent, -kPlaneHalfExtent, 0.0f},
+            { kPlaneHalfExtent,  kPlaneHalfExtent, 0.0f},
+            {-kPlaneHalfExtent,  kPlaneHalfExtent, 0.0f},
+        };
+        std::vector<uint32_t> indices = {
+            0, 1, 1, 2, 2, 3, 3, 0,
+        };
+
+        for (const float x_offset : kArrowOffsets)
+        {
+            const uint32_t base_index = static_cast<uint32_t>(vertices.size());
+            vertices.push_back(glm::vec3(x_offset, 0.0f, kArrowStartZ));
+            vertices.push_back(glm::vec3(x_offset, 0.0f, kArrowEndZ));
+            vertices.push_back(glm::vec3(x_offset - kArrowHeadWidth, 0.0f, kArrowEndZ + kArrowHeadLength));
+            vertices.push_back(glm::vec3(x_offset + kArrowHeadWidth, 0.0f, kArrowEndZ + kArrowHeadLength));
+            vertices.push_back(glm::vec3(x_offset, -kArrowHeadWidth, kArrowEndZ + kArrowHeadLength));
+            vertices.push_back(glm::vec3(x_offset,  kArrowHeadWidth, kArrowEndZ + kArrowHeadLength));
+
+            indices.push_back(base_index + 0);
+            indices.push_back(base_index + 1);
+            indices.push_back(base_index + 1);
+            indices.push_back(base_index + 2);
+            indices.push_back(base_index + 1);
+            indices.push_back(base_index + 3);
+            indices.push_back(base_index + 1);
+            indices.push_back(base_index + 4);
+            indices.push_back(base_index + 1);
+            indices.push_back(base_index + 5);
+        }
+
+        m_DirectionalLightMeshGPU.vb =
+            VertexBuffer::Create(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(glm::vec3)));
+        m_DirectionalLightMeshGPU.ib =
+            IndexBuffer::Create(indices.data(), static_cast<uint32_t>(indices.size()));
+        m_DirectionalLightMeshGPU.vao = VertexArray::Create();
+
+        VertexLayout layout;
+        layout.stride = sizeof(glm::vec3);
+        layout.attributes = {
+            {0, 3, 0, false},
+        };
+
+        m_DirectionalLightMeshGPU.vao->setVertexBuffer(m_DirectionalLightMeshGPU.vb, layout);
+        m_DirectionalLightMeshGPU.vao->setIndexBuffer(m_DirectionalLightMeshGPU.ib);
+        m_DirectionalLightMeshGPU.index_count = static_cast<uint32_t>(indices.size());
+        m_HasDirectionalLightMeshGPU = true;
+        return &m_DirectionalLightMeshGPU;
     }
 
     GizmoPass::DebugLineMeshGPU* GizmoPass::getOrCreateShadowHullMeshGPU()
