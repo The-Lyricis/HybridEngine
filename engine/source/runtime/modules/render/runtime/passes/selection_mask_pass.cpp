@@ -15,10 +15,8 @@ namespace Hybrid
         const RenderPacket& packet = *context.packet;
         const std::shared_ptr<Framebuffer>& framebuffer = context.selection_framebuffer;
         const EditorSelectionState* selection = context.editor_selection;
-        auto asset_manager = context.asset_manager;
 
-        if (!framebuffer || !selection || selection->selected_entities.empty() ||
-            !asset_manager || !context.resolve_mesh_gpu || context.shader_library == nullptr)
+        if (!framebuffer || !selection || selection->selected_entities.empty() || context.shader_library == nullptr)
         {
             return;
         }
@@ -44,25 +42,22 @@ namespace Hybrid
         const std::unordered_set<uint32_t> selected_entities(selection->selected_entities.begin(),
                                                              selection->selected_entities.end());
 
-        for (const auto& item : packet.items)
+        auto draw_selected_items = [&](const std::vector<RenderDrawItem>& items)
         {
-            if (selected_entities.find(item.entityID) == selected_entities.end() || item.meshId.value == 0)
-                continue;
+            for (const auto& item : items)
+            {
+                if (selected_entities.find(item.entityID) == selected_entities.end() ||
+                    !item.meshGPU || item.indexCount == 0)
+                    continue;
 
-            std::shared_ptr<Mesh> cpu_mesh = asset_manager->loadSync<Mesh>(item.meshId);
-            if (!cpu_mesh)
-                continue;
+                shader->setMat4("u_Model", item.model);
+                item.meshGPU->vao->bind();
+                RenderCommand::drawIndexed(item.indexCount, item.indexOffset);
+            }
+        };
 
-            MeshGPU* mesh_gpu = context.resolve_mesh_gpu(item.meshId, cpu_mesh);
-            if (!mesh_gpu)
-                continue;
-
-            shader->setMat4("u_Model", item.model);
-            mesh_gpu->vao->bind();
-
-            for (const auto& submesh : mesh_gpu->submeshes)
-                RenderCommand::drawIndexed(submesh.index_count, submesh.index_offset);
-        }
+        draw_selected_items(packet.opaque_items);
+        draw_selected_items(packet.transparent_items);
 
         framebuffer->unbind();
     }

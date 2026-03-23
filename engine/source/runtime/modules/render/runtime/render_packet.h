@@ -10,6 +10,8 @@
 
 #include "runtime/modules/asset/asset_type.h"
 #include "runtime/modules/render/runtime/editor_render_ext.h"
+#include "runtime/modules/render/runtime/material_system.h"
+#include "runtime/modules/render/runtime/mesh_gpu.h"
 
 namespace Hybrid
 {
@@ -52,6 +54,10 @@ namespace Hybrid
     {
         AssetID meshId{};
         AssetID materialId{};
+        MeshGPU* meshGPU = nullptr;
+        const MaterialSystem::MaterialGPU* materialGPU = nullptr;
+        uint32_t indexOffset = 0;
+        uint32_t indexCount = 0;
         glm::mat4 model{1.0f};
         glm::vec4 tint{1.0f};
         uint32_t entityID = 0;
@@ -61,7 +67,8 @@ namespace Hybrid
     {
         RenderFrameData frame;
         RenderLightData lights;
-        std::vector<RenderDrawItem> items;
+        std::vector<RenderDrawItem> opaque_items;
+        std::vector<RenderDrawItem> transparent_items;
         bool showColliderDebug = false;
         uint32_t activeEntityID = kInvalidEntityID;
         std::shared_ptr<Scene> scene;

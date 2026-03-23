@@ -77,6 +77,9 @@ namespace Hybrid
         void configureShaderBindings();
         void updateFrameUBO(const RenderPacket& packet, const glm::vec2& viewport_size);
         void updateLightUBO(const RenderPacket& packet);
+        void collectPacketLights(RenderPacket& packet) const;
+        void collectPacketDrawItems(RenderPacket& packet);
+        void sortRenderPacket(RenderPacket& packet) const;
 
         // Extract ECS data + camera/light state into a draw packet.
         RenderPacket buildRenderPacket(const FrameContext& frame_context,

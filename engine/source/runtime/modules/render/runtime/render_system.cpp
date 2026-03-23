@@ -507,70 +507,153 @@ namespace Hybrid
             m_LastProj = projM;
         }
 
-        // C) collect lights
-        pkt.lights.dir.intensity = 0.0f;
-        pkt.lights.points.reserve(RU::kMaxPointLights);
-        if (scene)
-        {
-            auto &reg = scene->getRegistry();
-
-            auto dirView = reg.view<Hybrid::TransformComponent, Hybrid::DirectionalLightComponent>();
-            for (auto e : dirView)
-            {
-                const auto &tc = dirView.get<Hybrid::TransformComponent>(e);
-                const auto &dl = dirView.get<Hybrid::DirectionalLightComponent>(e);
-                if (!dl.Enabled)
-                    continue;
-                pkt.lights.dir.color = dl.Color;
-                pkt.lights.dir.intensity = dl.Intensity;
-                pkt.lights.dir.direction = lightDirectionFromTransform(tc);
-                break;
-            }
-
-            auto ptView = reg.view<Hybrid::TransformComponent, Hybrid::PointLightComponent>();
-            for (auto e : ptView)
-            {
-                if ((int)pkt.lights.points.size() >= RU::kMaxPointLights)
-                    break;
-                const auto &tc = ptView.get<Hybrid::TransformComponent>(e);
-                const auto &pl = ptView.get<Hybrid::PointLightComponent>(e);
-                if (!pl.Enabled)
-                    continue;
-
-                RenderPointLightData p;
-                p.color = pl.Color;
-                p.intensity = pl.Intensity;
-                p.position = tc.Position;
-                p.range = pl.Range;
-                pkt.lights.points.push_back(p);
-            }
-        }
-
-        // D) collect draw items (pure ECS->packet)
-        if (scene)
-        {
-            auto &registry = scene->getRegistry();
-            auto renderView = registry.view<Hybrid::TransformComponent, Hybrid::MeshRendererComponent>();
-
-            pkt.items.reserve(renderView.size_hint());
-            for (auto e : renderView)
-            {
-                const auto &tr = renderView.get<Hybrid::TransformComponent>(e);
-                const auto &mr = renderView.get<Hybrid::MeshRendererComponent>(e);
-                if (!mr.Enabled)
-                    continue;
-
-                RenderDrawItem item;
-                item.meshId = mr.Mesh;
-                item.materialId = mr.Material;
-                item.model = tr.WorldMatrix;
-                item.tint = mr.Tint;
-                item.entityID = (uint32_t)entt::to_integral(e);
-                pkt.items.push_back(item);
-            }
-        }
+        collectPacketLights(pkt);
+        collectPacketDrawItems(pkt);
+        sortRenderPacket(pkt);
 
         return pkt;
+    }
+
+    void RenderSystem::collectPacketLights(RenderPacket& packet) const
+    {
+        packet.lights.dir.intensity = 0.0f;
+        packet.lights.points.clear();
+        packet.lights.points.reserve(RU::kMaxPointLights);
+
+        if (!packet.scene)
+            return;
+
+        auto& registry = packet.scene->getRegistry();
+
+        auto dir_view = registry.view<Hybrid::TransformComponent, Hybrid::DirectionalLightComponent>();
+        for (auto entity : dir_view)
+        {
+            const auto& transform = dir_view.get<Hybrid::TransformComponent>(entity);
+            const auto& light = dir_view.get<Hybrid::DirectionalLightComponent>(entity);
+            if (!light.Enabled)
+                continue;
+
+            packet.lights.dir.color = light.Color;
+            packet.lights.dir.intensity = light.Intensity;
+            packet.lights.dir.direction = lightDirectionFromTransform(transform);
+            break;
+        }
+
+        auto point_view = registry.view<Hybrid::TransformComponent, Hybrid::PointLightComponent>();
+        for (auto entity : point_view)
+        {
+            if (static_cast<int>(packet.lights.points.size()) >= RU::kMaxPointLights)
+                break;
+
+            const auto& transform = point_view.get<Hybrid::TransformComponent>(entity);
+            const auto& light = point_view.get<Hybrid::PointLightComponent>(entity);
+            if (!light.Enabled)
+                continue;
+
+            RenderPointLightData point{};
+            point.color = light.Color;
+            point.intensity = light.Intensity;
+            point.position = transform.Position;
+            point.range = light.Range;
+            packet.lights.points.push_back(point);
+        }
+    }
+
+    void RenderSystem::collectPacketDrawItems(RenderPacket& packet)
+    {
+        packet.opaque_items.clear();
+        packet.transparent_items.clear();
+
+        if (!packet.scene || !m_AssetManager)
+            return;
+
+        auto& registry = packet.scene->getRegistry();
+        auto render_view = registry.view<Hybrid::TransformComponent, Hybrid::MeshRendererComponent>();
+
+        packet.opaque_items.reserve(render_view.size_hint());
+        for (auto entity : render_view)
+        {
+            const auto& transform = render_view.get<Hybrid::TransformComponent>(entity);
+            const auto& renderer = render_view.get<Hybrid::MeshRendererComponent>(entity);
+            if (!renderer.Enabled || renderer.Mesh.value == 0)
+                continue;
+
+            std::shared_ptr<Mesh> cpu_mesh = m_AssetManager->loadSync<Mesh>(renderer.Mesh);
+            if (!cpu_mesh)
+                continue;
+
+            MeshGPU* mesh_gpu = getOrCreateMeshGPU(renderer.Mesh, cpu_mesh);
+            if (!mesh_gpu)
+                continue;
+
+            std::shared_ptr<Material> base_material;
+            AssetID base_material_id = renderer.Material;
+            if (base_material_id.value != 0)
+                base_material = m_AssetManager->loadSync<Material>(base_material_id);
+
+            if (!base_material && !mesh_gpu->submeshes.empty() && mesh_gpu->submeshes[0].material.value != 0)
+            {
+                base_material_id = mesh_gpu->submeshes[0].material;
+                base_material = m_AssetManager->loadSync<Material>(base_material_id);
+            }
+
+            if (!base_material)
+            {
+                base_material = m_AssetManager->getDefault<Material>();
+                base_material_id = AssetID{};
+            }
+
+            auto* base_material_gpu = m_MaterialSystem.getOrCreate(base_material_id, base_material);
+            if (!base_material_gpu)
+                continue;
+
+            for (const auto& submesh : mesh_gpu->submeshes)
+            {
+                AssetID effective_material_id = base_material_id;
+                const MaterialSystem::MaterialGPU* effective_material_gpu = base_material_gpu;
+
+                if (submesh.material.value != 0)
+                {
+                    auto sub_material = m_AssetManager->loadSync<Material>(submesh.material);
+                    if (sub_material)
+                    {
+                        if (auto* sub_material_gpu = m_MaterialSystem.getOrCreate(submesh.material, sub_material))
+                        {
+                            effective_material_id = submesh.material;
+                            effective_material_gpu = sub_material_gpu;
+                        }
+                    }
+                }
+
+                RenderDrawItem item{};
+                item.meshId = renderer.Mesh;
+                item.materialId = effective_material_id;
+                item.meshGPU = mesh_gpu;
+                item.materialGPU = effective_material_gpu;
+                item.indexOffset = submesh.index_offset;
+                item.indexCount = submesh.index_count;
+                item.model = transform.WorldMatrix;
+                item.tint = renderer.Tint;
+                item.entityID = static_cast<uint32_t>(entt::to_integral(entity));
+
+                // Materials do not expose transparency state yet, so everything stays in the opaque queue.
+                packet.opaque_items.push_back(item);
+            }
+        }
+    }
+
+    void RenderSystem::sortRenderPacket(RenderPacket& packet) const
+    {
+        auto opaque_less = [](const RenderDrawItem& lhs, const RenderDrawItem& rhs)
+        {
+            if (lhs.materialId.value != rhs.materialId.value)
+                return lhs.materialId.value < rhs.materialId.value;
+            if (lhs.meshId.value != rhs.meshId.value)
+                return lhs.meshId.value < rhs.meshId.value;
+            return lhs.entityID < rhs.entityID;
+        };
+
+        std::sort(packet.opaque_items.begin(), packet.opaque_items.end(), opaque_less);
     }
 
     void RenderSystem::renderFrame(const FrameContext& frame_context,
@@ -648,13 +731,7 @@ namespace Hybrid
                 scene_context.scene_framebuffer = m_SceneFB;
                 scene_context.selection_framebuffer = m_SelectionFB;
                 scene_context.selection_overlay_style = &m_SelectionOverlayStyle;
-                scene_context.asset_manager = m_AssetManager;
                 scene_context.shader_library = &m_ShaderLibrary;
-                scene_context.material_system = &m_MaterialSystem;
-                scene_context.resolve_mesh_gpu = [this](AssetID mesh_id, const std::shared_ptr<Mesh>& mesh) -> MeshGPU*
-                {
-                    return getOrCreateMeshGPU(mesh_id, mesh);
-                };
                 scene_context.scene_shader = m_SceneShader;
                 scene_context.collider_debug_shader = m_ColliderDebugShader;
                 updateFrameUBO(scene_packet, scene_frame.viewport_size);
@@ -688,13 +765,7 @@ namespace Hybrid
                 game_context.scene_framebuffer = m_GameFB;
                 game_context.selection_framebuffer = nullptr;
                 game_context.selection_overlay_style = &m_SelectionOverlayStyle;
-                game_context.asset_manager = m_AssetManager;
                 game_context.shader_library = &m_ShaderLibrary;
-                game_context.material_system = &m_MaterialSystem;
-                game_context.resolve_mesh_gpu = [this](AssetID mesh_id, const std::shared_ptr<Mesh>& mesh) -> MeshGPU*
-                {
-                    return getOrCreateMeshGPU(mesh_id, mesh);
-                };
                 game_context.scene_shader = m_SceneShader;
                 game_context.collider_debug_shader = m_ColliderDebugShader;
                 updateFrameUBO(game_packet, game_frame.viewport_size);
@@ -724,13 +795,7 @@ namespace Hybrid
         context.scene_framebuffer = m_SceneFB;
         context.selection_framebuffer = m_SelectionFB;
         context.selection_overlay_style = &m_SelectionOverlayStyle;
-        context.asset_manager = m_AssetManager;
         context.shader_library = &m_ShaderLibrary;
-        context.material_system = &m_MaterialSystem;
-        context.resolve_mesh_gpu = [this](AssetID mesh_id, const std::shared_ptr<Mesh>& mesh) -> MeshGPU*
-        {
-            return getOrCreateMeshGPU(mesh_id, mesh);
-        };
         context.scene_shader = m_SceneShader;
         context.collider_debug_shader = m_ColliderDebugShader;
         updateFrameUBO(packet, frame_context.viewport_size);
