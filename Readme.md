@@ -82,8 +82,40 @@ bin\HybridEditor.exe
 Runtime notes:
 
 - The build copies the editor executable, shaders, and editor resources into `bin/`.
-- On first launch, the engine automatically initializes `bin/GameProject/` and creates a default `GameProject.hyproj` if it does not already exist.
+- If no project argument is passed, the engine falls back to a debug bootstrap project at `bin/GameProject/GameProject.hyproj`.
 - Runtime logs are written to `bin/hybrid_engine.log`.
+
+### Project CLI
+
+Open an existing project:
+
+```bat
+bin\HybridEditor.exe --project F:\Projects\MyGame\MyGame.hyproj
+```
+
+You can also pass a project directory. The editor will look for a `.hyproj` file in that directory:
+
+```bat
+bin\HybridEditor.exe --project F:\Projects\MyGame
+```
+
+Create and open a new project:
+
+```bat
+bin\HybridEditor.exe --new-project F:\Projects\MyGame
+```
+
+Optionally override the project name used for the generated `.hyproj` file:
+
+```bat
+bin\HybridEditor.exe --new-project F:\Projects\Sandbox --project-name SandboxGame
+```
+
+Notes:
+
+- For the most explicit workflow, prefer passing the absolute path to the `.hyproj` file.
+- `--project` and `--new-project` cannot be used together.
+- If `--project-name` is omitted, the new project's directory name is used.
 
 ## Documentation
 
