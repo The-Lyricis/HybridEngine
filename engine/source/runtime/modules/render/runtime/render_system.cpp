@@ -6,10 +6,12 @@
 #include <glad/gl.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <array>
 #include <filesystem>
 #include <string>
+#include <unordered_set>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -754,10 +756,50 @@ namespace Hybrid
                   });
     }
 
+    void RenderSystem::updateStatsFromPacket(const RenderPacket& packet, float render_cpu_time_ms)
+    {
+        m_Stats.render_cpu_time_ms = std::max(0.0f, render_cpu_time_ms);
+        m_Stats.opaque_items = static_cast<uint32_t>(packet.opaque_items.size());
+        m_Stats.transparent_items = static_cast<uint32_t>(packet.transparent_items.size());
+        m_Stats.point_lights = static_cast<uint32_t>(packet.lights.points.size());
+
+        uint32_t draw_calls = 0;
+        uint32_t triangles = 0;
+        std::unordered_set<uint32_t> visible_entities;
+
+        auto accumulate_queue = [&](const std::vector<RenderDrawItem>& items)
+        {
+            for (const RenderDrawItem& item : items)
+            {
+                if (!item.meshGPU || !item.materialGPU || item.indexCount == 0)
+                    continue;
+                ++draw_calls;
+                triangles += item.indexCount / 3;
+                visible_entities.insert(item.entityID);
+            }
+        };
+
+        accumulate_queue(packet.opaque_items);
+        accumulate_queue(packet.transparent_items);
+
+        if (packet.frame.useSkyboxClear && packet.environment.skyboxTexture)
+        {
+            ++draw_calls;
+            triangles += 12;
+        }
+
+        m_Stats.draw_calls = draw_calls;
+        m_Stats.triangles = triangles;
+        m_Stats.visible_entities = static_cast<uint32_t>(visible_entities.size());
+    }
+
     void RenderSystem::renderFrame(const FrameContext& frame_context,
                                    RenderFlags flags,
                                    const EditorRenderExt* editor_ext)
     {
+        m_Stats.frame_time_ms = std::max(0.0f, frame_context.dt * 1000.0f);
+        m_Stats.fps = frame_context.dt > 1e-6f ? (1.0f / frame_context.dt) : 0.0f;
+
         auto make_pipeline_callbacks =
             [this]()
         {
@@ -839,7 +881,12 @@ namespace Hybrid
                 scene_context.collider_debug_shader = m_ColliderDebugShader;
                 updateFrameUBO(scene_packet, scene_frame.viewport_size);
                 updateLightUBO(scene_packet);
+                const auto render_begin = std::chrono::steady_clock::now();
                 m_RenderPipeline.execute(scene_context, make_pipeline_callbacks());
+                const auto render_end = std::chrono::steady_clock::now();
+                updateStatsFromPacket(
+                    scene_packet,
+                    std::chrono::duration<float, std::milli>(render_end - render_begin).count());
                 rendered_any = true;
             }
 
@@ -874,7 +921,12 @@ namespace Hybrid
                 game_context.collider_debug_shader = m_ColliderDebugShader;
                 updateFrameUBO(game_packet, game_frame.viewport_size);
                 updateLightUBO(game_packet);
+                const auto render_begin = std::chrono::steady_clock::now();
                 m_RenderPipeline.execute(game_context, make_pipeline_callbacks());
+                const auto render_end = std::chrono::steady_clock::now();
+                updateStatsFromPacket(
+                    game_packet,
+                    std::chrono::duration<float, std::milli>(render_end - render_begin).count());
                 rendered_any = true;
             }
 
@@ -905,7 +957,12 @@ namespace Hybrid
         context.collider_debug_shader = m_ColliderDebugShader;
         updateFrameUBO(packet, frame_context.viewport_size);
         updateLightUBO(packet);
+        const auto render_begin = std::chrono::steady_clock::now();
         m_RenderPipeline.execute(context, make_pipeline_callbacks());
+        const auto render_end = std::chrono::steady_clock::now();
+        updateStatsFromPacket(
+            packet,
+            std::chrono::duration<float, std::milli>(render_end - render_begin).count());
     }
     uint32_t RenderSystem::readEntityID(int x, int y) const
     {

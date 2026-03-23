@@ -19,6 +19,7 @@
 namespace Hybrid
 {
     class Scene;
+    struct RenderStats;
 
     struct EditorSelection
     {
@@ -125,6 +126,7 @@ namespace Hybrid
         ImVec2 game_viewport_min = {0.0f, 0.0f};
         ImVec2 game_viewport_max = {0.0f, 0.0f};
         bool game_viewport_image_hovered = false;
+        const RenderStats* render_stats = nullptr;
 
         bool request_pick = false;
         int pick_x = 0;

@@ -2,8 +2,11 @@
 
 #include "editor/core/editor_context.h"
 #include "runtime/core/base/macro.h"
+#include "runtime/modules/render/runtime/render_system.h"
 
 #include <imgui.h>
+
+#include <cstdio>
 
 namespace Hybrid
 {
@@ -55,6 +58,56 @@ namespace Hybrid
         const ImVec2 viewport_min = ImGui::GetItemRectMin();
         const ImVec2 viewport_max = ImGui::GetItemRectMax();
         const bool viewport_hovered = ImGui::IsItemHovered();
+
+        if (ctx.render_stats != nullptr)
+        {
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            char line0[64] = {};
+            char line1[64] = {};
+            char line2[64] = {};
+            char line3[64] = {};
+
+            std::snprintf(line0,
+                          sizeof(line0),
+                          "Frame %.1f FPS | %.2f ms",
+                          ctx.render_stats->fps,
+                          ctx.render_stats->frame_time_ms);
+            std::snprintf(line1,
+                          sizeof(line1),
+                          "Render %.2f ms | Draws %u",
+                          ctx.render_stats->render_cpu_time_ms,
+                          ctx.render_stats->draw_calls);
+            std::snprintf(line2,
+                          sizeof(line2),
+                          "Opaque %u | Transparent %u",
+                          ctx.render_stats->opaque_items,
+                          ctx.render_stats->transparent_items);
+            std::snprintf(line3,
+                          sizeof(line3),
+                          "Tris %u | Entities %u | Lights %u",
+                          ctx.render_stats->triangles,
+                          ctx.render_stats->visible_entities,
+                          ctx.render_stats->point_lights);
+
+            const char* lines[] = {line0, line1, line2, line3};
+            float max_width = 0.0f;
+            for (const char* line : lines)
+                max_width = std::max(max_width, ImGui::CalcTextSize(line).x);
+
+            const float line_height = ImGui::GetTextLineHeight();
+            const ImVec2 padding(8.0f, 6.0f);
+            const ImVec2 panel_min(viewport_max.x - max_width - padding.x * 2.0f - 8.0f,
+                                   viewport_min.y + 8.0f);
+            const ImVec2 panel_max(viewport_max.x - 8.0f,
+                                   panel_min.y + line_height * 4.0f + padding.y * 2.0f);
+
+            draw_list->AddRectFilled(panel_min, panel_max, IM_COL32(18, 22, 28, 190), 6.0f);
+            for (int i = 0; i < 4; ++i)
+            {
+                const ImVec2 text_pos(panel_min.x + padding.x, panel_min.y + padding.y + line_height * static_cast<float>(i));
+                draw_list->AddText(text_pos, ImGui::GetColorU32(ImGuiCol_Text), lines[i]);
+            }
+        }
 
         ctx.game_viewport_image_hovered = viewport_hovered;
         ctx.game_viewport_hovered = viewport_hovered;

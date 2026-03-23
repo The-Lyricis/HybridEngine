@@ -79,6 +79,7 @@ namespace Hybrid
         m_initialized = true;
 
         auto& ctx = m_editor_ui.context();
+        ctx.render_stats = &m_services.render->getStats();
         m_asset_hot_reload_controller.bindContext(ctx);
         ctx.enter_play_mode = [this]()
             {

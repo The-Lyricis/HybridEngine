@@ -39,6 +39,19 @@
 
 namespace Hybrid
 {
+    struct RenderStats
+    {
+        float frame_time_ms = 0.0f;
+        float fps = 0.0f;
+        float render_cpu_time_ms = 0.0f;
+        uint32_t draw_calls = 0;
+        uint32_t triangles = 0;
+        uint32_t visible_entities = 0;
+        uint32_t opaque_items = 0;
+        uint32_t transparent_items = 0;
+        uint32_t point_lights = 0;
+    };
+
     class Framebuffer;
     class VertexArray;
     class VertexBuffer;
@@ -71,6 +84,7 @@ namespace Hybrid
                          const EditorRenderExt* editor_ext = nullptr);
         const glm::mat4& getLastView() const { return m_LastView; }
         const glm::mat4& getLastProj() const { return m_LastProj; }
+        const RenderStats& getStats() const { return m_Stats; }
 
     private:
         void ensureFramebuffer(std::shared_ptr<Framebuffer>& framebuffer, const FramebufferSpec& spec);
@@ -83,6 +97,7 @@ namespace Hybrid
         void collectPacketLights(RenderPacket& packet) const;
         void collectPacketDrawItems(RenderPacket& packet);
         void sortRenderPacket(RenderPacket& packet) const;
+        void updateStatsFromPacket(const RenderPacket& packet, float render_cpu_time_ms);
         TexturePtr getOrCreateCubemapTexture(AssetID id);
         TexturePtr getDefaultCubemapTexture();
 
@@ -126,6 +141,7 @@ namespace Hybrid
         bool m_Initialized = false; // Render backend init state.
         float m_ShaderReloadTimer = 0.0f;
         float m_ShaderReloadInterval = 0.5f;
+        RenderStats m_Stats{};
 
         glm::mat4 m_LastView = glm::mat4(1.0f);
         glm::mat4 m_LastProj = glm::mat4(1.0f);
