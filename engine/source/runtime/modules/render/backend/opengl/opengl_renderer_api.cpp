@@ -44,6 +44,19 @@ namespace Hybrid {
         glDepthMask(enabled ? GL_TRUE : GL_FALSE);
     }
 
+    void GLRendererAPI::setDepthCompareFunc(DepthCompareFunc func) {
+        switch (func)
+        {
+        case DepthCompareFunc::LessEqual:
+            glDepthFunc(GL_LEQUAL);
+            break;
+        case DepthCompareFunc::Less:
+        default:
+            glDepthFunc(GL_LESS);
+            break;
+        }
+    }
+
     void GLRendererAPI::setLineWidth(float width) {
         glLineWidth(width);
     }

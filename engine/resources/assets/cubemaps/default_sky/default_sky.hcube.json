@@ -1,0 +1,10 @@
+﻿{
+  "px": "px.png",
+  "nx": "nx.png",
+  "py": "py.png",
+  "ny": "ny.png",
+  "pz": "pz.png",
+  "nz": "nz.png",
+  "srgb": true,
+  "generate_mips": false
+}

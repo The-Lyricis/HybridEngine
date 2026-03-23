@@ -146,13 +146,15 @@ namespace Hybrid
                 bool pressed = false;
                 if (tex != 0)
                 {
-                    const ImVec2 cursor = ImGui::GetCursorScreenPos();
                     if (ImGui::Button("##toolbtn", button_size))
                         pressed = true;
 
+                    const ImVec2 item_min = ImGui::GetItemRectMin();
+                    const ImVec2 item_max = ImGui::GetItemRectMax();
+                    const ImVec2 item_size(item_max.x - item_min.x, item_max.y - item_min.y);
                     const ImVec2 icon_min(
-                        cursor.x + (button_size.x - icon_size.x) * 0.5f,
-                        cursor.y + (button_size.y - icon_size.y) * 0.5f);
+                        item_min.x + (item_size.x - icon_size.x) * 0.5f,
+                        item_min.y + (item_size.y - icon_size.y) * 0.5f);
                     const ImVec2 icon_max(icon_min.x + icon_size.x, icon_min.y + icon_size.y);
                     ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)tex, icon_min, icon_max);
                 }
@@ -212,7 +214,7 @@ namespace Hybrid
 
         if (!g_ToolIcons.loaded)
         {
-            const std::string base = std::string(HYBRID_ROOT_DIR) + "/resources/icons/";
+            const std::string base = std::string(HYBRID_EDITOR_RESOURCES_DIR) + "/icons/";
             g_ToolIcons.hand = LoadTextureRGBA8(base + "icon_editorTools_pan.png");
             g_ToolIcons.move = LoadTextureRGBA8(base + "icon_editorTools_drag.png");
             g_ToolIcons.rotate = LoadTextureRGBA8(base + "icon_editorTools_rotate.png");

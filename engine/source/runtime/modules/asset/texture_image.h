@@ -14,6 +14,7 @@ namespace Hybrid
         uint32_t width = 0;
         uint32_t height = 0;
         TextureFormat format = TextureFormat::RGBA8;
+        bool srgb = false;
         bool generate_mips = true;
         std::vector<uint8_t> pixels;
 

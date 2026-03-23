@@ -8,5 +8,6 @@ namespace Hybrid
     {
     public:
         TexturePtr uploadTexture2D(const TextureImageData& image) override;
+        TexturePtr uploadTextureCube(const CubemapImageData& image) override;
     };
 } // namespace Hybrid

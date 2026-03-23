@@ -9,6 +9,7 @@
 #include <glm/vec4.hpp>
 
 #include "runtime/modules/asset/asset_type.h"
+#include "runtime/modules/render/public/texture.h"
 #include "runtime/modules/render/runtime/editor_render_ext.h"
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/mesh_gpu.h"
@@ -50,6 +51,14 @@ namespace Hybrid
         std::vector<RenderPointLightData> points;
     };
 
+    struct RenderEnvironmentData
+    {
+        AssetID skyboxCubemap{};
+        TexturePtr skyboxTexture;
+        float skyboxIntensity = 1.0f;
+        float skyboxRotationDegrees = 0.0f;
+    };
+
     struct RenderDrawItem
     {
         AssetID meshId{};
@@ -67,6 +76,7 @@ namespace Hybrid
     {
         RenderFrameData frame;
         RenderLightData lights;
+        RenderEnvironmentData environment;
         std::vector<RenderDrawItem> opaque_items;
         std::vector<RenderDrawItem> transparent_items;
         bool showColliderDebug = false;

@@ -1,11 +1,21 @@
 #pragma once
+
+#include <cstdint>
 #include <memory>
+
 #include <glm/vec4.hpp>
 
 #include "asset_type.h"
 
 namespace Hybrid
 {
+    enum class MaterialSurfaceMode : uint8_t
+    {
+        Opaque = 0,
+        Masked = 1,
+        Transparent = 2,
+    };
+
     struct MaterialData
     {
         glm::vec4 albedo_color{1.0f};
@@ -13,6 +23,8 @@ namespace Hybrid
         float roughness = 1.0f;
         float ao        = 1.0f;
         float emissive  = 0.0f;
+        MaterialSurfaceMode surface_mode = MaterialSurfaceMode::Opaque;
+        float alpha_cutoff = 0.5f;
 
         AssetID albedo_map{};
         AssetID normal_map{};

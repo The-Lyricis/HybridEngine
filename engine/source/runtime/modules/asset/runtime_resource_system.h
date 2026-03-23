@@ -26,6 +26,7 @@ namespace Hybrid
         std::shared_ptr<AssetRegistry> getRegistry() const { return m_registry; }
         std::shared_ptr<AssetManager> getManager() const { return m_manager; }
         AssetID getBuiltinMeshID(BuiltinMesh mesh) const;
+        AssetID getBuiltinCubemapID(BuiltinCubemap cubemap) const;
         void invalidateAsset(AssetID id) const;
 
     private:
@@ -33,8 +34,10 @@ namespace Hybrid
         
         // Default runtime fallback assets.
         void createDefaultTexture();
+        void createDefaultCubemap();
         void createHybridDefaultMaterial();
         void createBuiltinMesh(BuiltinMesh mesh);
+        void registerBuiltinCubemap(BuiltinCubemap cubemap);
 
     private:
         std::shared_ptr<IVirtualFileSystem> m_vfs;      // Logical path -> native file access.
@@ -44,6 +47,7 @@ namespace Hybrid
         std::shared_ptr<Texture>            m_defaultTexture; // 1x1 white fallback texture.
         std::shared_ptr<Material>           m_hybridDefaultMaterial; // Fallback material.
         AssetID                             m_builtinCubeMeshId{}; // Built-in mesh ids, starting with cube.
+        AssetID                             m_builtinDefaultSkyboxCubemapId{};
         ProjectContext m_project; // Project context for path resolution and info.
     };
 } // namespace Hybrid

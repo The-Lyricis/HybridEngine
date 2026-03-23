@@ -6,6 +6,7 @@
 #include "builtin_assets.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/render/public/texture.h"
+#include "cubemap_image_loader.h"
 #include "texture_image_loader.h"
 #include "mesh_loader.h"
 #include "material_loader.h"
@@ -58,6 +59,8 @@ namespace Hybrid
         const auto& cacheRoot = m_project.cache;
         const auto& projRoot = m_project.root;
         const auto& buildRoot = m_project.build;
+        const std::filesystem::path engineAssetsRoot =
+            std::filesystem::path(HYBRID_PROJECT_ROOT_DIR) / "engine/resources/assets";
 
         if (assetsRoot.empty() || !std::filesystem::exists(assetsRoot))
         {
@@ -87,6 +90,11 @@ namespace Hybrid
         if (!projRoot.empty())
         {
             m_vfs->mount("project", projRoot, 0);
+        }
+
+        if (std::filesystem::exists(engineAssetsRoot))
+        {
+            m_vfs->mount("engine", engineAssetsRoot, 0);
         }
 
         if (!buildRoot.empty())
@@ -130,29 +138,33 @@ namespace Hybrid
 
         registerDefaultLoaders();
         createDefaultTexture();
+        createDefaultCubemap();
         createHybridDefaultMaterial();
         createBuiltinMesh(BuiltinMesh::Cube);
 
-        HBD_CORE_INFO("{} initialize_completed meta_total={} meta_loaded={} meta_failed={} default_texture={} default_material={} builtin_cube_id={}",
+        HBD_CORE_INFO("{} initialize_completed meta_total={} meta_loaded={} meta_failed={} default_texture={} default_material={} builtin_cube_id={} builtin_default_skybox_id={}",
                       kRuntimeResourceLogTag,
                       meta_load_result.total_files,
                       meta_load_result.loaded,
                       meta_load_result.failed,
                       m_defaultTexture ? "true" : "false",
                       m_hybridDefaultMaterial ? "true" : "false",
-                      m_builtinCubeMeshId.value);
+                      m_builtinCubeMeshId.value,
+                      m_builtinDefaultSkyboxCubemapId.value);
     }
 
     void RuntimeResourceSystem::registerDefaultLoaders()
     {
         auto texLoader = std::make_shared<TextureImageLoader>();
         m_manager->registerLoader<TextureImageData>(texLoader);
+        auto cubemapLoader = std::make_shared<CubemapImageLoader>();
+        m_manager->registerLoader<CubemapImageData>(cubemapLoader);
 
         // Register the current CPU-side runtime loaders.
         m_manager->registerLoader<Mesh>(std::make_shared<MeshCookedLoader>());
         m_manager->registerLoader<Material>(std::make_shared<MaterialFileLoader>(m_registry));
         m_manager->registerLoader<Scene>(std::make_shared<SceneLoader>());
-        HBD_CORE_DEBUG("{} loaders_registered count=4 types=TextureImageData,Mesh,Material,Scene",
+        HBD_CORE_DEBUG("{} loaders_registered count=5 types=TextureImageData,CubemapImageData,Mesh,Material,Scene",
                        kRuntimeResourceLogTag);
     }
 
@@ -221,6 +233,39 @@ namespace Hybrid
         }
     }
 
+    void RuntimeResourceSystem::createDefaultCubemap()
+    {
+        registerBuiltinCubemap(BuiltinCubemap::DefaultSky);
+
+        if (!m_manager || m_builtinDefaultSkyboxCubemapId.value == 0)
+            return;
+
+        auto default_cubemap = m_manager->loadSync<CubemapImageData>(m_builtinDefaultSkyboxCubemapId);
+        if (!default_cubemap || !default_cubemap->isValid())
+        {
+            HBD_CORE_WARN("{} default_cubemap_register_failed asset_id={} reason=load_failed",
+                          kRuntimeResourceLogTag,
+                          m_builtinDefaultSkyboxCubemapId.value);
+            return;
+        }
+
+        m_manager->setDefault<CubemapImageData>(default_cubemap);
+        HBD_CORE_INFO("{} default_cubemap_registered asset_id={}",
+                      kRuntimeResourceLogTag,
+                      m_builtinDefaultSkyboxCubemapId.value);
+    }
+
+    AssetID RuntimeResourceSystem::getBuiltinCubemapID(BuiltinCubemap cubemap) const
+    {
+        switch (cubemap)
+        {
+        case BuiltinCubemap::DefaultSky:
+            return m_builtinDefaultSkyboxCubemapId;
+        default:
+            return {};
+        }
+    }
+
     void RuntimeResourceSystem::invalidateAsset(AssetID id) const
     {
         if (!m_manager || id.value == 0)
@@ -274,6 +319,47 @@ namespace Hybrid
 
         m_manager->registerResident<Mesh>(meta.id, builtin_mesh);
         HBD_CORE_INFO("{} builtin_mesh_registered logical_path={} asset_id={}",
+                      kRuntimeResourceLogTag,
+                      logical_path,
+                      meta.id.value);
+    }
+
+    void RuntimeResourceSystem::registerBuiltinCubemap(BuiltinCubemap cubemap)
+    {
+        if (!m_registry || !m_manager)
+            return;
+
+        const char* logical_path = BuiltinAssets::cubemapPath(cubemap);
+        const char* logical_hash = BuiltinAssets::cubemapHash(cubemap);
+        if (!logical_path || logical_path[0] == '\0')
+            return;
+
+        AssetMetadata meta{};
+        if (const auto* existing = m_registry->findByPath(logical_path))
+        {
+            meta = *existing;
+        }
+        else
+        {
+            meta.id = m_registry->generateUniqueID();
+            meta.type = AssetType::TextureCube;
+            meta.source_path = logical_path;
+            meta.cooked_path.clear();
+            meta.hash = logical_hash ? logical_hash : "";
+            meta.is_valid = true;
+            m_registry->registerAsset(meta);
+        }
+
+        switch (cubemap)
+        {
+        case BuiltinCubemap::DefaultSky:
+            m_builtinDefaultSkyboxCubemapId = meta.id;
+            break;
+        default:
+            break;
+        }
+
+        HBD_CORE_INFO("{} builtin_cubemap_registered logical_path={} asset_id={}",
                       kRuntimeResourceLogTag,
                       logical_path,
                       meta.id.value);

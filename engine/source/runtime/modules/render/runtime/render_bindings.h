@@ -21,6 +21,11 @@ namespace Hybrid::RenderBindings
     inline constexpr const char* kSceneAOScalarUniform = "u_AO";
     inline constexpr const char* kSceneEmissiveScalarUniform = "u_Emissive";
     inline constexpr const char* kSceneHasNormalMapUniform = "u_HasNormalMap";
+    inline constexpr const char* kSceneSurfaceModeUniform = "u_SurfaceMode";
+    inline constexpr const char* kSceneAlphaCutoffUniform = "u_AlphaCutoff";
+
+    inline constexpr uint32_t kSkyboxCubemapSlot = 5;
+    inline constexpr const char* kSkyboxCubemapUniform = "u_SkyboxCubemap";
 
     inline constexpr uint32_t kSelectionOverlaySceneColorSlot = 0;
     inline constexpr uint32_t kSelectionOverlaySceneDepthSlot = 1;

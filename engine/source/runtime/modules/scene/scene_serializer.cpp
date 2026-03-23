@@ -326,6 +326,12 @@ namespace Hybrid
 
         json root;
         root["meta"] = { {"version", 2} };   // 升级版本：v2 支持更多组件
+        root["environment"] = {
+            {"skyboxCubemap", scene.environment().skybox_cubemap.value},
+            {"skyboxCubemapPath", assetPathFor(registry, scene.environment().skybox_cubemap)},
+            {"skyboxIntensity", scene.environment().skybox_intensity},
+            {"skyboxRotationDegrees", scene.environment().skybox_rotation_degrees}
+        };
         root["entities"] = json::array();
 
         for (const Entity& root_entity : scene.getRootEntities())
@@ -356,6 +362,15 @@ namespace Hybrid
 
         if (!root.contains("entities") || !root["entities"].is_array())
             return false;
+
+        if (root.contains("environment") && root["environment"].is_object())
+        {
+            const auto& env = root["environment"];
+            scene.environment().skybox_cubemap =
+                resolveAsset(env, "skyboxCubemap", "skyboxCubemapPath", registry);
+            scene.environment().skybox_intensity = env.value("skyboxIntensity", 1.0f);
+            scene.environment().skybox_rotation_degrees = env.value("skyboxRotationDegrees", 0.0f);
+        }
 
         // Phase A: create entities + set TRS + read components (v2)
         struct PendingRel { uint64_t self = 0; uint64_t parent = 0; };

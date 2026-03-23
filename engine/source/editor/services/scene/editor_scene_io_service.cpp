@@ -15,6 +15,7 @@
 #include "editor/services/asset/editor_resource_system.h"
 #include "editor/services/platform/editor_platform_services.h"
 #include "editor/services/state/editor_camera_state_serde.h"
+#include "runtime/core/base/math_util.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/asset/runtime_resource_system.h"
 #include "runtime/modules/asset/scene_loader.h"
@@ -60,6 +61,27 @@ namespace Hybrid
             value.erase(value.begin(), std::find_if(value.begin(), value.end(), not_space));
             value.erase(std::find_if(value.rbegin(), value.rend(), not_space).base(), value.end());
             return value;
+        }
+
+        void initializeDefaultSceneContent(Scene& scene)
+        {
+            Entity camera = scene.createCameraEntity("Main Camera", true);
+            auto& camera_transform = camera.GetComponent<TransformComponent>();
+            auto& camera_component = camera.GetComponent<CameraComponent>();
+            camera_transform.Position = glm::vec3(0.0f, 1.5f, 6.0f);
+            camera_transform.Rotation = MathUtil::quatFromEulerDegrees(glm::vec3(-12.0f, 180.0f, 0.0f));
+            camera_component.ClearMode = CameraClearMode::Skybox;
+            camera_component.ClearColor = glm::vec4(0.1f, 0.1f, 0.12f, 1.0f);
+            camera_component.FovY = 45.0f;
+            camera_component.Near = 0.1f;
+            camera_component.Far = 1000.0f;
+
+            Entity sun = scene.createEntity("Directional Light");
+            auto& sun_transform = sun.GetComponent<TransformComponent>();
+            auto& sun_light = sun.AddComponent<DirectionalLightComponent>();
+            sun_transform.Rotation = MathUtil::quatFromEulerDegrees(glm::vec3(-50.0f, -30.0f, 0.0f));
+            sun_light.Color = glm::vec3(1.0f, 0.98f, 0.95f);
+            sun_light.Intensity = 1.0f;
         }
 
         bool normalizeSceneSaveVPath(const std::string& input, std::string& out_vpath)
@@ -591,6 +613,9 @@ namespace Hybrid
     {
         auto scene = std::make_shared<Scene>();
         scene->setName("Untitled");
+        if (m_services.resources)
+            scene->environment().skybox_cubemap = m_services.resources->getBuiltinCubemapID(BuiltinCubemap::DefaultSky);
+        initializeDefaultSceneContent(*scene);
 
         auto document = std::make_shared<SceneDocument>();
         document->scene = std::move(scene);

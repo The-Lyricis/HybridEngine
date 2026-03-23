@@ -11,6 +11,7 @@
 #include <glm/vec4.hpp>
 
 #include "runtime/modules/asset/asset_manager.h"
+#include "runtime/modules/asset/cubemap_image.h"
 #include "runtime/modules/asset/material.h"
 #include "runtime/modules/asset/mesh.h"
 #include "runtime/modules/render/runtime/editor_render_ext.h"
@@ -18,6 +19,7 @@
 #include "runtime/modules/render/runtime/passes/gizmo_pass.h"
 #include "runtime/modules/render/runtime/passes/picking_pass.h"
 #include "runtime/modules/render/runtime/passes/post_process_pass.h"
+#include "runtime/modules/render/runtime/passes/skybox_pass.h"
 #include "runtime/modules/render/runtime/render_context.h"
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/material_system.h"
@@ -33,6 +35,7 @@
 #include "runtime/modules/render/runtime/passes/shadow_pass.h"
 #include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/texture.h"
+#include "runtime/modules/render/public/texture_uploader.h"
 
 namespace Hybrid
 {
@@ -80,6 +83,8 @@ namespace Hybrid
         void collectPacketLights(RenderPacket& packet) const;
         void collectPacketDrawItems(RenderPacket& packet);
         void sortRenderPacket(RenderPacket& packet) const;
+        TexturePtr getOrCreateCubemapTexture(AssetID id);
+        TexturePtr getDefaultCubemapTexture();
 
         // Extract ECS data + camera/light state into a draw packet.
         RenderPacket buildRenderPacket(const FrameContext& frame_context,
@@ -98,11 +103,13 @@ namespace Hybrid
         std::shared_ptr<UniformBuffer> m_LightUBO;
         SelectionOverlayStyle m_SelectionOverlayStyle;
         std::shared_ptr<Shader> m_SceneShader;
+        std::shared_ptr<Shader> m_SkyboxShader;
         std::shared_ptr<Shader> m_ColliderDebugShader;
         ShaderLibrary m_ShaderLibrary;
         MaterialSystem m_MaterialSystem;
         RenderPipeline m_RenderPipeline;
         ScenePass m_ScenePass;
+        SkyboxPass m_SkyboxPass;
         PickingPass m_PickingPass;
         GizmoPass m_GizmoPass;
         ShadowPass m_ShadowPass;
@@ -112,6 +119,9 @@ namespace Hybrid
 
         std::shared_ptr<AssetManager> m_AssetManager;
         std::unordered_map<AssetID, MeshGPU, AssetID::Hasher> m_MeshCache;
+        std::unordered_map<AssetID, TexturePtr, AssetID::Hasher> m_CubemapCache;
+        TexturePtr m_DefaultCubemapTexture;
+        std::unique_ptr<TextureUploader> m_TextureUploader;
 
         bool m_Initialized = false; // Render backend init state.
         float m_ShaderReloadTimer = 0.0f;

@@ -15,6 +15,7 @@ namespace Hybrid {
         void setDepthTestEnabled(bool enabled) override;
         void setCullEnabled(bool enabled) override;
         void setDepthWriteEnabled(bool enabled) override;
+        void setDepthCompareFunc(DepthCompareFunc func) override;
         void setLineWidth(float width) override;
         void drawIndexed(uint32_t indexCount, uint32_t indexOffset = 0) override;
         void drawLinesIndexed(uint32_t indexCount, uint32_t indexOffset = 0) override;

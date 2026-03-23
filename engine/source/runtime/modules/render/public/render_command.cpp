@@ -41,6 +41,10 @@ namespace Hybrid {
         s_API->setDepthWriteEnabled(enabled);
     }
 
+    void RenderCommand::setDepthCompareFunc(DepthCompareFunc func) {
+        s_API->setDepthCompareFunc(func);
+    }
+
     void RenderCommand::setLineWidth(float width) {
         s_API->setLineWidth(width);
     }

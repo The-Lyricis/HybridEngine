@@ -38,5 +38,27 @@ namespace Hybrid
                 return nullptr;
             }
         }
+
+        const char* cubemapPath(BuiltinCubemap cubemap)
+        {
+            switch (cubemap)
+            {
+            case BuiltinCubemap::DefaultSky:
+                return "engine:cubemaps/default_sky/default_sky.hcube.json";
+            default:
+                return "";
+            }
+        }
+
+        const char* cubemapHash(BuiltinCubemap cubemap)
+        {
+            switch (cubemap)
+            {
+            case BuiltinCubemap::DefaultSky:
+                return "builtin_default_sky_v1";
+            default:
+                return "";
+            }
+        }
     } // namespace BuiltinAssets
 } // namespace Hybrid

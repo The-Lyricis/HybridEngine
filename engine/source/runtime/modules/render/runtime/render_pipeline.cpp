@@ -6,6 +6,7 @@ namespace Hybrid
         : m_pass_order
         {
             RenderPassType::Scene,
+            RenderPassType::Skybox,
             RenderPassType::Picking,
             RenderPassType::SelectionMask,
             RenderPassType::SelectionOverlay,
@@ -36,6 +37,10 @@ namespace Hybrid
             return HasFlag(flags, RenderFlags::Scene) ||
                    HasFlag(flags, RenderFlags::PickingID) ||
                    HasFlag(flags, RenderFlags::SelectionHighlight);
+        case RenderPassType::Skybox:
+            return HasFlag(flags, RenderFlags::Scene) ||
+                   HasFlag(flags, RenderFlags::PickingID) ||
+                   HasFlag(flags, RenderFlags::SelectionHighlight);
         case RenderPassType::Picking:
             return HasFlag(flags, RenderFlags::PickingID);
         case RenderPassType::SelectionMask:
@@ -63,6 +68,10 @@ namespace Hybrid
         case RenderPassType::Scene:
             if (callbacks.scene)
                 callbacks.scene(context);
+            break;
+        case RenderPassType::Skybox:
+            if (callbacks.skybox)
+                callbacks.skybox(context);
             break;
         case RenderPassType::Picking:
             if (callbacks.picking)

@@ -10,6 +10,12 @@
  */
 namespace Hybrid {
 
+    enum class DepthCompareFunc : uint8_t
+    {
+        Less = 0,
+        LessEqual,
+    };
+
     class RendererAPI {
     public:
         enum class API { None = 0, OpenGL = 1, Vulkan = 2, DirectX12 = 3 , Metal = 4 };
@@ -25,6 +31,7 @@ namespace Hybrid {
         virtual void setDepthTestEnabled(bool enabled) = 0;
         virtual void setCullEnabled(bool enabled) = 0;
         virtual void setDepthWriteEnabled(bool enabled) = 0;
+        virtual void setDepthCompareFunc(DepthCompareFunc func) = 0;
         virtual void setLineWidth(float width) = 0;
         virtual void drawIndexed(uint32_t indexCount, uint32_t indexOffset = 0) = 0;
         virtual void drawLinesIndexed(uint32_t indexCount, uint32_t indexOffset = 0) = 0;

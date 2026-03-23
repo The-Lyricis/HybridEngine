@@ -11,6 +11,7 @@ namespace Hybrid
     enum class RenderPassType : unsigned char
     {
         Scene,
+        Skybox,
         Picking,
         SelectionMask,
         SelectionOverlay,
@@ -24,6 +25,7 @@ namespace Hybrid
     struct RenderPipelineCallbacks
     {
         std::function<void(RenderContext&)> scene;
+        std::function<void(RenderContext&)> skybox;
         std::function<void(RenderContext&)> picking;
         std::function<void(RenderContext&)> selection_mask;
         std::function<void(RenderContext&)> selection_overlay;

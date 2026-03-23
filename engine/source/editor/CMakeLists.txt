@@ -2,6 +2,11 @@
 
 set(TARGET_NAME HybridEditor)
 
+set(ENGINE_RESOURCES_DIR "${ENGINE_ROOT_DIR}/resources")
+set(ENGINE_EDITOR_RESOURCES_DIR "${ENGINE_RESOURCES_DIR}/editor")
+set(ENGINE_ASSET_RESOURCES_DIR "${ENGINE_RESOURCES_DIR}/assets")
+set(EDITOR_RESOURCES_SOURCE_DIR "${ENGINE_EDITOR_RESOURCES_DIR}")
+
 # ------------------------------------------------------------
 # Sources：最新结构为 editor/ 下直接放 .cpp/.h，并且有 panels 子目录
 # ------------------------------------------------------------
@@ -17,10 +22,9 @@ file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
 
 # ------------------------------------------------------------
 # Piccolo 风格：显式把 .rc 资源编进可执行文件，给 exe 设定图标
-# 资源目录在 editor/resources/win
 # ------------------------------------------------------------
-set(APP_ICON_RC  "${CMAKE_CURRENT_SOURCE_DIR}/resources/win/app_icon.rc")
-set(APP_ICON_ICO "${CMAKE_CURRENT_SOURCE_DIR}/resources/win/app_icon.ico")
+set(APP_ICON_RC  "${EDITOR_RESOURCES_SOURCE_DIR}/win/app_icon.rc")
+set(APP_ICON_ICO "${EDITOR_RESOURCES_SOURCE_DIR}/win/app_icon.ico")
 
 if(WIN32 AND EXISTS "${APP_ICON_RC}" AND EXISTS "${APP_ICON_ICO}")
     set(EDITOR_RESOURCES "${APP_ICON_RC}")
@@ -34,13 +38,18 @@ set(EDITOR_ALL_FILES
     ${EDITOR_RESOURCES}
 )
 
-# IDE 分组：按当前目录树展示
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${EDITOR_ALL_FILES})
+# IDE 分组：源码按 editor 目录树展示，外部资源单独归组
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${EDITOR_HEADERS} ${EDITOR_SOURCES})
+if(EDITOR_RESOURCES)
+    source_group("Resources" FILES ${EDITOR_RESOURCES})
+endif()
 
 add_executable(${TARGET_NAME} ${EDITOR_ALL_FILES})
 
 target_compile_definitions(${TARGET_NAME} PRIVATE
     HYBRID_ROOT_DIR="${BINARY_ROOT_DIR}"
+    HYBRID_EDITOR_RESOURCES_DIR="${BINARY_ROOT_DIR}/resources/editor"
+    HYBRID_ENGINE_ASSETS_DIR="${BINARY_ROOT_DIR}/resources/assets"
 )
 
 set_target_properties(${TARGET_NAME} PROPERTIES
@@ -75,17 +84,27 @@ add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
             "${BINARY_ROOT_DIR}"
 )
 
-# 2) 拷贝 editor/resources（仅当存在）
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+# 2) 拷贝 editor resources
+if(EXISTS "${EDITOR_RESOURCES_SOURCE_DIR}")
     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}/resources"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}/resources/editor"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/resources"
-                "${BINARY_ROOT_DIR}/resources"
+                "${EDITOR_RESOURCES_SOURCE_DIR}"
+                "${BINARY_ROOT_DIR}/resources/editor"
     )
 endif()
 
-# 3)拷贝 engine/shader（仅当存在）
+# 3) 拷贝 engine built-in assets（仅当存在）
+if(EXISTS "${ENGINE_ASSET_RESOURCES_DIR}")
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}/resources/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${ENGINE_ASSET_RESOURCES_DIR}"
+                "${BINARY_ROOT_DIR}/resources/assets"
+    )
+endif()
+
+# 4) 拷贝 engine/shader（仅当存在）
 if(EXISTS "${ENGINE_ROOT_DIR}/shader")
     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E remove_directory

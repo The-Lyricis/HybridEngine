@@ -29,6 +29,7 @@ namespace Hybrid
 
         ShaderLibrary* shader_library = nullptr;
         std::shared_ptr<Shader> scene_shader;
+        std::shared_ptr<Shader> skybox_shader;
         std::shared_ptr<Shader> collider_debug_shader;
     };
 } // namespace Hybrid

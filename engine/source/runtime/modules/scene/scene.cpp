@@ -449,6 +449,7 @@ namespace Hybrid
     {
         auto dst = std::make_shared<Scene>();
         dst->setName(m_Name);
+        dst->environment() = m_Environment;
 
         const auto& srcReg = m_Registry;
         auto& dstReg = dst->getRegistry();

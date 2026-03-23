@@ -47,6 +47,8 @@ uniform sampler2D u_MRMap;
 uniform sampler2D u_AOMap;
 uniform sampler2D u_EmissiveMap;
 uniform int u_HasNormalMap;
+uniform int u_SurfaceMode;
+uniform float u_AlphaCutoff;
 
 vec3 getNormal() {
     vec3 N = normalize(vNormal);
@@ -65,7 +67,14 @@ vec3 getNormal() {
 }
 
 void main() {
-    vec3 albedo = (u_AlbedoColor * u_TintColor).rgb * texture(u_AlbedoMap, vUV).rgb;
+    vec4 albedoSample = texture(u_AlbedoMap, vUV);
+    vec4 albedoTint = u_AlbedoColor * u_TintColor;
+    vec3 albedo = albedoTint.rgb * albedoSample.rgb;
+    float alpha = albedoTint.a * albedoSample.a;
+
+    if (u_SurfaceMode == 1 && alpha < u_AlphaCutoff)
+        discard;
+
     vec2 mrTex = texture(u_MRMap, vUV).rg;
     float metallic  = clamp(u_Metallic * mrTex.r, 0.0, 1.0);
     float roughness = clamp(u_Roughness * mrTex.g, 0.04, 1.0);
@@ -113,6 +122,6 @@ void main() {
     }
 
     color += emissiveColor;
-    FragColor = vec4(color, u_AlbedoColor.a * u_TintColor.a);
+    FragColor = vec4(color, alpha);
     EntityID  = u_EntityID;
 }

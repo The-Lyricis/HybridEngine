@@ -13,6 +13,8 @@ namespace Hybrid
         shader.setFloat(RenderBindings::kSceneAOScalarUniform, data.ao);
         shader.setFloat(RenderBindings::kSceneEmissiveScalarUniform, data.emissive);
         shader.setInt(RenderBindings::kSceneHasNormalMapUniform, (data.normal_map.value != 0) ? 1 : 0);
+        shader.setInt(RenderBindings::kSceneSurfaceModeUniform, static_cast<int>(data.surface_mode));
+        shader.setFloat(RenderBindings::kSceneAlphaCutoffUniform, data.alpha_cutoff);
 
         if (albedo)
             albedo->bind(RenderBindings::kSceneAlbedoSlot);

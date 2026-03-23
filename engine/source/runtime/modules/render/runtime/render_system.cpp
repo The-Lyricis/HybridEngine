@@ -147,6 +147,9 @@ namespace Hybrid
     {
         m_AssetManager = std::move(mgr);
         m_MaterialSystem.setAssetManager(m_AssetManager);
+        m_TextureUploader = TextureUploader::Create();
+        m_CubemapCache.clear();
+        m_DefaultCubemapTexture.reset();
     }
 
     void RenderSystem::initialize(void *glfwWindowHandle)
@@ -200,6 +203,7 @@ namespace Hybrid
         m_ShaderLibrary.reloadChanged();
 
         m_SceneShader = m_ShaderLibrary.get("Scene");
+        m_SkyboxShader = m_ShaderLibrary.get("Skybox");
         m_ColliderDebugShader = m_ShaderLibrary.get("ColliderDebug");
         configureShaderBindings();
     }
@@ -240,6 +244,7 @@ namespace Hybrid
         m_ShaderLibrary.setRoot(std::filesystem::path(HYBRID_PROJECT_ROOT_DIR) / "engine/shader");
 
         bool scene_ok = false;
+        bool skybox_ok = false;
         bool collider_debug_ok = false;
         bool selection_mask_ok = false;
         bool selection_overlay_ok = false;
@@ -251,6 +256,8 @@ namespace Hybrid
                                                      std::string(shader_desc.fragment));
             if (shader_desc.name == RenderShaders::kScene.name)
                 scene_ok = loaded;
+            else if (shader_desc.name == RenderShaders::kSkybox.name)
+                skybox_ok = loaded;
             else if (shader_desc.name == RenderShaders::kColliderDebug.name)
                 collider_debug_ok = loaded;
             else if (shader_desc.name == RenderShaders::kSelectionMask.name)
@@ -260,17 +267,21 @@ namespace Hybrid
         }
 
         m_SceneShader = m_ShaderLibrary.get(std::string(RenderShaders::kScene.name));
+        m_SkyboxShader = m_ShaderLibrary.get(std::string(RenderShaders::kSkybox.name));
         m_ColliderDebugShader = m_ShaderLibrary.get(std::string(RenderShaders::kColliderDebug.name));
         configureShaderBindings();
-        HBD_CORE_INFO("{} builtin_shaders_loaded scene={} collider_debug={} selection_mask={} selection_overlay={} scene_shader_ready={} collider_debug_shader_ready={}",
+        HBD_CORE_INFO("{} builtin_shaders_loaded scene={} skybox={} collider_debug={} selection_mask={} selection_overlay={} scene_shader_ready={} skybox_shader_ready={} collider_debug_shader_ready={}",
                       kRenderSystemLogTag,
                       scene_ok ? "true" : "false",
+                      skybox_ok ? "true" : "false",
                       collider_debug_ok ? "true" : "false",
                       selection_mask_ok ? "true" : "false",
                       selection_overlay_ok ? "true" : "false",
                       m_SceneShader ? "true" : "false",
+                      m_SkyboxShader ? "true" : "false",
                       m_ColliderDebugShader ? "true" : "false");
-        return scene_ok && collider_debug_ok && selection_mask_ok && selection_overlay_ok && m_SceneShader && m_ColliderDebugShader;
+        return scene_ok && skybox_ok && collider_debug_ok && selection_mask_ok && selection_overlay_ok &&
+               m_SceneShader && m_SkyboxShader && m_ColliderDebugShader;
     }
 
     void RenderSystem::ensureGlobalUniformBuffers()
@@ -311,6 +322,13 @@ namespace Hybrid
             m_SceneShader->setInt(RenderBindings::kSceneMRUniform, RenderBindings::kSceneMRSlot);
             m_SceneShader->setInt(RenderBindings::kSceneAOUniform, RenderBindings::kSceneAOSlot);
             m_SceneShader->setInt(RenderBindings::kSceneEmissiveUniform, RenderBindings::kSceneEmissiveSlot);
+        }
+
+        if (m_SkyboxShader)
+        {
+            m_SkyboxShader->bind();
+            m_SkyboxShader->setUniformBlockBinding(RU::kFrameBlockName, RU::kFrameUBOBinding);
+            m_SkyboxShader->setInt(RenderBindings::kSkyboxCubemapUniform, RenderBindings::kSkyboxCubemapSlot);
         }
 
         if (auto selection_overlay_shader = m_ShaderLibrary.get(std::string(RenderShaders::kSelectionOverlay.name)))
@@ -426,10 +444,60 @@ namespace Hybrid
         case AssetType::Texture2D:
         case AssetType::TextureCube:
             m_MaterialSystem.invalidateTexture(id);
+            m_CubemapCache.erase(id);
+            m_DefaultCubemapTexture.reset();
             break;
         default:
             break;
         }
+    }
+
+    TexturePtr RenderSystem::getOrCreateCubemapTexture(AssetID id)
+    {
+        if (!m_AssetManager)
+            return nullptr;
+
+        if (!m_TextureUploader)
+            m_TextureUploader = TextureUploader::Create();
+        if (!m_TextureUploader)
+            return nullptr;
+
+        if (id.value == 0)
+            return getDefaultCubemapTexture();
+
+        if (auto it = m_CubemapCache.find(id); it != m_CubemapCache.end())
+            return it->second;
+
+        auto image = m_AssetManager->loadSync<CubemapImageData>(id);
+        if (!image || !image->isValid())
+            return getDefaultCubemapTexture();
+
+        TexturePtr cubemap = m_TextureUploader->uploadTextureCube(*image);
+        if (!cubemap)
+            return getDefaultCubemapTexture();
+
+        m_CubemapCache[id] = cubemap;
+        return cubemap;
+    }
+
+    TexturePtr RenderSystem::getDefaultCubemapTexture()
+    {
+        if (m_DefaultCubemapTexture)
+            return m_DefaultCubemapTexture;
+        if (!m_AssetManager)
+            return nullptr;
+
+        if (!m_TextureUploader)
+            m_TextureUploader = TextureUploader::Create();
+        if (!m_TextureUploader)
+            return nullptr;
+
+        auto image = m_AssetManager->getDefault<CubemapImageData>();
+        if (!image || !image->isValid())
+            return nullptr;
+
+        m_DefaultCubemapTexture = m_TextureUploader->uploadTextureCube(*image);
+        return m_DefaultCubemapTexture;
     }
 
     
@@ -476,6 +544,8 @@ namespace Hybrid
             projM = editor_ext->editor_proj;
             cameraPos = editor_ext->editor_camera_pos;
             has_camera = true;
+            if (scene && scene->environment().skybox_cubemap.value != 0)
+                pkt.frame.useSkyboxClear = true;
         }
 
         if (!has_camera && scene)
@@ -493,6 +563,17 @@ namespace Hybrid
         pkt.scene = scene;
         pkt.showColliderDebug = editor_ext ? editor_ext->show_collider_debug : false;
         pkt.activeEntityID = resolveActiveSelectionEntityID(editor_ext);
+        if (scene)
+        {
+            const SceneEnvironmentSettings& environment = scene->environment();
+            pkt.environment.skyboxCubemap = environment.skybox_cubemap;
+            pkt.environment.skyboxIntensity = environment.skybox_intensity;
+            pkt.environment.skyboxRotationDegrees = environment.skybox_rotation_degrees;
+            if (environment.skybox_cubemap.value != 0)
+                pkt.environment.skyboxTexture = getOrCreateCubemapTexture(environment.skybox_cubemap);
+        }
+        if (pkt.frame.useSkyboxClear && !pkt.environment.skyboxTexture)
+            pkt.environment.skyboxTexture = getOrCreateCubemapTexture({});
 
         // B) write packet
         pkt.frame.view = viewM;
@@ -571,6 +652,7 @@ namespace Hybrid
         auto render_view = registry.view<Hybrid::TransformComponent, Hybrid::MeshRendererComponent>();
 
         packet.opaque_items.reserve(render_view.size_hint());
+        packet.transparent_items.reserve(render_view.size_hint() / 4);
         for (auto entity : render_view)
         {
             const auto& transform = render_view.get<Hybrid::TransformComponent>(entity);
@@ -636,8 +718,10 @@ namespace Hybrid
                 item.tint = renderer.Tint;
                 item.entityID = static_cast<uint32_t>(entt::to_integral(entity));
 
-                // Materials do not expose transparency state yet, so everything stays in the opaque queue.
-                packet.opaque_items.push_back(item);
+                if (effective_material_gpu->data.surface_mode == MaterialSurfaceMode::Transparent)
+                    packet.transparent_items.push_back(item);
+                else
+                    packet.opaque_items.push_back(item);
             }
         }
     }
@@ -654,6 +738,20 @@ namespace Hybrid
         };
 
         std::sort(packet.opaque_items.begin(), packet.opaque_items.end(), opaque_less);
+
+        std::sort(packet.transparent_items.begin(),
+                  packet.transparent_items.end(),
+                  [&packet](const RenderDrawItem& lhs, const RenderDrawItem& rhs)
+                  {
+                      const glm::vec3 camera_pos = packet.frame.cameraPos;
+                      const glm::vec3 lhs_pos = glm::vec3(lhs.model[3]);
+                      const glm::vec3 rhs_pos = glm::vec3(rhs.model[3]);
+                      const float lhs_dist2 = glm::dot(lhs_pos - camera_pos, lhs_pos - camera_pos);
+                      const float rhs_dist2 = glm::dot(rhs_pos - camera_pos, rhs_pos - camera_pos);
+                      if (lhs_dist2 != rhs_dist2)
+                          return lhs_dist2 > rhs_dist2;
+                      return lhs.entityID < rhs.entityID;
+                  });
     }
 
     void RenderSystem::renderFrame(const FrameContext& frame_context,
@@ -667,6 +765,10 @@ namespace Hybrid
             callbacks.scene = [this](RenderContext& context)
             {
                 m_ScenePass.execute(context);
+            };
+            callbacks.skybox = [this](RenderContext& context)
+            {
+                m_SkyboxPass.execute(context);
             };
             callbacks.picking = [this](RenderContext& context)
             {
@@ -733,6 +835,7 @@ namespace Hybrid
                 scene_context.selection_overlay_style = &m_SelectionOverlayStyle;
                 scene_context.shader_library = &m_ShaderLibrary;
                 scene_context.scene_shader = m_SceneShader;
+                scene_context.skybox_shader = m_SkyboxShader;
                 scene_context.collider_debug_shader = m_ColliderDebugShader;
                 updateFrameUBO(scene_packet, scene_frame.viewport_size);
                 updateLightUBO(scene_packet);
@@ -767,6 +870,7 @@ namespace Hybrid
                 game_context.selection_overlay_style = &m_SelectionOverlayStyle;
                 game_context.shader_library = &m_ShaderLibrary;
                 game_context.scene_shader = m_SceneShader;
+                game_context.skybox_shader = m_SkyboxShader;
                 game_context.collider_debug_shader = m_ColliderDebugShader;
                 updateFrameUBO(game_packet, game_frame.viewport_size);
                 updateLightUBO(game_packet);
@@ -797,6 +901,7 @@ namespace Hybrid
         context.selection_overlay_style = &m_SelectionOverlayStyle;
         context.shader_library = &m_ShaderLibrary;
         context.scene_shader = m_SceneShader;
+        context.skybox_shader = m_SkyboxShader;
         context.collider_debug_shader = m_ColliderDebugShader;
         updateFrameUBO(packet, frame_context.viewport_size);
         updateLightUBO(packet);

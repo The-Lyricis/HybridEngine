@@ -29,7 +29,7 @@ namespace Hybrid
         HWND hwnd = glfwGetWin32Window(m_window);
         if (hwnd)
         {
-            constexpr int APP_ICON_ID = 101; // Defined in editor resources/win/app_icon.rc.
+            constexpr int APP_ICON_ID = 101; // Defined in engine/resources/editor/win/app_icon.rc.
             HICON hIcon = static_cast<HICON>(LoadImage(
                 GetModuleHandle(nullptr),
                 MAKEINTRESOURCE(APP_ICON_ID),

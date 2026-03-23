@@ -60,7 +60,7 @@ namespace Hybrid
             if (!s_loaded)
             {
                 s_loaded = true;
-                const std::string base = std::string(HYBRID_ROOT_DIR) + "/resources/icons/";
+                const std::string base = std::string(HYBRID_EDITOR_RESOURCES_DIR) + "/icons/";
                 s_trash_icon = LoadTextureRGBA8(base + "icon_component_trash.png");
             }
             return s_trash_icon;

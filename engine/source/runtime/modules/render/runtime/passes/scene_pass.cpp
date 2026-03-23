@@ -55,8 +55,22 @@ namespace Hybrid
                 }
             };
 
+            RenderCommand::setBlendEnabled(false);
+            RenderCommand::setDepthTestEnabled(true);
+            RenderCommand::setDepthWriteEnabled(true);
+            RenderCommand::setCullEnabled(true);
             draw_queue(packet.opaque_items);
-            draw_queue(packet.transparent_items);
+
+            if (!packet.transparent_items.empty())
+            {
+                RenderCommand::setBlendEnabled(true);
+                RenderCommand::setDepthTestEnabled(true);
+                RenderCommand::setDepthWriteEnabled(false);
+                RenderCommand::setCullEnabled(true);
+                draw_queue(packet.transparent_items);
+                RenderCommand::setDepthWriteEnabled(true);
+                RenderCommand::setBlendEnabled(false);
+            }
         }
 
         Renderer::endFrame();

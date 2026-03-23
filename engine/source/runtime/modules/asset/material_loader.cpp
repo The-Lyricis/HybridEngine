@@ -69,6 +69,45 @@ namespace Hybrid
             return true;
         }
 
+        bool parseSurfaceMode(const json& node, MaterialSurfaceMode& out_mode)
+        {
+            if (node.is_string())
+            {
+                const std::string value = node.get<std::string>();
+                if (value == "opaque")
+                {
+                    out_mode = MaterialSurfaceMode::Opaque;
+                    return true;
+                }
+                if (value == "masked" || value == "alphatest" || value == "alpha_test")
+                {
+                    out_mode = MaterialSurfaceMode::Masked;
+                    return true;
+                }
+                if (value == "transparent" || value == "alphablend" || value == "alpha_blend")
+                {
+                    out_mode = MaterialSurfaceMode::Transparent;
+                    return true;
+                }
+                return false;
+            }
+
+            if (node.is_number_integer() || node.is_number_unsigned())
+            {
+                const int value = node.get<int>();
+                if (value < static_cast<int>(MaterialSurfaceMode::Opaque) ||
+                    value > static_cast<int>(MaterialSurfaceMode::Transparent))
+                {
+                    return false;
+                }
+
+                out_mode = static_cast<MaterialSurfaceMode>(value);
+                return true;
+            }
+
+            return false;
+        }
+
         void resolveTexturePathToId(const std::shared_ptr<AssetRegistry>& registry,
                                     const std::string& path,
                                     AssetID& out_id)
@@ -130,6 +169,10 @@ namespace Hybrid
             data.ao = root["ao"].get<float>();
         if (root.contains("emissive") && root["emissive"].is_number())
             data.emissive = root["emissive"].get<float>();
+        if (root.contains("surface_mode"))
+            (void)parseSurfaceMode(root["surface_mode"], data.surface_mode);
+        if (root.contains("alpha_cutoff") && root["alpha_cutoff"].is_number())
+            data.alpha_cutoff = root["alpha_cutoff"].get<float>();
 
         const auto parseIdIfExists = [&](const char* key, AssetID& out_id) {
             if (root.contains(key))

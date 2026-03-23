@@ -17,6 +17,7 @@ namespace Hybrid {
         static void setDepthTestEnabled(bool enabled);
         static void setCullEnabled(bool enabled);
         static void setDepthWriteEnabled(bool enabled);
+        static void setDepthCompareFunc(DepthCompareFunc func);
         static void setLineWidth(float width);
 
         static void drawIndexed(unsigned int indexCount, unsigned int indexOffset = 0);
