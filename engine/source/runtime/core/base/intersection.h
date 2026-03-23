@@ -2,9 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
@@ -20,6 +23,89 @@ namespace Hybrid
     {
         glm::vec3 Min{0.0f, 0.0f, 0.0f};
         glm::vec3 Max{0.0f, 0.0f, 0.0f};
+
+        static AABB Empty()
+        {
+            const float inf = std::numeric_limits<float>::infinity();
+            return {{ inf,  inf,  inf}, {-inf, -inf, -inf}};
+        }
+
+        bool isValid() const
+        {
+            return Min.x <= Max.x && Min.y <= Max.y && Min.z <= Max.z;
+        }
+
+        void normalize()
+        {
+            if (Min.x > Max.x)
+                std::swap(Min.x, Max.x);
+            if (Min.y > Max.y)
+                std::swap(Min.y, Max.y);
+            if (Min.z > Max.z)
+                std::swap(Min.z, Max.z);
+        }
+
+        AABB normalized() const
+        {
+            AABB result = *this;
+            result.normalize();
+            return result;
+        }
+
+        glm::vec3 center() const
+        {
+            return 0.5f * (Min + Max);
+        }
+
+        glm::vec3 size() const
+        {
+            if (!isValid())
+                return glm::vec3(0.0f);
+            return Max - Min;
+        }
+
+        glm::vec3 extents() const
+        {
+            return 0.5f * size();
+        }
+
+        void expand(const glm::vec3& point)
+        {
+            if (!isValid())
+            {
+                Min = point;
+                Max = point;
+                return;
+            }
+
+            Min = glm::min(Min, point);
+            Max = glm::max(Max, point);
+        }
+
+        void expand(const AABB& other)
+        {
+            if (!other.isValid())
+                return;
+
+            if (!isValid())
+            {
+                *this = other;
+                return;
+            }
+
+            Min = glm::min(Min, other.Min);
+            Max = glm::max(Max, other.Max);
+        }
+
+        bool contains(const glm::vec3& point) const
+        {
+            if (!isValid())
+                return false;
+
+            return point.x >= Min.x && point.x <= Max.x &&
+                   point.y >= Min.y && point.y <= Max.y &&
+                   point.z >= Min.z && point.z <= Max.z;
+        }
     };
 
     struct AABBIntersection
@@ -94,26 +180,48 @@ namespace Hybrid
         return true;
     }
 
+    inline AABB TransformAABB(const AABB& local_bounds, const glm::mat4& transform)
+    {
+        if (!local_bounds.isValid())
+            return AABB{};
+
+        const glm::vec3 local_center = local_bounds.center();
+        const glm::vec3 local_extents = local_bounds.extents();
+        const glm::vec3 world_center = glm::vec3(transform * glm::vec4(local_center, 1.0f));
+
+        const glm::mat3 linear(transform);
+        const glm::mat3 abs_linear(glm::abs(linear[0]), glm::abs(linear[1]), glm::abs(linear[2]));
+        const glm::vec3 world_extents = abs_linear * local_extents;
+
+        return {world_center - world_extents, world_center + world_extents};
+    }
+
     inline AABBIntersection IntersectAABB(const AABB& a, const AABB& b)
     {
         AABBIntersection hit{};
 
-        const float overlap_x = std::min(a.Max.x, b.Max.x) - std::max(a.Min.x, b.Min.x);
+        const AABB lhs = a.normalized();
+        const AABB rhs = b.normalized();
+
+        if (!lhs.isValid() || !rhs.isValid())
+            return hit;
+
+        const float overlap_x = std::min(lhs.Max.x, rhs.Max.x) - std::max(lhs.Min.x, rhs.Min.x);
         if (overlap_x <= 0.0f)
             return hit;
 
-        const float overlap_y = std::min(a.Max.y, b.Max.y) - std::max(a.Min.y, b.Min.y);
+        const float overlap_y = std::min(lhs.Max.y, rhs.Max.y) - std::max(lhs.Min.y, rhs.Min.y);
         if (overlap_y <= 0.0f)
             return hit;
 
-        const float overlap_z = std::min(a.Max.z, b.Max.z) - std::max(a.Min.z, b.Min.z);
+        const float overlap_z = std::min(lhs.Max.z, rhs.Max.z) - std::max(lhs.Min.z, rhs.Min.z);
         if (overlap_z <= 0.0f)
             return hit;
 
         hit.Hit = true;
 
-        const glm::vec3 center_a = 0.5f * (a.Min + a.Max);
-        const glm::vec3 center_b = 0.5f * (b.Min + b.Max);
+        const glm::vec3 center_a = lhs.center();
+        const glm::vec3 center_b = rhs.center();
         const glm::vec3 delta = center_b - center_a;
 
         hit.Penetration = overlap_x;

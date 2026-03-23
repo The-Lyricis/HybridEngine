@@ -1,12 +1,12 @@
 #include "editor_camera.h"
+
+#include "runtime/core/base/math_util.h"
+
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
-#include <cmath>
 
 namespace Hybrid {
-
-    static float radians(float deg) { return deg * 0.01745329251994329577f; }
 
     EditorCamera::EditorCamera(float fovDeg, float aspect, float nearClip, float farClip)
         : m_FovDeg(fovDeg), m_Aspect(aspect), m_Near(nearClip), m_Far(farClip)
@@ -56,7 +56,7 @@ namespace Hybrid {
         if (orbitPan)
         {
             const float d = std::max(m_Distance, 0.001f);
-            const float vFovRad = radians(m_FovDeg);
+            const float vFovRad = MathUtil::degToRad(m_FovDeg);
             const float worldPerPixel =
                 (2.0f * d * std::tan(vFovRad * 0.5f)) / std::max(m_ViewportHeight, 1.0f);
 
@@ -147,30 +147,30 @@ namespace Hybrid {
 
     void EditorCamera::recalcProj()
     {
-        m_Proj = glm::perspective(radians(m_FovDeg), m_Aspect, m_Near, m_Far);
+        m_Proj = glm::perspective(MathUtil::degToRad(m_FovDeg), m_Aspect, m_Near, m_Far);
         m_ViewProj = m_Proj * m_View;
     }
 
     glm::vec3 EditorCamera::getForward() const
     {
-        const float yawR = radians(m_YawDeg);
-        const float pitR = radians(m_PitchDeg);
+        const float yawR = MathUtil::degToRad(m_YawDeg);
+        const float pitR = MathUtil::degToRad(m_PitchDeg);
 
         glm::vec3 forward;
         forward.x = std::cos(yawR) * std::cos(pitR);
         forward.y = std::sin(pitR);
         forward.z = std::sin(yawR) * std::cos(pitR);
-        return glm::normalize(forward);
+        return MathUtil::normalize(forward);
     }
 
     glm::vec3 EditorCamera::getRight() const
     {
-        return glm::normalize(glm::cross(getForward(), glm::vec3(0.0f, 1.0f, 0.0f)));
+        return MathUtil::normalize(glm::cross(getForward(), glm::vec3(0.0f, 1.0f, 0.0f)), glm::vec3(1.0f, 0.0f, 0.0f));
     }
 
     glm::vec3 EditorCamera::getUp() const
     {
-        return glm::normalize(glm::cross(getRight(), getForward()));
+        return MathUtil::normalize(glm::cross(getRight(), getForward()), glm::vec3(0.0f, 1.0f, 0.0f));
     }
 
     void EditorCamera::syncFocalPointFromPosition()
