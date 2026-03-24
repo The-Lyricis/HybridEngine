@@ -159,6 +159,9 @@ namespace Hybrid
         if (ImGui::MenuItem("Delete", nullptr, false, has_target))
             queueAction(PendingActionType::Delete, target);
 
+        if (ImGui::MenuItem("Duplicate", nullptr, false, has_target))
+            queueAction(PendingActionType::Duplicate, target);
+
         if (ImGui::MenuItem("Unparent", nullptr, false, has_parent))
             queueAction(PendingActionType::Unparent, target);
 
@@ -244,6 +247,32 @@ namespace Hybrid
                               kHierarchyPanelLogTag,
                               entityHandleValue(m_pendingTarget),
                               entity_name);
+            }
+            break;
+        }
+        case PendingActionType::Duplicate:
+        {
+            if (!registry.valid(m_pendingTarget) || !ctx.duplicate_scene_selection)
+            {
+                HBD_CORE_WARN("{} duplicate_rejected entity={} reason=invalid_entity",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(m_pendingTarget));
+                break;
+            }
+
+            if (ctx.duplicate_scene_selection(m_pendingTarget))
+            {
+                HBD_CORE_INFO("{} duplicate_completed entity={} name={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(m_pendingTarget),
+                              getEntityLabel(registry, m_pendingTarget));
+            }
+            else
+            {
+                HBD_CORE_WARN("{} duplicate_failed entity={} name={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(m_pendingTarget),
+                              getEntityLabel(registry, m_pendingTarget));
             }
             break;
         }

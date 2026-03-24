@@ -7,7 +7,7 @@ namespace Hybrid
 {
     namespace
     {
-        void CaptureEntitySubtreeRecursive(Scene& scene, entt::entity entity, EntitySnapshot& snapshot)
+        void CaptureEntityData(Scene& scene, entt::entity entity, EntitySnapshot& snapshot)
         {
             auto& registry = scene.getRegistry();
             const Entity wrapped(entity, &registry, &scene);
@@ -39,6 +39,14 @@ namespace Hybrid
             snapshot.has_rigidbody = wrapped.HasComponent<RigidbodyComponent>();
             if (snapshot.has_rigidbody)
                 snapshot.rigidbody = wrapped.GetComponent<RigidbodyComponent>();
+        }
+
+        void CaptureEntitySubtreeRecursive(Scene& scene, entt::entity entity, EntitySnapshot& snapshot)
+        {
+            auto& registry = scene.getRegistry();
+            const Entity wrapped(entity, &registry, &scene);
+
+            CaptureEntityData(scene, entity, snapshot);
 
             const auto& transform = wrapped.GetComponent<TransformComponent>();
             for (entt::entity child = transform.FirstChild; child != entt::null;)
@@ -50,6 +58,22 @@ namespace Hybrid
                 snapshot.children.emplace_back();
                 CaptureEntitySubtreeRecursive(scene, child, snapshot.children.back());
                 child = next;
+            }
+        }
+
+        template<typename TComponent>
+        void ApplyOptionalComponent(Entity entity, bool should_have, const TComponent& value)
+        {
+            if (should_have)
+            {
+                if (entity.HasComponent<TComponent>())
+                    entity.GetComponent<TComponent>() = value;
+                else
+                    entity.AddComponent<TComponent>(value);
+            }
+            else if (entity.HasComponent<TComponent>())
+            {
+                entity.RemoveComponent<TComponent>();
             }
         }
 
@@ -92,6 +116,13 @@ namespace Hybrid
         }
     } // namespace
 
+    EntitySnapshot CaptureEntity(Scene& scene, entt::entity entity)
+    {
+        EntitySnapshot snapshot{};
+        CaptureEntityData(scene, entity, snapshot);
+        return snapshot;
+    }
+
     EntitySnapshot CaptureEntitySubtree(Scene& scene, entt::entity root)
     {
         EntitySnapshot snapshot{};
@@ -99,8 +130,47 @@ namespace Hybrid
         return snapshot;
     }
 
+    bool ApplyEntitySnapshot(Scene& scene, entt::entity entity_handle, const EntitySnapshot& snapshot)
+    {
+        auto& registry = scene.getRegistry();
+        if (entity_handle == entt::null || !registry.valid(entity_handle))
+            return false;
+
+        Entity entity(entity_handle, &registry, &scene);
+        if (!entity.HasComponent<IDComponent>() || entity.GetComponent<IDComponent>().ID != snapshot.id)
+            return false;
+
+        entity.GetComponent<TagComponent>().Tag = snapshot.tag;
+
+        auto& transform = entity.GetComponent<TransformComponent>();
+        transform.Position = snapshot.transform.position;
+        transform.Rotation = snapshot.transform.rotation;
+        transform.Scale = snapshot.transform.scale;
+        transform.DirtyLocal = true;
+        transform.DirtyWorld = true;
+
+        ApplyOptionalComponent<CameraComponent>(entity, snapshot.has_camera, snapshot.camera);
+        ApplyOptionalComponent<MeshRendererComponent>(entity, snapshot.has_mesh_renderer, snapshot.mesh_renderer);
+        ApplyOptionalComponent<DirectionalLightComponent>(entity, snapshot.has_directional_light, snapshot.directional_light);
+        ApplyOptionalComponent<PointLightComponent>(entity, snapshot.has_point_light, snapshot.point_light);
+        ApplyOptionalComponent<ColliderComponent>(entity, snapshot.has_collider, snapshot.collider);
+        ApplyOptionalComponent<RigidbodyComponent>(entity, snapshot.has_rigidbody, snapshot.rigidbody);
+
+        scene.MarkDirtyRecursive(entity);
+        return true;
+    }
+
     entt::entity RestoreEntitySubtree(Scene& scene, const EntitySnapshot& snapshot, entt::entity parent)
     {
         return RestoreEntitySubtreeRecursive(scene, snapshot, parent);
+    }
+
+    EntitySnapshot CloneEntitySnapshotWithFreshUUIDs(const EntitySnapshot& snapshot)
+    {
+        EntitySnapshot copy = snapshot;
+        copy.id = UUIDGenerator::New();
+        for (EntitySnapshot& child : copy.children)
+            child = CloneEntitySnapshotWithFreshUUIDs(child);
+        return copy;
     }
 } // namespace Hybrid

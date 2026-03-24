@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 #include <imgui.h>
 
+#include "editor/core/component_value_command.h"
 #include "editor/core/editor_context.h"
 #include "editor/core/editor_drag_drop.h"
 #include "runtime/core/base/math_util.h"
@@ -86,6 +87,27 @@ namespace Hybrid
             return changed;
         }
 
+        bool DrawTagComponent(EditorContext& ctx, Entity entity, void* componentPtr)
+        {
+            if (componentPtr == nullptr)
+                return false;
+
+            auto* tag = static_cast<TagComponent*>(componentPtr);
+            return DrawTrackedContinuousComponentEdit(ctx,
+                                                      entity,
+                                                      *tag,
+                                                      "Set Name",
+                                                      [&]()
+                                                      {
+                                                          char buffer[256]{};
+                                                          strncpy_s(buffer, tag->Tag.c_str(), sizeof(buffer) - 1);
+                                                          if (!ImGui::InputText("Name", buffer, sizeof(buffer)))
+                                                              return false;
+                                                          tag->Tag = buffer;
+                                                          return true;
+                                                      });
+        }
+
         bool DrawTransformComponent(EditorContext& ctx, Entity entity, void* componentPtr)
         {
             if (componentPtr == nullptr || ctx.active_scene == nullptr)
@@ -94,7 +116,14 @@ namespace Hybrid
             auto* tr = static_cast<TransformComponent*>(componentPtr);
             bool transform_changed = false;
 
-            transform_changed |= DrawVec3Control("Position", tr->Position, 0.05f);
+            transform_changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                                    entity,
+                                                                    *tr,
+                                                                    "Set Transform Position",
+                                                                    [&]()
+                                                                    {
+                                                                        return DrawVec3Control("Position", tr->Position, 0.05f);
+                                                                    });
 
             glm::vec3 euler_deg = MathUtil::eulerDegreesFromQuat(tr->Rotation);
             if (euler_deg.x > 180.0f) euler_deg.x -= 360.0f;
@@ -109,17 +138,30 @@ namespace Hybrid
             ImGui::SetColumnWidth(0, 90.0f);
             ImGui::TextUnformatted("Rotation");
             ImGui::NextColumn();
-            const bool rot_changed = ImGui::DragFloat3("##v", &euler_deg.x, 0.2f);
+            const bool rot_changed = DrawTrackedContinuousComponentEdit(ctx,
+                                                                        entity,
+                                                                        *tr,
+                                                                        "Set Transform Rotation",
+                                                                        [&]()
+                                                                        {
+                                                                            return ImGui::DragFloat3("##v", &euler_deg.x, 0.2f);
+                                                                        },
+                                                                        [&](TransformComponent& component)
+                                                                        {
+                                                                            component.Rotation = MathUtil::quatFromEulerDegrees(euler_deg);
+                                                                        });
             ImGui::Columns(1);
             ImGui::PopID();
+            transform_changed |= rot_changed;
 
-            if (rot_changed)
-            {
-                tr->Rotation = MathUtil::quatFromEulerDegrees(euler_deg);
-                transform_changed = true;
-            }
-
-            transform_changed |= DrawVec3Control("Scale", tr->Scale, 0.05f);
+            transform_changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                                    entity,
+                                                                    *tr,
+                                                                    "Set Transform Scale",
+                                                                    [&]()
+                                                                    {
+                                                                        return DrawVec3Control("Scale", tr->Scale, 0.05f);
+                                                                    });
 
             if (transform_changed)
             {
@@ -179,7 +221,7 @@ namespace Hybrid
             return changed;
         }
 
-        bool DrawCameraComponent(EditorContext&, Entity, void* componentPtr)
+        bool DrawCameraComponent(EditorContext& ctx, Entity entity, void* componentPtr)
         {
             if (componentPtr == nullptr)
                 return false;
@@ -187,20 +229,44 @@ namespace Hybrid
             auto* camera = static_cast<CameraComponent*>(componentPtr);
             bool changed = false;
 
-            changed |= ImGui::Checkbox("Primary", &camera->Primary);
-            changed |= ImGui::SliderFloat("FovY", &camera->FovY, 1.0f, 179.0f);
-            changed |= ImGui::SliderFloat("Near", &camera->Near, 0.001f, 100.0f);
-            changed |= ImGui::SliderFloat("Far", &camera->Far, 1.0f, 10000.0f);
+            changed |= DrawTrackedImmediateComponentEdit(ctx,
+                                                         entity,
+                                                         *camera,
+                                                         "Set Camera Primary",
+                                                         [&]() { return ImGui::Checkbox("Primary", &camera->Primary); });
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *camera,
+                                                          "Set Camera FOV",
+                                                          [&]() { return ImGui::SliderFloat("FovY", &camera->FovY, 1.0f, 179.0f); });
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *camera,
+                                                          "Set Camera Near",
+                                                          [&]() { return ImGui::SliderFloat("Near", &camera->Near, 0.001f, 100.0f); });
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *camera,
+                                                          "Set Camera Far",
+                                                          [&]() { return ImGui::SliderFloat("Far", &camera->Far, 1.0f, 10000.0f); });
 
             int clear_mode = static_cast<int>(camera->ClearMode);
-            if (ImGui::Combo("Clear Mode", &clear_mode, kCameraClearModeNames, IM_ARRAYSIZE(kCameraClearModeNames)))
-            {
-                camera->ClearMode = static_cast<CameraClearMode>(clear_mode);
-                changed = true;
-            }
+            changed |= DrawTrackedImmediateComponentEdit(ctx,
+                                                         entity,
+                                                         *camera,
+                                                         "Set Camera Clear Mode",
+                                                         [&]() { return ImGui::Combo("Clear Mode", &clear_mode, kCameraClearModeNames, IM_ARRAYSIZE(kCameraClearModeNames)); },
+                                                         [&](CameraComponent& component)
+                                                         {
+                                                             component.ClearMode = static_cast<CameraClearMode>(clear_mode);
+                                                         });
 
             if (camera->ClearMode == CameraClearMode::SolidColor)
-                changed |= ImGui::ColorEdit4("Clear Color", &camera->ClearColor.x);
+                changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                              entity,
+                                                              *camera,
+                                                              "Set Camera Clear Color",
+                                                              [&]() { return ImGui::ColorEdit4("Clear Color", &camera->ClearColor.x); });
 
             return changed;
         }
@@ -218,15 +284,27 @@ namespace Hybrid
                     ? ctx.describe_mesh_renderer_material(entity.GetHandle())
                     : std::string("None");
 
-            changed |= DrawAssetSlot("Mesh", mr->Mesh);
-            changed |= DrawAssetSlot("Material", mr->Material, effective_material.c_str());
+            changed |= DrawTrackedImmediateComponentEdit(ctx,
+                                                         entity,
+                                                         *mr,
+                                                         "Set Mesh Renderer Mesh",
+                                                         [&]() { return DrawAssetSlot("Mesh", mr->Mesh); });
+            changed |= DrawTrackedImmediateComponentEdit(ctx,
+                                                         entity,
+                                                         *mr,
+                                                         "Set Mesh Renderer Material",
+                                                         [&]() { return DrawAssetSlot("Material", mr->Material, effective_material.c_str()); });
 
             ImGui::PushID("Tint");
             ImGui::Columns(2);
             ImGui::SetColumnWidth(0, 90.0f);
             ImGui::TextUnformatted("Tint");
             ImGui::NextColumn();
-            changed |= ImGui::ColorEdit4("##tint", &mr->Tint.x);
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *mr,
+                                                          "Set Mesh Renderer Tint",
+                                                          [&]() { return ImGui::ColorEdit4("##tint", &mr->Tint.x); });
             ImGui::Columns(1);
             ImGui::PopID();
 
@@ -241,24 +319,43 @@ namespace Hybrid
             auto* collider = static_cast<ColliderComponent*>(componentPtr);
             bool changed = false;
 
-            changed |= ImGui::Checkbox("Is Trigger", &collider->IsTrigger);
+            changed |= DrawTrackedImmediateComponentEdit(ctx,
+                                                         entity,
+                                                         *collider,
+                                                         "Set Collider Trigger",
+                                                         [&]() { return ImGui::Checkbox("Is Trigger", &collider->IsTrigger); });
 
             int type_index = static_cast<int>(collider->Type);
-            if (ImGui::Combo("Type", &type_index, kColliderTypeNames, IM_ARRAYSIZE(kColliderTypeNames)))
-            {
-                collider->Type = static_cast<ColliderType>(type_index);
-                changed = true;
-            }
+            changed |= DrawTrackedImmediateComponentEdit(ctx,
+                                                         entity,
+                                                         *collider,
+                                                         "Set Collider Type",
+                                                         [&]() { return ImGui::Combo("Type", &type_index, kColliderTypeNames, IM_ARRAYSIZE(kColliderTypeNames)); },
+                                                         [&](ColliderComponent& component)
+                                                         {
+                                                             component.Type = static_cast<ColliderType>(type_index);
+                                                         });
 
-            changed |= DrawVec3Control("Center", collider->Center, 0.05f);
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *collider,
+                                                          "Set Collider Center",
+                                                          [&]() { return DrawVec3Control("Center", collider->Center, 0.05f); });
 
             switch (collider->Type)
             {
             case ColliderType::Box:
-                changed |= DrawVec3Control("Half Extents", collider->Box.HalfExtents, 0.05f);
-                collider->Box.HalfExtents.x = std::max(0.0f, collider->Box.HalfExtents.x);
-                collider->Box.HalfExtents.y = std::max(0.0f, collider->Box.HalfExtents.y);
-                collider->Box.HalfExtents.z = std::max(0.0f, collider->Box.HalfExtents.z);
+                changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                              entity,
+                                                              *collider,
+                                                              "Set Box Collider Half Extents",
+                                                              [&]() { return DrawVec3Control("Half Extents", collider->Box.HalfExtents, 0.05f); },
+                                                              [&](ColliderComponent& component)
+                                                              {
+                                                                  component.Box.HalfExtents.x = std::max(0.0f, component.Box.HalfExtents.x);
+                                                                  component.Box.HalfExtents.y = std::max(0.0f, component.Box.HalfExtents.y);
+                                                                  component.Box.HalfExtents.z = std::max(0.0f, component.Box.HalfExtents.z);
+                                                              });
                 break;
             case ColliderType::Sphere:
                 ImGui::PushID("Radius");
@@ -266,12 +363,17 @@ namespace Hybrid
                 ImGui::SetColumnWidth(0, 90.0f);
                 ImGui::TextUnformatted("Radius");
                 ImGui::NextColumn();
-                if (ImGui::DragFloat("##v", &collider->Sphere.Radius, 0.05f, 0.0f, 1000.0f))
-                    changed = true;
+                changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                              entity,
+                                                              *collider,
+                                                              "Set Sphere Collider Radius",
+                                                              [&]() { return ImGui::DragFloat("##v", &collider->Sphere.Radius, 0.05f, 0.0f, 1000.0f); },
+                                                              [&](ColliderComponent& component)
+                                                              {
+                                                                  component.Sphere.Radius = std::max(0.0f, component.Sphere.Radius);
+                                                              });
                 ImGui::Columns(1);
                 ImGui::PopID();
-
-                collider->Sphere.Radius = std::max(0.0f, collider->Sphere.Radius);
                 break;
             default:
                 break;
@@ -287,12 +389,111 @@ namespace Hybrid
                 ImGui::BeginDisabled();
             if (ImGui::Button("Fit To Mesh"))
             {
-                if (ctx.fit_box_collider_to_mesh && ctx.fit_box_collider_to_mesh(entity.GetHandle()))
-                    changed = true;
+                if (ctx.fit_box_collider_to_mesh)
+                {
+                    const ColliderComponent before = *collider;
+                    if (ctx.fit_box_collider_to_mesh(entity.GetHandle()))
+                    {
+                        CommitComponentValueChange(ctx,
+                                                   entity,
+                                                   "Fit Box Collider To Mesh",
+                                                   before,
+                                                   *collider);
+                        changed = true;
+                    }
+                }
             }
             if (!can_fit)
                 ImGui::EndDisabled();
 
+            return changed;
+        }
+
+        bool DrawDirectionalLightComponent(EditorContext& ctx, Entity entity, void* componentPtr)
+        {
+            if (componentPtr == nullptr)
+                return false;
+
+            auto* light = static_cast<DirectionalLightComponent*>(componentPtr);
+            bool changed = false;
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *light,
+                                                          "Set Directional Light Color",
+                                                          [&]() { return ImGui::ColorEdit3("Color", &light->Color.x); });
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *light,
+                                                          "Set Directional Light Intensity",
+                                                          [&]() { return ImGui::DragFloat("Intensity", &light->Intensity, 0.05f, 0.0f, 100.0f); });
+            return changed;
+        }
+
+        bool DrawPointLightComponent(EditorContext& ctx, Entity entity, void* componentPtr)
+        {
+            if (componentPtr == nullptr)
+                return false;
+
+            auto* light = static_cast<PointLightComponent*>(componentPtr);
+            bool changed = false;
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *light,
+                                                          "Set Point Light Color",
+                                                          [&]() { return ImGui::ColorEdit3("Color", &light->Color.x); });
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *light,
+                                                          "Set Point Light Intensity",
+                                                          [&]() { return ImGui::DragFloat("Intensity", &light->Intensity, 0.05f, 0.0f, 100.0f); });
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *light,
+                                                          "Set Point Light Range",
+                                                          [&]() { return ImGui::DragFloat("Range", &light->Range, 0.1f, 0.0f, 1000.0f); },
+                                                          [&](PointLightComponent& component)
+                                                          {
+                                                              component.Range = std::max(0.0f, component.Range);
+                                                          });
+            return changed;
+        }
+
+        bool DrawRigidbodyComponent(EditorContext& ctx, Entity entity, void* componentPtr)
+        {
+            if (componentPtr == nullptr)
+                return false;
+
+            auto* rigidbody = static_cast<RigidbodyComponent*>(componentPtr);
+            bool changed = false;
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *rigidbody,
+                                                          "Set Rigidbody Velocity",
+                                                          [&]() { return DrawVec3Control("Velocity", rigidbody->Velocity, 0.05f); });
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *rigidbody,
+                                                          "Set Rigidbody Constant Force",
+                                                          [&]() { return DrawVec3Control("Constant Force", rigidbody->ConstantForce, 0.05f); });
+            changed |= DrawTrackedContinuousComponentEdit(ctx,
+                                                          entity,
+                                                          *rigidbody,
+                                                          "Set Rigidbody Mass",
+                                                          [&]() { return ImGui::DragFloat("Mass", &rigidbody->Mass, 0.05f, 0.001f, 1000.0f); },
+                                                          [&](RigidbodyComponent& component)
+                                                          {
+                                                              component.Mass = std::max(0.001f, component.Mass);
+                                                          });
+            changed |= DrawTrackedImmediateComponentEdit(ctx,
+                                                         entity,
+                                                         *rigidbody,
+                                                         "Set Rigidbody Gravity",
+                                                         [&]() { return ImGui::Checkbox("UseGravity", &rigidbody->UseGravity); });
+            changed |= DrawTrackedImmediateComponentEdit(ctx,
+                                                         entity,
+                                                         *rigidbody,
+                                                         "Set Rigidbody Kinematic",
+                                                         [&]() { return ImGui::Checkbox("IsKinematic", &rigidbody->IsKinematic); });
             return changed;
         }
 
@@ -307,6 +508,7 @@ namespace Hybrid
             tag_desc.add = &AddComponent<TagComponent>;
             tag_desc.get = &GetComponentPtr<TagComponent>;
             tag_desc.remove = &RemoveComponent<TagComponent>;
+            tag_desc.draw_custom = &DrawTagComponent;
             tag_desc.properties = {
                 PropertyDesc{
                     "Name",
@@ -352,6 +554,7 @@ namespace Hybrid
             directional_light_desc.get = &GetComponentPtr<DirectionalLightComponent>;
             directional_light_desc.remove = &RemoveComponent<DirectionalLightComponent>;
             directional_light_desc.enabled = &GetEnabledPtr<DirectionalLightComponent>;
+            directional_light_desc.draw_custom = &DrawDirectionalLightComponent;
             directional_light_desc.properties = {
                 PropertyDesc{
                     "Color",
@@ -385,6 +588,7 @@ namespace Hybrid
             point_light_desc.get = &GetComponentPtr<PointLightComponent>;
             point_light_desc.remove = &RemoveComponent<PointLightComponent>;
             point_light_desc.enabled = &GetEnabledPtr<PointLightComponent>;
+            point_light_desc.draw_custom = &DrawPointLightComponent;
             point_light_desc.properties = {
                 PropertyDesc{
                     "Color",
@@ -439,6 +643,7 @@ namespace Hybrid
             rigidbody_desc.get = &GetComponentPtr<RigidbodyComponent>;
             rigidbody_desc.remove = &RemoveComponent<RigidbodyComponent>;
             rigidbody_desc.enabled = &GetEnabledPtr<RigidbodyComponent>;
+            rigidbody_desc.draw_custom = &DrawRigidbodyComponent;
             rigidbody_desc.properties = {
                 PropertyDesc{
                     "Velocity",

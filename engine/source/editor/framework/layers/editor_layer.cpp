@@ -1,5 +1,6 @@
 #include "editor_layer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <entt/entity/entity.hpp>
 #include <glm/glm.hpp>
@@ -204,6 +205,18 @@ namespace Hybrid
             {
                 return deleteSceneEntity(entity_handle);
             };
+        ctx.duplicate_scene_selection = [this](entt::entity target_entity) -> bool
+            {
+                return duplicateSceneSelection(target_entity);
+            };
+        ctx.submit_editor_command = [this](std::unique_ptr<IEditorCommand> command)
+            {
+                if (!command)
+                    return;
+                if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
+                    return;
+                m_command_history.execute(std::move(command), m_editor_ui.context());
+            };
         ctx.undo = [this]() -> bool
             {
                 if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
@@ -320,6 +333,8 @@ namespace Hybrid
         ctx.request_save_scene_as = {};
         ctx.create_scene_entity = {};
         ctx.delete_scene_entity = {};
+        ctx.duplicate_scene_selection = {};
+        ctx.submit_editor_command = {};
         ctx.undo = {};
         ctx.redo = {};
         ctx.can_undo = {};
@@ -838,6 +853,103 @@ namespace Hybrid
                                                              parent,
                                                              before_selection,
                                                              after_selection_snapshot);
+        m_command_history.execute(std::move(command), ctx);
+        syncContextDocumentState();
+        return true;
+    }
+
+    bool EditorLayer::duplicateSceneSelection(entt::entity target_entity)
+    {
+        auto& ctx = m_editor_ui.context();
+        if (!ctx.active_scene || !ctx.active_document)
+            return false;
+        if (ctx.is_play_mode && ctx.is_play_mode())
+            return false;
+
+        Scene& scene = *ctx.active_scene;
+        auto& registry = scene.getRegistry();
+        if (target_entity == entt::null || !registry.valid(target_entity) || !registry.all_of<TransformComponent>(target_entity))
+            return false;
+
+        std::vector<entt::entity> source_entities;
+        if (ctx.selection.contains(target_entity))
+        {
+            source_entities = ctx.selection.items;
+        }
+        else
+        {
+            source_entities.push_back(target_entity);
+        }
+
+        source_entities.erase(
+            std::remove_if(source_entities.begin(),
+                           source_entities.end(),
+                           [&](entt::entity entity)
+                           {
+                               return entity == entt::null || !registry.valid(entity) || !registry.all_of<TransformComponent>(entity);
+                           }),
+            source_entities.end());
+
+        std::vector<entt::entity> root_entities;
+        root_entities.reserve(source_entities.size());
+        for (entt::entity entity : source_entities)
+        {
+            bool is_child_of_selected = false;
+            for (entt::entity other : source_entities)
+            {
+                if (other == entity)
+                    continue;
+                if (scene.IsDescendant(Entity(entity, &registry, &scene), Entity(other, &registry, &scene)))
+                {
+                    is_child_of_selected = true;
+                    break;
+                }
+            }
+
+            if (!is_child_of_selected)
+                root_entities.push_back(entity);
+        }
+
+        if (root_entities.empty())
+            return false;
+
+        const EditorSelectionSnapshot before_selection = CaptureSelectionSnapshot(ctx, &scene);
+        std::vector<DuplicateEntityCommand::Entry> entries;
+        entries.reserve(root_entities.size());
+
+        UUID new_active_id{};
+        for (entt::entity entity : root_entities)
+        {
+            DuplicateEntityCommand::Entry entry{};
+            entry.snapshot = CloneEntitySnapshotWithFreshUUIDs(CaptureEntitySubtree(scene, entity));
+            entry.parent_id = {};
+
+            const entt::entity parent = registry.get<TransformComponent>(entity).Parent;
+            if (parent != entt::null && registry.valid(parent) && registry.all_of<IDComponent>(parent))
+                entry.parent_id = registry.get<IDComponent>(parent).ID;
+
+            if (entity == ctx.selection.active)
+                new_active_id = entry.snapshot.id;
+
+            entries.push_back(std::move(entry));
+        }
+
+        EditorSelectionSnapshot after_selection{};
+        after_selection.items.reserve(entries.size());
+        for (const auto& entry : entries)
+            after_selection.items.push_back(entry.snapshot.id);
+
+        if (new_active_id.value != 0)
+            after_selection.active = new_active_id;
+        else if (!entries.empty())
+            after_selection.active = entries.back().snapshot.id;
+
+        after_selection.range_anchor = after_selection.active;
+
+        auto command = std::make_unique<DuplicateEntityCommand>(ctx.active_document,
+                                                                std::move(entries),
+                                                                before_selection,
+                                                                after_selection);
         m_command_history.execute(std::move(command), ctx);
         syncContextDocumentState();
         return true;

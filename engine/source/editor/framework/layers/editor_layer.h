@@ -58,6 +58,7 @@ namespace Hybrid
         bool fitBoxColliderToMesh(entt::entity entity_handle);
         entt::entity createSceneEntity(SceneEntityTemplate type, entt::entity parent);
         bool deleteSceneEntity(entt::entity entity_handle);
+        bool duplicateSceneSelection(entt::entity target_entity);
 
     private:
         EngineServices m_services{};       // Injected runtime/editor services.

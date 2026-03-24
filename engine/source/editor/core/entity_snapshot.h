@@ -39,6 +39,9 @@ namespace Hybrid
         std::vector<EntitySnapshot> children;
     };
 
+    EntitySnapshot CaptureEntity(Scene& scene, entt::entity entity);
     EntitySnapshot CaptureEntitySubtree(Scene& scene, entt::entity root);
+    bool ApplyEntitySnapshot(Scene& scene, entt::entity entity, const EntitySnapshot& snapshot);
     entt::entity RestoreEntitySubtree(Scene& scene, const EntitySnapshot& snapshot, entt::entity parent = entt::null);
+    EntitySnapshot CloneEntitySnapshotWithFreshUUIDs(const EntitySnapshot& snapshot);
 } // namespace Hybrid

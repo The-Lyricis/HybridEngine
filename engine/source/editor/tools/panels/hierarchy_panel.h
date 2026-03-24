@@ -22,6 +22,7 @@ namespace Hybrid
         {
             None = 0,
             Delete,
+            Duplicate,
             Unparent,
             CreateRootEmpty,
             CreateRootCube,

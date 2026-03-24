@@ -20,6 +20,7 @@
 namespace Hybrid
 {
     class Scene;
+    class IEditorCommand;
     struct RenderStats;
 
     struct EditorSelection
@@ -175,6 +176,8 @@ namespace Hybrid
         std::function<bool()> request_save_scene_as;
         std::function<entt::entity(SceneEntityTemplate, entt::entity)> create_scene_entity;
         std::function<bool(entt::entity)> delete_scene_entity;
+        std::function<bool(entt::entity)> duplicate_scene_selection;
+        std::function<void(std::unique_ptr<IEditorCommand>)> submit_editor_command;
         std::function<bool()> undo;
         std::function<bool()> redo;
         std::function<bool()> can_undo;
