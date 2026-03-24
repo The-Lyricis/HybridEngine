@@ -10,6 +10,7 @@
 #include "editor/core/editor_commands.h"
 #include "editor/core/editor_dialogs.h"
 #include "editor/core/editor_context.h"
+#include "editor/core/editor_shortcuts.h"
 #include "editor/tools/panels/game_view_panel.h"
 #include "editor/tools/panels/hierarchy_panel.h"
 #include "editor/tools/panels/inspector_panel.h"
@@ -214,29 +215,7 @@ namespace Hybrid
         if (!m_initialized || !m_ctx)
             return;
 
-        const ImGuiIO& io = ImGui::GetIO();
-        const bool shortcut_modifier = io.KeyCtrl || io.KeySuper;
-        if (!io.WantTextInput && shortcut_modifier)
-        {
-            if (ImGui::IsKeyPressed(ImGuiKey_Z, false))
-            {
-                if (io.KeyShift)
-                {
-                    if (m_ctx->redo)
-                        (void)m_ctx->redo();
-                }
-                else
-                {
-                    if (m_ctx->undo)
-                        (void)m_ctx->undo();
-                }
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_Y, false))
-            {
-                if (m_ctx->redo)
-                    (void)m_ctx->redo();
-            }
-        }
+        ProcessEditorShortcuts(*m_ctx);
 
         ImGuizmo::SetImGuiContext(ImGui::GetCurrentContext());
         ImGuizmo::BeginFrame();
@@ -390,41 +369,6 @@ namespace Hybrid
             return;
 
         const bool is_playing = m_ctx && m_ctx->is_play_mode ? m_ctx->is_play_mode() : false;
-        const bool request_new_scene_shortcut =
-            m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N, false);
-        const bool request_open_project_shortcut =
-            m_ctx && ImGui::GetIO().KeyCtrl && ImGui::GetIO().KeyShift && ImGui::IsKeyPressed(ImGuiKey_O, false);
-        const bool request_open_shortcut =
-            m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false);
-        const bool request_save_shortcut =
-            m_ctx && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false);
-        const bool request_save_as_shortcut = request_save_shortcut && ImGui::GetIO().KeyShift;
-
-        if (request_new_scene_shortcut)
-        {
-            if (m_ctx && m_ctx->execute_command)
-                m_ctx->execute_command(EditorCommandId::NewScene);
-        }
-        else if (request_open_project_shortcut)
-        {
-            if (m_ctx && m_ctx->execute_command)
-                m_ctx->execute_command(EditorCommandId::OpenProject);
-        }
-        else if (request_open_shortcut)
-        {
-            if (m_ctx && m_ctx->execute_command)
-                m_ctx->execute_command(EditorCommandId::OpenScene);
-        }
-        else if (request_save_as_shortcut)
-        {
-            if (m_ctx && m_ctx->execute_command)
-                m_ctx->execute_command(EditorCommandId::SaveSceneAs);
-        }
-        else if (request_save_shortcut && m_ctx)
-        {
-            if (m_ctx->execute_command)
-                m_ctx->execute_command(EditorCommandId::SaveScene);
-        }
 
         if (ImGui::BeginMenu("File"))
         {

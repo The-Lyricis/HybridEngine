@@ -119,6 +119,14 @@ namespace Hybrid
         World
     };
 
+    enum class SceneToolMode
+    {
+        Select = 0,
+        Move,
+        Rotate,
+        Scale
+    };
+
     enum class SceneEntityTemplate : int
     {
         Empty = 0,
@@ -159,6 +167,7 @@ namespace Hybrid
         glm::mat4 gizmo_view = glm::mat4(1.0f);
         glm::mat4 gizmo_proj = glm::mat4(1.0f);
         GizmoSpace gizmo_space = GizmoSpace::Local;
+        SceneToolMode scene_tool_mode = SceneToolMode::Move;
 
         bool gizmo_using = false;
 

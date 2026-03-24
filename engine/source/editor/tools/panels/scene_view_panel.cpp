@@ -83,8 +83,41 @@ namespace Hybrid
             Rotate,
             Scale
         };
-        static ToolMode s_Tool = ToolMode::Move;
         static bool s_ToolIconsLoadFailedLogged = false;
+
+        ToolMode toToolMode(SceneToolMode mode)
+        {
+            switch (mode)
+            {
+            case SceneToolMode::Select:
+                return ToolMode::Select;
+            case SceneToolMode::Move:
+                return ToolMode::Move;
+            case SceneToolMode::Rotate:
+                return ToolMode::Rotate;
+            case SceneToolMode::Scale:
+                return ToolMode::Scale;
+            default:
+                return ToolMode::Move;
+            }
+        }
+
+        SceneToolMode toSceneToolMode(ToolMode mode)
+        {
+            switch (mode)
+            {
+            case ToolMode::Select:
+                return SceneToolMode::Select;
+            case ToolMode::Move:
+                return SceneToolMode::Move;
+            case ToolMode::Rotate:
+                return SceneToolMode::Rotate;
+            case ToolMode::Scale:
+                return SceneToolMode::Scale;
+            default:
+                return SceneToolMode::Move;
+            }
+        }
 
         const char *toolModeName(ToolMode mode)
         {
@@ -134,30 +167,7 @@ namespace Hybrid
         static ToolbarResult DrawSceneToolbar(const EditorContext &ctx, float available_width)
         {
             ToolbarResult result{};
-
-            if (!ctx.suppress_tool_shortcuts)
-            {
-                if (ImGui::IsKeyPressed(ImGuiKey_Q))
-                {
-                    s_Tool = ToolMode::Select;
-                    result.interacted = true;
-                }
-                if (ImGui::IsKeyPressed(ImGuiKey_W))
-                {
-                    s_Tool = ToolMode::Move;
-                    result.interacted = true;
-                }
-                if (ImGui::IsKeyPressed(ImGuiKey_E))
-                {
-                    s_Tool = ToolMode::Rotate;
-                    result.interacted = true;
-                }
-                if (ImGui::IsKeyPressed(ImGuiKey_R))
-                {
-                    s_Tool = ToolMode::Scale;
-                    result.interacted = true;
-                }
-            }
+            ToolMode tool_mode = toToolMode(ctx.scene_tool_mode);
 
             // 更紧凑的尺寸（接近 Unity）
             const float pad_x = 6.0f;
@@ -218,9 +228,9 @@ namespace Hybrid
 
             auto draw_tool_button = [&](GLuint tex, const char *tip, ToolMode mode)
             {
-                if (draw_icon_button(tex, tip, s_Tool == mode, static_cast<int>(mode)))
+                if (draw_icon_button(tex, tip, tool_mode == mode, static_cast<int>(mode)))
                 {
-                    s_Tool = mode;
+                    const_cast<EditorContext&>(ctx).scene_tool_mode = toSceneToolMode(mode);
                     result.interacted = true;
                 }
             };
@@ -381,17 +391,18 @@ namespace Hybrid
             if (toolbar.interacted)
                 ctx.scene_viewport_hovered = false;
 
-            if (ctx.select_tool != (s_Tool == ToolMode::Select))
+            const ToolMode active_tool = toToolMode(ctx.scene_tool_mode);
+            if (ctx.select_tool != (active_tool == ToolMode::Select))
             {
-                HBD_CORE_INFO("{} tool_changed tool={}", kSceneViewPanelLogTag, toolModeName(s_Tool));
+                HBD_CORE_INFO("{} tool_changed tool={}", kSceneViewPanelLogTag, toolModeName(active_tool));
             }
-            ctx.select_tool = (s_Tool == ToolMode::Select);
+            ctx.select_tool = (active_tool == ToolMode::Select);
 
             bool gizmo_over = false;
             ctx.gizmo_using = false;
 
             const bool want_gizmo =
-                (s_Tool == ToolMode::Move || s_Tool == ToolMode::Rotate || s_Tool == ToolMode::Scale);
+                (active_tool == ToolMode::Move || active_tool == ToolMode::Rotate || active_tool == ToolMode::Scale);
 
             if (want_gizmo && ctx.active_scene && ctx.activeEntity() != entt::null)
             {
@@ -407,9 +418,9 @@ namespace Hybrid
                     ImGuizmo::SetRect(viewport_min.x, viewport_min.y, canvas_size.x, canvas_size.y);
 
                     ImGuizmo::OPERATION op = ImGuizmo::TRANSLATE;
-                    if (s_Tool == ToolMode::Rotate)
+                    if (active_tool == ToolMode::Rotate)
                         op = ImGuizmo::ROTATE;
-                    if (s_Tool == ToolMode::Scale)
+                    if (active_tool == ToolMode::Scale)
                         op = ImGuizmo::SCALE;
                     ImGuizmo::MODE gizmo_mode = ImGuizmo::LOCAL;
                     if (op != ImGuizmo::SCALE)
