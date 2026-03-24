@@ -198,6 +198,7 @@ namespace Hybrid
         std::function<bool(const std::filesystem::path&)> reveal_in_file_browser;
         std::function<AssetID(const std::string& asset_vpath)> find_asset_by_vpath;
         std::function<std::string(entt::entity)> describe_mesh_renderer_material;
+        std::function<std::string(AssetID)> describe_asset;
         std::function<bool(AssetID, const ImVec2& drop_mouse_pos)> instantiate_scene_asset;
         std::function<bool(const std::string& rel_path, const ImVec2& drop_mouse_pos)> instantiate_scene_project_path;
         std::function<bool(entt::entity)> fit_box_collider_to_mesh;

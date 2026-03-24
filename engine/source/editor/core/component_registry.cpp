@@ -3,13 +3,14 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 
 #include <glm/glm.hpp>
 #include <imgui.h>
 
 #include "editor/core/component_value_command.h"
 #include "editor/core/editor_context.h"
-#include "editor/core/editor_drag_drop.h"
+#include "editor/core/property_drawer.h"
 #include "runtime/core/base/math_util.h"
 #include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/scene.h"
@@ -20,56 +21,15 @@ namespace Hybrid
 {
     namespace
     {
-        static const char* kCameraClearModeNames[] =
+        glm::vec3 NormalizeEulerDegrees(glm::vec3 euler_deg)
         {
-            "Solid Color",
-            "Skybox"
-        };
-
-        static const char* kColliderTypeNames[] =
-        {
-            "None",
-            "Box",
-            "Sphere"
-        };
-
-        template<typename T>
-        bool HasComponent(Entity entity)
-        {
-            return entity && entity.HasComponent<T>();
-        }
-
-        template<typename T>
-        bool AddComponent(Entity entity)
-        {
-            if (!entity || entity.HasComponent<T>())
-                return false;
-
-            entity.AddComponent<T>();
-            return true;
-        }
-
-        template<typename T>
-        void* GetComponentPtr(Entity entity)
-        {
-            if (!entity || !entity.HasComponent<T>())
-                return nullptr;
-            return &entity.GetComponent<T>();
-        }
-
-        template<typename T>
-        void RemoveComponent(Entity entity)
-        {
-            if (entity && entity.HasComponent<T>())
-                entity.RemoveComponent<T>();
-        }
-
-        template<typename T>
-        bool* GetEnabledPtr(void* componentPtr)
-        {
-            if (componentPtr == nullptr)
-                return nullptr;
-            return &static_cast<T*>(componentPtr)->Enabled;
+            if (euler_deg.x > 180.0f) euler_deg.x -= 360.0f;
+            if (euler_deg.y > 180.0f) euler_deg.y -= 360.0f;
+            if (euler_deg.z > 180.0f) euler_deg.z -= 360.0f;
+            if (euler_deg.x < -180.0f) euler_deg.x += 360.0f;
+            if (euler_deg.y < -180.0f) euler_deg.y += 360.0f;
+            if (euler_deg.z < -180.0f) euler_deg.z += 360.0f;
+            return euler_deg;
         }
 
         bool DrawVec3Control(const char* label, glm::vec3& value, float speed)
@@ -85,27 +45,6 @@ namespace Hybrid
             ImGui::Columns(1);
             ImGui::PopID();
             return changed;
-        }
-
-        bool DrawTagComponent(EditorContext& ctx, Entity entity, void* componentPtr)
-        {
-            if (componentPtr == nullptr)
-                return false;
-
-            auto* tag = static_cast<TagComponent*>(componentPtr);
-            return DrawTrackedContinuousComponentEdit(ctx,
-                                                      entity,
-                                                      *tag,
-                                                      "Set Name",
-                                                      [&]()
-                                                      {
-                                                          char buffer[256]{};
-                                                          strncpy_s(buffer, tag->Tag.c_str(), sizeof(buffer) - 1);
-                                                          if (!ImGui::InputText("Name", buffer, sizeof(buffer)))
-                                                              return false;
-                                                          tag->Tag = buffer;
-                                                          return true;
-                                                      });
         }
 
         bool DrawTransformComponent(EditorContext& ctx, Entity entity, void* componentPtr)
@@ -125,19 +64,22 @@ namespace Hybrid
                                                                         return DrawVec3Control("Position", tr->Position, 0.05f);
                                                                     });
 
-            glm::vec3 euler_deg = MathUtil::eulerDegreesFromQuat(tr->Rotation);
-            if (euler_deg.x > 180.0f) euler_deg.x -= 360.0f;
-            if (euler_deg.y > 180.0f) euler_deg.y -= 360.0f;
-            if (euler_deg.z > 180.0f) euler_deg.z -= 360.0f;
-            if (euler_deg.x < -180.0f) euler_deg.x += 360.0f;
-            if (euler_deg.y < -180.0f) euler_deg.y += 360.0f;
-            if (euler_deg.z < -180.0f) euler_deg.z += 360.0f;
-
             ImGui::PushID("Rotation");
             ImGui::Columns(2);
             ImGui::SetColumnWidth(0, 90.0f);
             ImGui::TextUnformatted("Rotation");
             ImGui::NextColumn();
+
+            const uint32_t entity_id = static_cast<uint32_t>(entt::to_integral(entity.GetHandle()));
+            const size_t command_hash = std::hash<std::string_view>{}(std::string_view("Set Transform Rotation"));
+            const ImGuiID rotation_session_id =
+                static_cast<ImGuiID>(command_hash ^ (static_cast<size_t>(entity_id) * 16777619ull));
+
+            static std::unordered_map<ImGuiID, glm::vec3> s_rotation_sessions;
+            glm::vec3 euler_deg = NormalizeEulerDegrees(MathUtil::eulerDegreesFromQuat(tr->Rotation));
+            if (const auto it = s_rotation_sessions.find(rotation_session_id); it != s_rotation_sessions.end())
+                euler_deg = it->second;
+
             const bool rot_changed = DrawTrackedContinuousComponentEdit(ctx,
                                                                         entity,
                                                                         *tr,
@@ -150,6 +92,16 @@ namespace Hybrid
                                                                         {
                                                                             component.Rotation = MathUtil::quatFromEulerDegrees(euler_deg);
                                                                         });
+
+            if (ImGui::IsItemActivated() || ImGui::IsItemActive() || rot_changed)
+                s_rotation_sessions[rotation_session_id] = euler_deg;
+
+            const bool rotation_edit_ended =
+                ImGui::IsItemDeactivatedAfterEdit() ||
+                (!ImGui::IsItemActive() && !ImGui::IsMouseDown(ImGuiMouseButton_Left));
+            if (rotation_edit_ended)
+                s_rotation_sessions.erase(rotation_session_id);
+
             ImGui::Columns(1);
             ImGui::PopID();
             transform_changed |= rot_changed;
@@ -172,55 +124,6 @@ namespace Hybrid
             return transform_changed;
         }
 
-        bool DrawAssetSlot(const char* label, AssetID& assetId, const char* displayText = nullptr)
-        {
-            bool changed = false;
-
-            ImGui::PushID(label);
-            ImGui::Columns(2);
-            ImGui::SetColumnWidth(0, 90.0f);
-            ImGui::TextUnformatted(label);
-            ImGui::NextColumn();
-
-            char buffer[64]{};
-            if (displayText != nullptr && displayText[0] != '\0')
-            {
-                std::snprintf(buffer, sizeof(buffer), "%s", displayText);
-            }
-            else if (assetId.value == 0)
-                std::snprintf(buffer, sizeof(buffer), "None");
-            else
-                std::snprintf(buffer, sizeof(buffer), "%llu", static_cast<unsigned long long>(assetId.value));
-
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 64.0f);
-            ImGui::InputText("##asset", buffer, sizeof(buffer), ImGuiInputTextFlags_ReadOnly);
-
-            if (ImGui::BeginDragDropTarget())
-            {
-                AssetID dropped{};
-                if (EditorDragDrop::AcceptAsset(dropped))
-                {
-                    assetId = dropped;
-                    changed = true;
-                }
-                ImGui::EndDragDropTarget();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Clear"))
-            {
-                if (assetId.value != 0)
-                {
-                    assetId = AssetID{};
-                    changed = true;
-                }
-            }
-
-            ImGui::Columns(1);
-            ImGui::PopID();
-            return changed;
-        }
-
         bool DrawCameraComponent(EditorContext& ctx, Entity entity, void* componentPtr)
         {
             if (componentPtr == nullptr)
@@ -229,44 +132,19 @@ namespace Hybrid
             auto* camera = static_cast<CameraComponent*>(componentPtr);
             bool changed = false;
 
-            changed |= DrawTrackedImmediateComponentEdit(ctx,
-                                                         entity,
-                                                         *camera,
-                                                         "Set Camera Primary",
-                                                         [&]() { return ImGui::Checkbox("Primary", &camera->Primary); });
-            changed |= DrawTrackedContinuousComponentEdit(ctx,
-                                                          entity,
-                                                          *camera,
-                                                          "Set Camera FOV",
-                                                          [&]() { return ImGui::SliderFloat("FovY", &camera->FovY, 1.0f, 179.0f); });
-            changed |= DrawTrackedContinuousComponentEdit(ctx,
-                                                          entity,
-                                                          *camera,
-                                                          "Set Camera Near",
-                                                          [&]() { return ImGui::SliderFloat("Near", &camera->Near, 0.001f, 100.0f); });
-            changed |= DrawTrackedContinuousComponentEdit(ctx,
-                                                          entity,
-                                                          *camera,
-                                                          "Set Camera Far",
-                                                          [&]() { return ImGui::SliderFloat("Far", &camera->Far, 1.0f, 10000.0f); });
+            if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::Camera))
+            {
+                for (const PropertyDesc& property : schema->properties)
+                {
+                    if (std::strcmp(property.name, "clearColor") == 0 &&
+                        camera->ClearMode != CameraClearMode::SolidColor)
+                    {
+                        continue;
+                    }
 
-            int clear_mode = static_cast<int>(camera->ClearMode);
-            changed |= DrawTrackedImmediateComponentEdit(ctx,
-                                                         entity,
-                                                         *camera,
-                                                         "Set Camera Clear Mode",
-                                                         [&]() { return ImGui::Combo("Clear Mode", &clear_mode, kCameraClearModeNames, IM_ARRAYSIZE(kCameraClearModeNames)); },
-                                                         [&](CameraComponent& component)
-                                                         {
-                                                             component.ClearMode = static_cast<CameraClearMode>(clear_mode);
-                                                         });
-
-            if (camera->ClearMode == CameraClearMode::SolidColor)
-                changed |= DrawTrackedContinuousComponentEdit(ctx,
-                                                              entity,
-                                                              *camera,
-                                                              "Set Camera Clear Color",
-                                                              [&]() { return ImGui::ColorEdit4("Clear Color", &camera->ClearColor.x); });
+                    changed |= DrawTrackedPropertyField(ctx, entity, *camera, property);
+                }
+            }
 
             return changed;
         }
@@ -279,34 +157,11 @@ namespace Hybrid
             auto* mr = static_cast<MeshRendererComponent*>(componentPtr);
             bool changed = false;
 
-            const std::string effective_material =
-                ctx.describe_mesh_renderer_material
-                    ? ctx.describe_mesh_renderer_material(entity.GetHandle())
-                    : std::string("None");
-
-            changed |= DrawTrackedImmediateComponentEdit(ctx,
-                                                         entity,
-                                                         *mr,
-                                                         "Set Mesh Renderer Mesh",
-                                                         [&]() { return DrawAssetSlot("Mesh", mr->Mesh); });
-            changed |= DrawTrackedImmediateComponentEdit(ctx,
-                                                         entity,
-                                                         *mr,
-                                                         "Set Mesh Renderer Material",
-                                                         [&]() { return DrawAssetSlot("Material", mr->Material, effective_material.c_str()); });
-
-            ImGui::PushID("Tint");
-            ImGui::Columns(2);
-            ImGui::SetColumnWidth(0, 90.0f);
-            ImGui::TextUnformatted("Tint");
-            ImGui::NextColumn();
-            changed |= DrawTrackedContinuousComponentEdit(ctx,
-                                                          entity,
-                                                          *mr,
-                                                          "Set Mesh Renderer Tint",
-                                                          [&]() { return ImGui::ColorEdit4("##tint", &mr->Tint.x); });
-            ImGui::Columns(1);
-            ImGui::PopID();
+            if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::MeshRenderer))
+            {
+                for (const PropertyDesc& property : schema->properties)
+                    changed |= DrawTrackedPropertyField(ctx, entity, *mr, property);
+            }
 
             return changed;
         }
@@ -319,28 +174,11 @@ namespace Hybrid
             auto* collider = static_cast<ColliderComponent*>(componentPtr);
             bool changed = false;
 
-            changed |= DrawTrackedImmediateComponentEdit(ctx,
-                                                         entity,
-                                                         *collider,
-                                                         "Set Collider Trigger",
-                                                         [&]() { return ImGui::Checkbox("Is Trigger", &collider->IsTrigger); });
-
-            int type_index = static_cast<int>(collider->Type);
-            changed |= DrawTrackedImmediateComponentEdit(ctx,
-                                                         entity,
-                                                         *collider,
-                                                         "Set Collider Type",
-                                                         [&]() { return ImGui::Combo("Type", &type_index, kColliderTypeNames, IM_ARRAYSIZE(kColliderTypeNames)); },
-                                                         [&](ColliderComponent& component)
-                                                         {
-                                                             component.Type = static_cast<ColliderType>(type_index);
-                                                         });
-
-            changed |= DrawTrackedContinuousComponentEdit(ctx,
-                                                          entity,
-                                                          *collider,
-                                                          "Set Collider Center",
-                                                          [&]() { return DrawVec3Control("Center", collider->Center, 0.05f); });
+            if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::Collider))
+            {
+                for (const PropertyDesc& property : schema->properties)
+                    changed |= DrawTrackedPropertyField(ctx, entity, *collider, property);
+            }
 
             switch (collider->Type)
             {
@@ -497,217 +335,43 @@ namespace Hybrid
             return changed;
         }
 
+        ComponentCustomDrawFn ResolveCustomDraw(SceneComponentType type)
+        {
+            switch (type)
+            {
+            case SceneComponentType::Tag: return nullptr;
+            case SceneComponentType::Transform: return &DrawTransformComponent;
+            case SceneComponentType::Camera: return &DrawCameraComponent;
+            case SceneComponentType::MeshRenderer: return nullptr;
+            case SceneComponentType::DirectionalLight: return nullptr;
+            case SceneComponentType::PointLight: return nullptr;
+            case SceneComponentType::Collider: return &DrawColliderComponent;
+            case SceneComponentType::Rigidbody: return nullptr;
+            default: return nullptr;
+            }
+        }
+
         std::vector<ComponentDesc> BuildDescriptors()
         {
             std::vector<ComponentDesc> descriptors;
+            const std::vector<ComponentSchema>& schemas = GetComponentSchemas();
+            descriptors.reserve(schemas.size());
 
-            ComponentDesc tag_desc;
-            tag_desc.name = "Tag";
-            tag_desc.flags = ComponentFlags::Serializable;
-            tag_desc.has = &HasComponent<TagComponent>;
-            tag_desc.add = &AddComponent<TagComponent>;
-            tag_desc.get = &GetComponentPtr<TagComponent>;
-            tag_desc.remove = &RemoveComponent<TagComponent>;
-            tag_desc.draw_custom = &DrawTagComponent;
-            tag_desc.properties = {
-                PropertyDesc{
-                    "Name",
-                    PropertyType::String,
-                    offsetof(TagComponent, Tag),
-                    0.1f,
-                    0.0f,
-                    0.0f,
-                    false,
-                    nullptr,
-                    PropertyFlags::Visible | PropertyFlags::Editable | PropertyFlags::Serializable,
-                    nullptr
-                }
-            };
-            descriptors.push_back(tag_desc);
-
-            ComponentDesc transform_desc;
-            transform_desc.name = "Transform";
-            transform_desc.flags = ComponentFlags::Serializable;
-            transform_desc.has = &HasComponent<TransformComponent>;
-            transform_desc.add = &AddComponent<TransformComponent>;
-            transform_desc.get = &GetComponentPtr<TransformComponent>;
-            transform_desc.remove = &RemoveComponent<TransformComponent>;
-            transform_desc.draw_custom = &DrawTransformComponent;
-            descriptors.push_back(transform_desc);
-
-            ComponentDesc camera_desc;
-            camera_desc.name = "Camera";
-            camera_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
-            camera_desc.has = &HasComponent<CameraComponent>;
-            camera_desc.add = &AddComponent<CameraComponent>;
-            camera_desc.get = &GetComponentPtr<CameraComponent>;
-            camera_desc.remove = &RemoveComponent<CameraComponent>;
-            camera_desc.enabled = &GetEnabledPtr<CameraComponent>;
-            camera_desc.draw_custom = &DrawCameraComponent;
-            descriptors.push_back(camera_desc);
-
-            ComponentDesc directional_light_desc;
-            directional_light_desc.name = "Directional Light";
-            directional_light_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
-            directional_light_desc.has = &HasComponent<DirectionalLightComponent>;
-            directional_light_desc.add = &AddComponent<DirectionalLightComponent>;
-            directional_light_desc.get = &GetComponentPtr<DirectionalLightComponent>;
-            directional_light_desc.remove = &RemoveComponent<DirectionalLightComponent>;
-            directional_light_desc.enabled = &GetEnabledPtr<DirectionalLightComponent>;
-            directional_light_desc.draw_custom = &DrawDirectionalLightComponent;
-            directional_light_desc.properties = {
-                PropertyDesc{
-                    "Color",
-                    PropertyType::Vec3,
-                    offsetof(DirectionalLightComponent, Color),
-                    0.1f,
-                    0.0f,
-                    0.0f,
-                    false,
-                    "Light color.",
-                    PropertyFlags::Visible | PropertyFlags::Editable | PropertyFlags::Serializable | PropertyFlags::Color
-                },
-                PropertyDesc{
-                    "Intensity",
-                    PropertyType::Float,
-                    offsetof(DirectionalLightComponent, Intensity),
-                    0.05f,
-                    0.0f,
-                    100.0f,
-                    true,
-                    "Directional light intensity."
-                }
-            };
-            descriptors.push_back(directional_light_desc);
-
-            ComponentDesc point_light_desc;
-            point_light_desc.name = "Point Light";
-            point_light_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
-            point_light_desc.has = &HasComponent<PointLightComponent>;
-            point_light_desc.add = &AddComponent<PointLightComponent>;
-            point_light_desc.get = &GetComponentPtr<PointLightComponent>;
-            point_light_desc.remove = &RemoveComponent<PointLightComponent>;
-            point_light_desc.enabled = &GetEnabledPtr<PointLightComponent>;
-            point_light_desc.draw_custom = &DrawPointLightComponent;
-            point_light_desc.properties = {
-                PropertyDesc{
-                    "Color",
-                    PropertyType::Vec3,
-                    offsetof(PointLightComponent, Color),
-                    0.1f,
-                    0.0f,
-                    0.0f,
-                    false,
-                    "Light color.",
-                    PropertyFlags::Visible | PropertyFlags::Editable | PropertyFlags::Serializable | PropertyFlags::Color
-                },
-                PropertyDesc{
-                    "Intensity",
-                    PropertyType::Float,
-                    offsetof(PointLightComponent, Intensity),
-                    0.05f,
-                    0.0f,
-                    100.0f,
-                    true,
-                    "Point light intensity."
-                },
-                PropertyDesc{
-                    "Range",
-                    PropertyType::Float,
-                    offsetof(PointLightComponent, Range),
-                    0.1f,
-                    0.0f,
-                    1000.0f,
-                    true,
-                    "Point light attenuation range."
-                }
-            };
-            descriptors.push_back(point_light_desc);
-
-            ComponentDesc collider_desc;
-            collider_desc.name = "BoxCollider";
-            collider_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
-            collider_desc.has = &HasComponent<ColliderComponent>;
-            collider_desc.add = &AddComponent<ColliderComponent>;
-            collider_desc.get = &GetComponentPtr<ColliderComponent>;
-            collider_desc.remove = &RemoveComponent<ColliderComponent>;
-            collider_desc.enabled = &GetEnabledPtr<ColliderComponent>;
-            collider_desc.draw_custom = &DrawColliderComponent;
-            descriptors.push_back(collider_desc);
-
-            ComponentDesc rigidbody_desc;
-            rigidbody_desc.name = "Rigidbody";
-            rigidbody_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
-            rigidbody_desc.has = &HasComponent<RigidbodyComponent>;
-            rigidbody_desc.add = &AddComponent<RigidbodyComponent>;
-            rigidbody_desc.get = &GetComponentPtr<RigidbodyComponent>;
-            rigidbody_desc.remove = &RemoveComponent<RigidbodyComponent>;
-            rigidbody_desc.enabled = &GetEnabledPtr<RigidbodyComponent>;
-            rigidbody_desc.draw_custom = &DrawRigidbodyComponent;
-            rigidbody_desc.properties = {
-                PropertyDesc{
-                    "Velocity",
-                    PropertyType::Vec3,
-                    offsetof(RigidbodyComponent, Velocity),
-                    0.05f,
-                    0.0f,
-                    0.0f,
-                    false,
-                    "Linear velocity in world space."
-                },
-                PropertyDesc{
-                    "Constant Force",
-                    PropertyType::Vec3,
-                    offsetof(RigidbodyComponent, ConstantForce),
-                    0.05f,
-                    0.0f,
-                    0.0f,
-                    false,
-                    "Continuous force applied every physics step in world space."
-                },
-                PropertyDesc{
-                    "Mass",
-                    PropertyType::Float,
-                    offsetof(RigidbodyComponent, Mass),
-                    0.05f,
-                    0.001f,
-                    1000.0f,
-                    true,
-                    "Rigid body mass."
-                },
-                PropertyDesc{
-                    "UseGravity",
-                    PropertyType::Bool,
-                    offsetof(RigidbodyComponent, UseGravity),
-                    0.1f,
-                    0.0f,
-                    0.0f,
-                    false,
-                    "Whether gravity affects this body."
-                },
-                PropertyDesc{
-                    "IsKinematic",
-                    PropertyType::Bool,
-                    offsetof(RigidbodyComponent, IsKinematic),
-                    0.1f,
-                    0.0f,
-                    0.0f,
-                    false,
-                    "Whether the rigid body is driven externally."
-                }
-            };
-            descriptors.push_back(rigidbody_desc);
-
-            ComponentDesc mesh_renderer_desc;
-            mesh_renderer_desc.name = "Mesh Renderer";
-            mesh_renderer_desc.flags = ComponentFlags::Serializable | ComponentFlags::Addable | ComponentFlags::Removable;
-            mesh_renderer_desc.has = &HasComponent<MeshRendererComponent>;
-            mesh_renderer_desc.add = &AddComponent<MeshRendererComponent>;
-            mesh_renderer_desc.get = &GetComponentPtr<MeshRendererComponent>;
-            mesh_renderer_desc.remove = &RemoveComponent<MeshRendererComponent>;
-            mesh_renderer_desc.enabled = &GetEnabledPtr<MeshRendererComponent>;
-            mesh_renderer_desc.draw_custom = &DrawMeshRendererComponent;
-            descriptors.push_back(mesh_renderer_desc);
+            for (const ComponentSchema& schema : schemas)
+            {
+                ComponentDesc desc{};
+                desc.schema = &schema;
+                desc.draw_custom = ResolveCustomDraw(schema.type);
+                desc.name = schema.name;
+                desc.flags = schema.flags;
+                desc.has = schema.has;
+                desc.add = schema.add;
+                desc.get = schema.get;
+                desc.remove = schema.remove;
+                desc.enabled = schema.enabled;
+                desc.properties = schema.properties;
+                descriptors.push_back(std::move(desc));
+            }
 
             return descriptors;
         }

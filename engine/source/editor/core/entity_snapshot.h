@@ -6,6 +6,7 @@
 #include <entt/entt.hpp>
 
 #include "editor/core/transform_snapshot.h"
+#include "runtime/modules/scene/component_schema.h"
 #include "runtime/modules/scene/components.h"
 
 namespace Hybrid
@@ -18,23 +19,11 @@ namespace Hybrid
         std::string tag = "Entity";
         TransformSnapshot transform{};
 
-        bool has_camera = false;
-        CameraComponent camera{};
-
-        bool has_mesh_renderer = false;
-        MeshRendererComponent mesh_renderer{};
-
-        bool has_directional_light = false;
-        DirectionalLightComponent directional_light{};
-
-        bool has_point_light = false;
-        PointLightComponent point_light{};
-
-        bool has_collider = false;
-        ColliderComponent collider{};
-
-        bool has_rigidbody = false;
-        RigidbodyComponent rigidbody{};
+#define HYBRID_DECLARE_SNAPSHOT_COMPONENT(id, type, member, name, key, flags) \
+        bool has_##member = false; \
+        type member{};
+        HYBRID_OPTIONAL_SCENE_COMPONENTS(HYBRID_DECLARE_SNAPSHOT_COMPONENT)
+#undef HYBRID_DECLARE_SNAPSHOT_COMPONENT
 
         std::vector<EntitySnapshot> children;
     };

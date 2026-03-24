@@ -280,6 +280,14 @@ namespace Hybrid
             {
                 return describeMeshRendererMaterial(entity_handle);
             };
+        ctx.describe_asset = [this](AssetID asset_id) -> std::string
+            {
+                if (asset_id.value == 0)
+                    return "None";
+                auto registry = m_services.resources ? m_services.resources->getRegistry() : nullptr;
+                const AssetMetadata* meta = registry ? registry->find(asset_id) : nullptr;
+                return displayNameForAssetMeta(meta);
+            };
         ctx.instantiate_scene_asset = [this](AssetID asset_id, const ImVec2& drop_mouse_pos) -> bool
             {
                 const bool instantiated = instantiateSceneAsset(asset_id, drop_mouse_pos);
@@ -346,6 +354,7 @@ namespace Hybrid
         ctx.reveal_in_file_browser = {};
         ctx.find_asset_by_vpath = {};
         ctx.describe_mesh_renderer_material = {};
+        ctx.describe_asset = {};
         ctx.instantiate_scene_asset = {};
         ctx.instantiate_scene_project_path = {};
         ctx.fit_box_collider_to_mesh = {};

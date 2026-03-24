@@ -3,10 +3,13 @@
 
 #include <algorithm>
 #include <fstream>
+#include <string>
+#include <type_traits>
 #include <vector>
 #include <nlohmann/json.hpp>
 
 #include "runtime/modules/asset/asset_registry.h"
+#include "component_schema.h"
 #include "scene.h"
 #include "components.h"
 #include "uuid.h"
@@ -82,167 +85,280 @@ namespace Hybrid
             return AssetID::FromRaw(j.value(id_key, 0ull));
         }
 
+        static const char* componentKey(SceneComponentType type)
+        {
+            if (const ComponentSchema* schema = FindComponentSchema(type))
+                return schema->serialization_key;
+            return "";
+        }
+
+        static json serializePropertyValue(const void* value_ptr, const PropertyDesc& property)
+        {
+            switch (property.resolvedValueKind())
+            {
+            case PropertyType::Bool:
+                return *static_cast<const bool*>(value_ptr);
+            case PropertyType::Int:
+                return *static_cast<const int*>(value_ptr);
+            case PropertyType::Float:
+                return *static_cast<const float*>(value_ptr);
+            case PropertyType::String:
+                return *static_cast<const std::string*>(value_ptr);
+            case PropertyType::Vec2:
+            {
+                const auto& v = *static_cast<const glm::vec2*>(value_ptr);
+                return json::array({v.x, v.y});
+            }
+            case PropertyType::Vec3:
+                return toJson(*static_cast<const glm::vec3*>(value_ptr));
+            case PropertyType::Vec4:
+                return toJson(*static_cast<const glm::vec4*>(value_ptr));
+            case PropertyType::Enum:
+                switch (property.value_type != nullptr ? property.value_type->size : 0)
+                {
+                case 1: return static_cast<int>(*static_cast<const uint8_t*>(value_ptr));
+                case 2: return static_cast<int>(*static_cast<const uint16_t*>(value_ptr));
+                case 4: return static_cast<int>(*static_cast<const uint32_t*>(value_ptr));
+                case 8: return static_cast<int64_t>(*static_cast<const uint64_t*>(value_ptr));
+                default: return json();
+                }
+            case PropertyType::Asset:
+                return static_cast<const AssetID*>(value_ptr)->value;
+            default:
+                return json();
+            }
+        }
+
+        static bool deserializePropertyValue(const json& value, void* value_ptr, const PropertyDesc& property)
+        {
+            switch (property.resolvedValueKind())
+            {
+            case PropertyType::Bool:
+                if (!value.is_boolean()) return false;
+                *static_cast<bool*>(value_ptr) = value.get<bool>();
+                return true;
+            case PropertyType::Int:
+                if (!value.is_number_integer()) return false;
+                *static_cast<int*>(value_ptr) = value.get<int>();
+                return true;
+            case PropertyType::Float:
+                if (!value.is_number()) return false;
+                *static_cast<float*>(value_ptr) = value.get<float>();
+                return true;
+            case PropertyType::String:
+                if (!value.is_string()) return false;
+                *static_cast<std::string*>(value_ptr) = value.get<std::string>();
+                return true;
+            case PropertyType::Vec2:
+                if (!value.is_array() || value.size() != 2) return false;
+                *static_cast<glm::vec2*>(value_ptr) =
+                    glm::vec2(value.at(0).get<float>(), value.at(1).get<float>());
+                return true;
+            case PropertyType::Vec3:
+                if (!value.is_array() || value.size() != 3) return false;
+                *static_cast<glm::vec3*>(value_ptr) = vec3From(value);
+                return true;
+            case PropertyType::Vec4:
+                if (!value.is_array() || value.size() != 4) return false;
+                *static_cast<glm::vec4*>(value_ptr) = vec4From(value);
+                return true;
+            case PropertyType::Enum:
+                if (!value.is_number_integer()) return false;
+                switch (property.value_type != nullptr ? property.value_type->size : 0)
+                {
+                case 1: *static_cast<uint8_t*>(value_ptr) = static_cast<uint8_t>(value.get<int>()); return true;
+                case 2: *static_cast<uint16_t*>(value_ptr) = static_cast<uint16_t>(value.get<int>()); return true;
+                case 4: *static_cast<uint32_t*>(value_ptr) = static_cast<uint32_t>(value.get<int>()); return true;
+                case 8: *static_cast<uint64_t*>(value_ptr) = static_cast<uint64_t>(value.get<int64_t>()); return true;
+                default: return false;
+                }
+            case PropertyType::Asset:
+                if (!value.is_number_unsigned() && !value.is_number_integer()) return false;
+                *static_cast<AssetID*>(value_ptr) = AssetID::FromRaw(value.get<uint64_t>());
+                return true;
+            default:
+                return false;
+            }
+        }
+
+        static void writeSchemaProperties(json& out,
+                                          const void* component_ptr,
+                                          const ComponentSchema& schema)
+        {
+            if (component_ptr == nullptr)
+                return;
+
+            if (schema.enabled != nullptr)
+            {
+                const bool* enabled = schema.enabled(const_cast<void*>(component_ptr));
+                if (enabled != nullptr)
+                    out["enabled"] = *enabled;
+            }
+
+            for (const PropertyDesc& property : schema.properties)
+            {
+                if (!property.isSerializable() || property.isTransient())
+                    continue;
+
+                const void* value_ptr = property.getConstPtr(component_ptr);
+                if (value_ptr == nullptr)
+                    continue;
+                out[property.name] = serializePropertyValue(value_ptr, property);
+            }
+        }
+
+        static void readSchemaProperties(const json& in,
+                                         void* component_ptr,
+                                         const ComponentSchema& schema)
+        {
+            if (component_ptr == nullptr)
+                return;
+
+            if (schema.enabled != nullptr)
+            {
+                if (bool* enabled = schema.enabled(component_ptr); enabled != nullptr)
+                    *enabled = in.value("enabled", true);
+            }
+
+            for (const PropertyDesc& property : schema.properties)
+            {
+                if (!property.isSerializable() || property.isTransient())
+                    continue;
+                if (!in.contains(property.name))
+                    continue;
+
+                void* value_ptr = property.getMutablePtr(component_ptr);
+                if (value_ptr == nullptr)
+                    continue;
+                (void)deserializePropertyValue(in[property.name], value_ptr, property);
+            }
+        }
+
         static void writeComponents(entt::registry& reg, entt::entity e, json& je, const AssetRegistry* registry)
         {
             // Camera
             if (reg.all_of<CameraComponent>(e))
             {
                 const auto& c = reg.get<CameraComponent>(e);
-                je["camera"] = {
-                    {"enabled", c.Enabled},
-                    {"primary", c.Primary},
-                    {"fovY", c.FovY},
-                    {"near", c.Near},
-                    {"far",  c.Far},
-                    {"clearMode", static_cast<int>(c.ClearMode)},
-                    {"clearColor", toJson(c.ClearColor)}
-                };
+                json jc = json::object();
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::Camera))
+                    writeSchemaProperties(jc, &c, *schema);
+                je[componentKey(SceneComponentType::Camera)] = std::move(jc);
             }
 
             // MeshRenderer
             if (reg.all_of<MeshRendererComponent>(e))
             {
                 const auto& mr = reg.get<MeshRendererComponent>(e);
-                je["meshRenderer"] = {
-                    {"enabled", mr.Enabled},
-                    {"mesh", mr.Mesh.value},
-                    {"material", mr.Material.value},
-                    {"tint", toJson(mr.Tint)}
-                };
+                json jm = json::object();
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::MeshRenderer))
+                    writeSchemaProperties(jm, &mr, *schema);
 
                 const std::string mesh_path = assetPathFor(registry, mr.Mesh);
                 if (!mesh_path.empty())
-                    je["meshRenderer"]["meshPath"] = mesh_path;
+                    jm["meshPath"] = mesh_path;
 
                 const std::string material_path = assetPathFor(registry, mr.Material);
                 if (!material_path.empty())
-                    je["meshRenderer"]["materialPath"] = material_path;
+                    jm["materialPath"] = material_path;
+                je[componentKey(SceneComponentType::MeshRenderer)] = std::move(jm);
             }
 
             // DirectionalLight
             if (reg.all_of<DirectionalLightComponent>(e))
             {
                 const auto& dl = reg.get<DirectionalLightComponent>(e);
-                je["dirLight"] = {
-                    {"enabled", dl.Enabled},
-                    {"color", toJson(dl.Color)},
-                    {"intensity", dl.Intensity}
-                };
+                json jl = json::object();
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::DirectionalLight))
+                    writeSchemaProperties(jl, &dl, *schema);
+                je[componentKey(SceneComponentType::DirectionalLight)] = std::move(jl);
             }
 
             // PointLight
             if (reg.all_of<PointLightComponent>(e))
             {
                 const auto& pl = reg.get<PointLightComponent>(e);
-                je["pointLight"] = {
-                    {"enabled", pl.Enabled},
-                    {"color", toJson(pl.Color)},
-                    {"intensity", pl.Intensity},
-                    {"range", pl.Range}
-                };
+                json jl = json::object();
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::PointLight))
+                    writeSchemaProperties(jl, &pl, *schema);
+                je[componentKey(SceneComponentType::PointLight)] = std::move(jl);
             }
 
             if (reg.all_of<ColliderComponent>(e))
             {
                 const auto& collider = reg.get<ColliderComponent>(e);
-                json jc = {
-                    {"type", static_cast<int>(collider.Type)},
-                    {"enabled", collider.Enabled},
-                    {"isTrigger", collider.IsTrigger},
-                    {"center", toJson(collider.Center)}
-                };
+                json jc = json::object();
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::Collider))
+                    writeSchemaProperties(jc, &collider, *schema);
 
                 if (collider.Type == ColliderType::Box)
                     jc["halfExtents"] = toJson(collider.Box.HalfExtents);
                 else if (collider.Type == ColliderType::Sphere)
                     jc["radius"] = collider.Sphere.Radius;
 
-                je["collider"] = std::move(jc);
+                je[componentKey(SceneComponentType::Collider)] = std::move(jc);
             }
 
             if (reg.all_of<RigidbodyComponent>(e))
             {
                 const auto& rb = reg.get<RigidbodyComponent>(e);
-                je["rigidbody"] = {
-                    {"enabled", rb.Enabled},
-                    {"velocity", toJson(rb.Velocity)},
-                    {"constantForce", toJson(rb.ConstantForce)},
-                    {"mass", rb.Mass},
-                    {"useGravity", rb.UseGravity},
-                    {"isKinematic", rb.IsKinematic}
-                };
+                json jr = json::object();
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::Rigidbody))
+                    writeSchemaProperties(jr, &rb, *schema);
+                je[componentKey(SceneComponentType::Rigidbody)] = std::move(jr);
             }
         }
 
         static void readComponents(entt::registry& reg, entt::entity e, const json& je, const AssetRegistry* registry)
         {
             // Camera
-            if (je.contains("camera") && je["camera"].is_object())
+            if (const char* key = componentKey(SceneComponentType::Camera); je.contains(key) && je[key].is_object())
             {
-                const auto& jc = je["camera"];
+                const auto& jc = je[key];
                 auto& c = reg.all_of<CameraComponent>(e) ? reg.get<CameraComponent>(e) : reg.emplace<CameraComponent>(e);
-                c.Enabled = jc.value("enabled", true);
-                c.Primary = jc.value("primary", false);
-                c.FovY = jc.value("fovY", 45.0f);
-                c.Near = jc.value("near", 0.1f);
-                c.Far = jc.value("far", 1000.0f);
-                c.ClearMode = static_cast<CameraClearMode>(
-                    jc.value("clearMode", static_cast<int>(CameraClearMode::SolidColor)));
-                if (jc.contains("clearColor") && jc["clearColor"].is_array() && jc["clearColor"].size() == 4)
-                    c.ClearColor = vec4From(jc["clearColor"]);
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::Camera))
+                    readSchemaProperties(jc, &c, *schema);
             }
 
             // MeshRenderer
-            if (je.contains("meshRenderer") && je["meshRenderer"].is_object())
+            if (const char* key = componentKey(SceneComponentType::MeshRenderer); je.contains(key) && je[key].is_object())
             {
-                const auto& jm = je["meshRenderer"];
+                const auto& jm = je[key];
                 auto& mr = reg.all_of<MeshRendererComponent>(e) ? reg.get<MeshRendererComponent>(e)
                     : reg.emplace<MeshRendererComponent>(e);
-                mr.Enabled = jm.value("enabled", true);
-                mr.Mesh = resolveAsset(jm, "mesh", "meshPath", registry);
-                mr.Material = resolveAsset(jm, "material", "materialPath", registry);
-
-                if (jm.contains("tint") && jm["tint"].is_array() && jm["tint"].size() == 4)
-                    mr.Tint = vec4From(jm["tint"]);
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::MeshRenderer))
+                    readSchemaProperties(jm, &mr, *schema);
+                mr.Mesh = resolveAsset(jm, "Mesh", "meshPath", registry);
+                mr.Material = resolveAsset(jm, "Material", "materialPath", registry);
             }
 
             // DirectionalLight
-            if (je.contains("dirLight") && je["dirLight"].is_object())
+            if (const char* key = componentKey(SceneComponentType::DirectionalLight); je.contains(key) && je[key].is_object())
             {
-                const auto& jl = je["dirLight"];
+                const auto& jl = je[key];
                 auto& dl = reg.all_of<DirectionalLightComponent>(e) ? reg.get<DirectionalLightComponent>(e)
                     : reg.emplace<DirectionalLightComponent>(e);
-                dl.Enabled = jl.value("enabled", true);
-                if (jl.contains("color") && jl["color"].is_array() && jl["color"].size() == 3)
-                    dl.Color = vec3From(jl["color"]);
-                dl.Intensity = jl.value("intensity", 1.0f);
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::DirectionalLight))
+                    readSchemaProperties(jl, &dl, *schema);
             }
 
             // PointLight
-            if (je.contains("pointLight") && je["pointLight"].is_object())
+            if (const char* key = componentKey(SceneComponentType::PointLight); je.contains(key) && je[key].is_object())
             {
-                const auto& jl = je["pointLight"];
+                const auto& jl = je[key];
                 auto& pl = reg.all_of<PointLightComponent>(e) ? reg.get<PointLightComponent>(e)
                     : reg.emplace<PointLightComponent>(e);
-                pl.Enabled = jl.value("enabled", true);
-                if (jl.contains("color") && jl["color"].is_array() && jl["color"].size() == 3)
-                    pl.Color = vec3From(jl["color"]);
-                pl.Intensity = jl.value("intensity", 1.0f);
-                pl.Range = jl.value("range", 10.0f);
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::PointLight))
+                    readSchemaProperties(jl, &pl, *schema);
             }
 
-            if (je.contains("collider") && je["collider"].is_object())
+            if (const char* key = componentKey(SceneComponentType::Collider); je.contains(key) && je[key].is_object())
             {
-                const auto& jc = je["collider"];
+                const auto& jc = je[key];
                 auto& collider = reg.all_of<ColliderComponent>(e) ? reg.get<ColliderComponent>(e)
                     : reg.emplace<ColliderComponent>(e);
-
-                collider.Type = static_cast<ColliderType>(jc.value("type", static_cast<int>(ColliderType::Box)));
-                collider.Enabled = jc.value("enabled", true);
-                collider.IsTrigger = jc.value("isTrigger", false);
-
-                if (jc.contains("center") && jc["center"].is_array() && jc["center"].size() == 3)
-                    collider.Center = vec3From(jc["center"]);
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::Collider))
+                    readSchemaProperties(jc, &collider, *schema);
 
                 if (jc.contains("halfExtents") && jc["halfExtents"].is_array() && jc["halfExtents"].size() == 3)
                     collider.Box.HalfExtents = vec3From(jc["halfExtents"]);
@@ -254,24 +370,14 @@ namespace Hybrid
                 collider.Sphere.Radius = std::max(0.0f, jc.value("radius", collider.Sphere.Radius));
             }
 
-            if (je.contains("rigidbody") && je["rigidbody"].is_object())
+            if (const char* key = componentKey(SceneComponentType::Rigidbody); je.contains(key) && je[key].is_object())
             {
-                const auto& jr = je["rigidbody"];
+                const auto& jr = je[key];
                 auto& rb = reg.all_of<RigidbodyComponent>(e) ? reg.get<RigidbodyComponent>(e)
                     : reg.emplace<RigidbodyComponent>(e);
-
-                rb.Enabled = jr.value("enabled", true);
-                if (jr.contains("velocity") && jr["velocity"].is_array() && jr["velocity"].size() == 3)
-                    rb.Velocity = vec3From(jr["velocity"]);
+                if (const ComponentSchema* schema = FindComponentSchema(SceneComponentType::Rigidbody))
+                    readSchemaProperties(jr, &rb, *schema);
                 rb.Force = glm::vec3(0.0f);
-                if (jr.contains("constantForce") && jr["constantForce"].is_array() && jr["constantForce"].size() == 3)
-                    rb.ConstantForce = vec3From(jr["constantForce"]);
-                else
-                    rb.ConstantForce = glm::vec3(0.0f);
-
-                rb.Mass = std::max(0.0f, jr.value("mass", 1.0f));
-                rb.UseGravity = jr.value("useGravity", true);
-                rb.IsKinematic = jr.value("isKinematic", false);
             }
         }
 

@@ -11,6 +11,9 @@
 #include "runtime/modules/scene/scene.h"
 #include "runtime/modules/scene/entity.h"
 #include "runtime/modules/scene/components/collider_component.h"
+#include "runtime/modules/scene/components/directional_light_component.h"
+#include "runtime/modules/scene/components/point_light_component.h"
+#include "runtime/modules/scene/components/rigidbody_component.h"
 
 #include <glad/gl.h>
 #include <imgui.h>
@@ -232,6 +235,50 @@ namespace Hybrid
 
             return result;
         }
+
+        bool DrawSchemaDrivenComponent(EditorContext& ctx,
+                                       Entity entity,
+                                       const ComponentDesc& desc,
+                                       void* component_ptr)
+        {
+            if (component_ptr == nullptr)
+                return false;
+
+            switch (desc.schema != nullptr ? desc.schema->type : SceneComponentType::Tag)
+            {
+            case SceneComponentType::DirectionalLight:
+            {
+                auto& component = *static_cast<DirectionalLightComponent*>(component_ptr);
+                bool changed = false;
+                for (const PropertyDesc& property : desc.properties)
+                    changed |= DrawTrackedPropertyField(ctx, entity, component, property);
+                return changed;
+            }
+            case SceneComponentType::PointLight:
+            {
+                auto& component = *static_cast<PointLightComponent*>(component_ptr);
+                bool changed = false;
+                for (const PropertyDesc& property : desc.properties)
+                    changed |= DrawTrackedPropertyField(ctx, entity, component, property);
+                return changed;
+            }
+            case SceneComponentType::Rigidbody:
+            {
+                auto& component = *static_cast<RigidbodyComponent*>(component_ptr);
+                bool changed = false;
+                for (const PropertyDesc& property : desc.properties)
+                    changed |= DrawTrackedPropertyField(ctx, entity, component, property);
+                return changed;
+            }
+            default:
+                for (const PropertyDesc& property : desc.properties)
+                {
+                    if (DrawPropertyField(component_ptr, property))
+                        return true;
+                }
+                return false;
+            }
+        }
     }
 
     void InspectorPanel::onImGuiRender(EditorContext& ctx)
@@ -311,11 +358,8 @@ namespace Hybrid
                 }
                 else
                 {
-                    for (const PropertyDesc& property : desc.properties)
-                    {
-                        if (DrawPropertyField(component_ptr, property))
-                            ctx.markSceneDirty();
-                    }
+                    if (DrawSchemaDrivenComponent(ctx, selected_entity, desc, component_ptr))
+                        ctx.markSceneDirty();
                 }
             }
 

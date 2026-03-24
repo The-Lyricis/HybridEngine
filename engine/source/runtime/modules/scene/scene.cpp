@@ -1,4 +1,5 @@
 #include "scene.h"
+#include "component_schema.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
@@ -489,23 +490,9 @@ namespace Hybrid
 
         for (const auto& [srcEntity, dstEntity] : entityMap)
         {
-            if (srcReg.all_of<CameraComponent>(srcEntity))
-                dstReg.emplace_or_replace<CameraComponent>(dstEntity, srcReg.get<CameraComponent>(srcEntity));
-
-            if (srcReg.all_of<MeshRendererComponent>(srcEntity))
-                dstReg.emplace_or_replace<MeshRendererComponent>(dstEntity, srcReg.get<MeshRendererComponent>(srcEntity));
-
-            if (srcReg.all_of<DirectionalLightComponent>(srcEntity))
-                dstReg.emplace_or_replace<DirectionalLightComponent>(dstEntity, srcReg.get<DirectionalLightComponent>(srcEntity));
-
-            if (srcReg.all_of<PointLightComponent>(srcEntity))
-                dstReg.emplace_or_replace<PointLightComponent>(dstEntity, srcReg.get<PointLightComponent>(srcEntity));
-
-            if (srcReg.all_of<RigidbodyComponent>(srcEntity))
-                dstReg.emplace_or_replace<RigidbodyComponent>(dstEntity, srcReg.get<RigidbodyComponent>(srcEntity));
-
-            if (srcReg.all_of<ColliderComponent>(srcEntity))
-                dstReg.emplace_or_replace<ColliderComponent>(dstEntity, srcReg.get<ColliderComponent>(srcEntity));
+            CopyOptionalSceneComponents(
+                Entity(dstEntity, &dstReg, dst.get()),
+                Entity(srcEntity, &mutableSrcReg));
         }
 
         auto remapEntity = [&entityMap](entt::entity e) -> entt::entity
