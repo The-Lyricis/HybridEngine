@@ -1,6 +1,6 @@
 #include "transform_command.h"
 
-#include "editor/core/editor_context.h"
+#include "editor/core/context/editor_context.h"
 #include "editor/core/scene_document.h"
 #include "runtime/modules/scene/scene.h"
 
@@ -42,7 +42,7 @@ namespace Hybrid
             return false;
 
         document->dirty = true;
-        if (ctx.active_document == document)
+        if (ctx.document.activeDocument() == document)
             ctx.markSceneDirty();
         return true;
     }

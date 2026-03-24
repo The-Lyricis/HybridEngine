@@ -8,12 +8,12 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-#include "editor/core/editor_context.h"
-#include "editor/core/entity_commands.h"
-#include "editor/core/entity_snapshot.h"
-#include "editor/core/selection_snapshot.h"
-#include "editor/core/transform_command.h"
-#include "editor/core/transform_snapshot.h"
+#include "editor/core/context/editor_context.h"
+#include "editor/core/commands/entity_commands.h"
+#include "editor/core/snapshot/entity_snapshot.h"
+#include "editor/core/snapshot/selection_snapshot.h"
+#include "editor/core/commands/transform_command.h"
+#include "editor/core/snapshot/transform_snapshot.h"
 #include "editor/services/import/import_types.h"
 #include "editor/services/platform/editor_platform_services.h"
 #include "editor/services/project/project_history.h"
@@ -85,233 +85,9 @@ namespace Hybrid
         m_initialized = true;
 
         auto& ctx = m_editor_ui.context();
-        ctx.render_stats = &m_services.render->getStats();
+        ctx.debug.render_stats = &m_services.render->getStats();
+        BindEditorContextActions(ctx, buildContextActionBindings());
         m_asset_hot_reload_controller.bindContext(ctx);
-        ctx.enter_play_mode = [this]()
-            {
-                const auto& document = m_scene_io.getActiveDocument();
-                if (!document || !document->scene)
-                    return;
-
-                if (m_mode_callbacks.enter_play_mode_from_scene)
-                {
-                    if (m_mode_callbacks.enter_play_mode_from_scene(document->scene))
-                    {
-                        auto& local_ctx = m_editor_ui.context();
-                        local_ctx.selection.clear();
-                        local_ctx.request_pick = false;
-                        syncContextDocumentState();
-                    }
-                }
-            };
-        ctx.exit_play_mode = [this]()
-            {
-                if (m_mode_callbacks.exit_play_mode)
-                {
-                    m_mode_callbacks.exit_play_mode();
-                    auto& local_ctx = m_editor_ui.context();
-                    local_ctx.selection.clear();
-                    local_ctx.request_pick = false;
-                    syncContextDocumentState();
-                }
-            };
-        ctx.toggle_pause_mode = [this]()
-            {
-                if (m_mode_callbacks.toggle_pause_mode)
-                    m_mode_callbacks.toggle_pause_mode();
-            };
-        ctx.is_play_mode = [this]() -> bool
-            {
-                return m_mode_callbacks.is_play_mode ? m_mode_callbacks.is_play_mode() : false;
-            };
-        ctx.is_pause_mode = [this]() -> bool
-            {
-                return m_mode_callbacks.is_pause_mode ? m_mode_callbacks.is_pause_mode() : false;
-            };
-        ctx.open_scene = [this](const std::string& scene_vpath)
-            {
-                const bool opened = m_scene_io.open(scene_vpath);
-                if (opened)
-                    m_editor_ui.context().selection.clear();
-                syncContextDocumentState();
-            };
-        ctx.request_open_project = [this]() -> bool
-            {
-                return requestOpenProject();
-            };
-        ctx.request_open_recent_project = [this](const std::filesystem::path& project_path) -> bool
-            {
-                return openProjectInNewInstance(project_path);
-            };
-        ctx.list_recent_projects = [this]() -> std::vector<std::filesystem::path>
-            {
-                if (!m_services.platform)
-                    return {};
-
-                RecentProjectState state{};
-                if (!ProjectHistory::loadRecentState(*m_services.platform, state))
-                    return {};
-                return state.recent_project_files;
-            };
-        ctx.request_open_scene = [this]() -> bool
-            {
-                const bool opened = m_scene_io.requestOpen();
-                if (opened)
-                    m_editor_ui.context().selection.clear();
-                syncContextDocumentState();
-                return opened;
-            };
-        ctx.request_reimport_asset = [this](const std::string& asset_vpath) -> bool
-            {
-                const bool ok = m_asset_hot_reload_controller.requestReimport(asset_vpath);
-                syncContextDocumentState();
-                return ok;
-            };
-        ctx.request_rename_folder = [this](const std::string& old_folder_vpath, const std::string& new_folder_vpath) -> bool
-            {
-                const bool ok = m_asset_hot_reload_controller.requestRenameFolder(old_folder_vpath, new_folder_vpath);
-                syncContextDocumentState();
-                return ok;
-            };
-        ctx.request_new_scene = [this]() -> bool
-            {
-                const bool created = m_scene_io.createUntitled();
-                if (created)
-                    m_editor_ui.context().selection.clear();
-                syncContextDocumentState();
-                return created;
-            };
-        ctx.request_reset_layout = [this]()
-            {
-                m_editor_ui.requestResetLayout();
-            };
-        ctx.request_save_scene = [this]() -> bool
-            {
-                const bool saved = m_scene_io.requestSave();
-                syncContextDocumentState();
-                return saved;
-            };
-        ctx.request_save_scene_as = [this]() -> bool
-            {
-                const bool saved = m_scene_io.requestSaveAs();
-                syncContextDocumentState();
-                return saved;
-            };
-        ctx.create_scene_entity = [this](SceneEntityTemplate type, entt::entity parent) -> entt::entity
-            {
-                return createSceneEntity(type, parent);
-            };
-        ctx.delete_scene_entity = [this](entt::entity entity_handle) -> bool
-            {
-                return deleteSceneEntity(entity_handle);
-            };
-        ctx.duplicate_scene_selection = [this](entt::entity target_entity) -> bool
-            {
-                return duplicateSceneSelection(target_entity);
-            };
-        ctx.submit_editor_command = [this](std::unique_ptr<IEditorCommand> command)
-            {
-                if (!command)
-                    return;
-                if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
-                    return;
-                m_command_history.execute(std::move(command), m_editor_ui.context());
-            };
-        ctx.undo = [this]() -> bool
-            {
-                if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
-                    return false;
-                return m_command_history.undo(m_editor_ui.context());
-            };
-        ctx.redo = [this]() -> bool
-            {
-                if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
-                    return false;
-                return m_command_history.redo(m_editor_ui.context());
-            };
-        ctx.can_undo = [this]() -> bool
-            {
-                if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
-                    return false;
-                return m_command_history.canUndo();
-            };
-        ctx.can_redo = [this]() -> bool
-            {
-                if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
-                    return false;
-                return m_command_history.canRedo();
-            };
-        ctx.execute_command = [this](EditorCommandId id) -> bool
-            {
-                return executeCommand(id);
-            };
-        ctx.can_execute_command = [this](EditorCommandId id) -> bool
-            {
-                return canExecuteCommand(id);
-            };
-        ctx.commit_transform_command = [this](entt::entity entity,
-                                              const TransformSnapshot& before,
-                                              const TransformSnapshot& after)
-            {
-                auto& ctx = m_editor_ui.context();
-                if (entity == entt::null || !ctx.active_document)
-                    return;
-                if (ctx.is_play_mode && ctx.is_play_mode())
-                    return;
-                if (TransformSnapshotsEqual(before, after))
-                    return;
-
-                auto command = std::make_unique<TransformCommand>(ctx.active_document, entity, before, after);
-                m_command_history.execute(std::move(command), ctx);
-            };
-        ctx.request_confirm_dialog = [this](EditorConfirmDialog dialog)
-            {
-                m_editor_ui.queueConfirmDialog(std::move(dialog));
-            };
-        ctx.reveal_in_file_browser = [this](const std::filesystem::path& path) -> bool
-            {
-                return m_services.platform ? m_services.platform->revealInFileBrowser(path) : false;
-            };
-        ctx.find_asset_by_vpath = [this](const std::string& asset_vpath) -> AssetID
-            {
-                return findAssetByVPath(asset_vpath);
-            };
-        ctx.describe_mesh_renderer_material = [this](entt::entity entity_handle) -> std::string
-            {
-                return describeMeshRendererMaterial(entity_handle);
-            };
-        ctx.describe_asset = [this](AssetID asset_id) -> std::string
-            {
-                if (asset_id.value == 0)
-                    return "None";
-                auto registry = m_services.resources ? m_services.resources->getRegistry() : nullptr;
-                const AssetMetadata* meta = registry ? registry->find(asset_id) : nullptr;
-                return displayNameForAssetMeta(meta);
-            };
-        ctx.instantiate_scene_asset = [this](AssetID asset_id, const ImVec2& drop_mouse_pos) -> bool
-            {
-                const bool instantiated = instantiateSceneAsset(asset_id, drop_mouse_pos);
-                syncContextDocumentState();
-                return instantiated;
-            };
-        ctx.instantiate_scene_project_path = [this](const std::string& rel_path, const ImVec2& drop_mouse_pos) -> bool
-            {
-                const bool instantiated = instantiateSceneProjectPath(rel_path, drop_mouse_pos);
-                syncContextDocumentState();
-                return instantiated;
-            };
-        ctx.fit_box_collider_to_mesh = [this](entt::entity entity_handle) -> bool
-            {
-                const bool fitted = fitBoxColliderToMesh(entity_handle);
-                syncContextDocumentState();
-                return fitted;
-            };
-        ctx.get_builtin_mesh_id = [this](BuiltinMesh mesh) -> AssetID
-            {
-                if (!m_services.resources)
-                    return {};
-                return m_services.resources->getBuiltinMeshID(mesh);
-            };
 
         (void)m_scene_io.restoreStartupScene();
         syncContextDocumentState();
@@ -327,43 +103,7 @@ namespace Hybrid
             (void)m_scene_io.saveSceneViewState(*m_active_scene_view_document, m_editor_camera.dumpState());
 
         auto& ctx = m_editor_ui.context();
-        ctx.notify_asset_source_event = {};
-        ctx.open_scene = {};
-        ctx.request_open_project = {};
-        ctx.request_open_recent_project = {};
-        ctx.list_recent_projects = {};
-        ctx.request_open_scene = {};
-        ctx.request_reimport_asset = {};
-        ctx.request_rename_folder = {};
-        ctx.request_new_scene = {};
-        ctx.request_reset_layout = {};
-        ctx.request_save_scene = {};
-        ctx.request_save_scene_as = {};
-        ctx.create_scene_entity = {};
-        ctx.delete_scene_entity = {};
-        ctx.duplicate_scene_selection = {};
-        ctx.submit_editor_command = {};
-        ctx.undo = {};
-        ctx.redo = {};
-        ctx.can_undo = {};
-        ctx.can_redo = {};
-        ctx.execute_command = {};
-        ctx.can_execute_command = {};
-        ctx.commit_transform_command = {};
-        ctx.request_confirm_dialog = {};
-        ctx.reveal_in_file_browser = {};
-        ctx.find_asset_by_vpath = {};
-        ctx.describe_mesh_renderer_material = {};
-        ctx.describe_asset = {};
-        ctx.instantiate_scene_asset = {};
-        ctx.instantiate_scene_project_path = {};
-        ctx.fit_box_collider_to_mesh = {};
-        ctx.get_builtin_mesh_id = {};
-        ctx.enter_play_mode = {};
-        ctx.exit_play_mode = {};
-        ctx.toggle_pause_mode = {};
-        ctx.is_play_mode = {};
-        ctx.is_pause_mode = {};
+        ClearEditorContextActions(ctx);
         ctx.selection.clear();
         ctx.clearActiveDocument();
         m_asset_hot_reload_controller.unbindContext(ctx);
@@ -394,6 +134,272 @@ namespace Hybrid
     {
         auto& ui_ctx = m_editor_ui.context();
         return m_command_dispatcher.canExecute(id, EditorCommandContext{const_cast<EditorContext*>(&ui_ctx)});
+    }
+
+    EditorDocumentActions EditorLayer::buildDocumentActions()
+    {
+        EditorDocumentActions actions{};
+        actions.open_scene = [this](const std::string& scene_vpath)
+        {
+            const bool opened = m_scene_io.open(scene_vpath);
+            if (opened)
+                m_editor_ui.context().selection.clear();
+            syncContextDocumentState();
+        };
+        actions.request_open_project = [this]() -> bool
+        {
+            return requestOpenProject();
+        };
+        actions.request_open_recent_project = [this](const std::filesystem::path& project_path) -> bool
+        {
+            return openProjectInNewInstance(project_path);
+        };
+        actions.list_recent_projects = [this]() -> std::vector<std::filesystem::path>
+        {
+            if (!m_services.platform)
+                return {};
+
+            RecentProjectState state{};
+            if (!ProjectHistory::loadRecentState(*m_services.platform, state))
+                return {};
+            return state.recent_project_files;
+        };
+        actions.request_open_scene = [this]() -> bool
+        {
+            const bool opened = m_scene_io.requestOpen();
+            if (opened)
+                m_editor_ui.context().selection.clear();
+            syncContextDocumentState();
+            return opened;
+        };
+        actions.request_new_scene = [this]() -> bool
+        {
+            const bool created = m_scene_io.createUntitled();
+            if (created)
+                m_editor_ui.context().selection.clear();
+            syncContextDocumentState();
+            return created;
+        };
+        actions.request_reset_layout = [this]()
+        {
+            m_editor_ui.requestResetLayout();
+        };
+        actions.request_save_scene = [this]() -> bool
+        {
+            const bool saved = m_scene_io.requestSave();
+            syncContextDocumentState();
+            return saved;
+        };
+        actions.request_save_scene_as = [this]() -> bool
+        {
+            const bool saved = m_scene_io.requestSaveAs();
+            syncContextDocumentState();
+            return saved;
+        };
+        actions.request_confirm_dialog = [this](EditorConfirmDialog dialog)
+        {
+            m_editor_ui.queueConfirmDialog(std::move(dialog));
+        };
+        actions.reveal_in_file_browser = [this](const std::filesystem::path& path) -> bool
+        {
+            return m_services.platform ? m_services.platform->revealInFileBrowser(path) : false;
+        };
+        return actions;
+    }
+
+    EditorSceneActions EditorLayer::buildSceneActions()
+    {
+        EditorSceneActions actions{};
+        actions.create_entity = [this](SceneEntityTemplate type, entt::entity parent) -> entt::entity
+        {
+            return createSceneEntity(type, parent);
+        };
+        actions.delete_entity = [this](entt::entity entity_handle) -> bool
+        {
+            return deleteSceneEntity(entity_handle);
+        };
+        actions.duplicate_selection = [this](entt::entity target_entity) -> bool
+        {
+            return duplicateSceneSelection(target_entity);
+        };
+        actions.instantiate_asset = [this](AssetID asset_id, const ImVec2& drop_mouse_pos) -> bool
+        {
+            const bool instantiated = instantiateSceneAsset(asset_id, drop_mouse_pos);
+            syncContextDocumentState();
+            return instantiated;
+        };
+        actions.instantiate_project_path = [this](const std::string& rel_path, const ImVec2& drop_mouse_pos) -> bool
+        {
+            const bool instantiated = instantiateSceneProjectPath(rel_path, drop_mouse_pos);
+            syncContextDocumentState();
+            return instantiated;
+        };
+        actions.fit_box_collider_to_mesh = [this](entt::entity entity_handle) -> bool
+        {
+            const bool fitted = fitBoxColliderToMesh(entity_handle);
+            syncContextDocumentState();
+            return fitted;
+        };
+        actions.get_builtin_mesh_id = [this](BuiltinMesh mesh) -> AssetID
+        {
+            if (!m_services.resources)
+                return {};
+            return m_services.resources->getBuiltinMeshID(mesh);
+        };
+        return actions;
+    }
+
+    EditorAssetActions EditorLayer::buildAssetActions()
+    {
+        EditorAssetActions actions{};
+        actions.request_reimport_asset = [this](const std::string& asset_vpath) -> bool
+        {
+            const bool ok = m_asset_hot_reload_controller.requestReimport(asset_vpath);
+            syncContextDocumentState();
+            return ok;
+        };
+        actions.request_rename_folder = [this](const std::string& old_folder_vpath, const std::string& new_folder_vpath) -> bool
+        {
+            const bool ok = m_asset_hot_reload_controller.requestRenameFolder(old_folder_vpath, new_folder_vpath);
+            syncContextDocumentState();
+            return ok;
+        };
+        actions.find_asset_by_vpath = [this](const std::string& asset_vpath) -> AssetID
+        {
+            return findAssetByVPath(asset_vpath);
+        };
+        actions.describe_mesh_renderer_material = [this](entt::entity entity_handle) -> std::string
+        {
+            return describeMeshRendererMaterial(entity_handle);
+        };
+        actions.describe_asset = [this](AssetID asset_id) -> std::string
+        {
+            if (asset_id.value == 0)
+                return "None";
+            auto registry = m_services.resources ? m_services.resources->getRegistry() : nullptr;
+            const AssetMetadata* meta = registry ? registry->find(asset_id) : nullptr;
+            return displayNameForAssetMeta(meta);
+        };
+        return actions;
+    }
+
+    EditorCommandActions EditorLayer::buildCommandActions()
+    {
+        EditorCommandActions actions{};
+        actions.submit_editor_command = [this](std::unique_ptr<IEditorCommand> command)
+        {
+            if (!command)
+                return;
+            if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
+                return;
+            m_command_history.execute(std::move(command), m_editor_ui.context());
+        };
+        actions.undo = [this]() -> bool
+        {
+            if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
+                return false;
+            return m_command_history.undo(m_editor_ui.context());
+        };
+        actions.redo = [this]() -> bool
+        {
+            if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
+                return false;
+            return m_command_history.redo(m_editor_ui.context());
+        };
+        actions.can_undo = [this]() -> bool
+        {
+            if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
+                return false;
+            return m_command_history.canUndo();
+        };
+        actions.can_redo = [this]() -> bool
+        {
+            if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode())
+                return false;
+            return m_command_history.canRedo();
+        };
+        actions.execute_command = [this](EditorCommandId id) -> bool
+        {
+            return executeCommand(id);
+        };
+        actions.can_execute_command = [this](EditorCommandId id) -> bool
+        {
+            return canExecuteCommand(id);
+        };
+        actions.commit_transform_command = [this](entt::entity entity,
+                                                  const TransformSnapshot& before,
+                                                  const TransformSnapshot& after)
+        {
+            auto& ctx = m_editor_ui.context();
+            if (entity == entt::null || !ctx.document.activeDocument())
+                return;
+            if (ctx.mode.is_play_mode && ctx.mode.is_play_mode())
+                return;
+            if (TransformSnapshotsEqual(before, after))
+                return;
+
+            auto command = std::make_unique<TransformCommand>(ctx.document.activeDocument(), entity, before, after);
+            m_command_history.execute(std::move(command), ctx);
+        };
+        return actions;
+    }
+
+    EditorModeActions EditorLayer::buildModeActions()
+    {
+        EditorModeActions actions{};
+        actions.enter_play_mode = [this]()
+        {
+            const auto& document = m_scene_io.getActiveDocument();
+            if (!document || !document->scene)
+                return;
+
+            if (m_mode_callbacks.enter_play_mode_from_scene)
+            {
+                if (m_mode_callbacks.enter_play_mode_from_scene(document->scene))
+                {
+                    auto& local_ctx = m_editor_ui.context();
+                    local_ctx.selection.clear();
+                    local_ctx.picking.request = false;
+                    syncContextDocumentState();
+                }
+            }
+        };
+        actions.exit_play_mode = [this]()
+        {
+            if (m_mode_callbacks.exit_play_mode)
+            {
+                m_mode_callbacks.exit_play_mode();
+                auto& local_ctx = m_editor_ui.context();
+                local_ctx.selection.clear();
+                local_ctx.picking.request = false;
+                syncContextDocumentState();
+            }
+        };
+        actions.toggle_pause_mode = [this]()
+        {
+            if (m_mode_callbacks.toggle_pause_mode)
+                m_mode_callbacks.toggle_pause_mode();
+        };
+        actions.is_play_mode = [this]() -> bool
+        {
+            return m_mode_callbacks.is_play_mode ? m_mode_callbacks.is_play_mode() : false;
+        };
+        actions.is_pause_mode = [this]() -> bool
+        {
+            return m_mode_callbacks.is_pause_mode ? m_mode_callbacks.is_pause_mode() : false;
+        };
+        return actions;
+    }
+
+    EditorContextActionBindings EditorLayer::buildContextActionBindings()
+    {
+        EditorContextActionBindings bindings{};
+        bindings.documents = buildDocumentActions();
+        bindings.scene_actions = buildSceneActions();
+        bindings.asset_actions = buildAssetActions();
+        bindings.commands = buildCommandActions();
+        bindings.mode = buildModeActions();
+        return bindings;
     }
 
     bool EditorLayer::requestOpenProject()
@@ -484,30 +490,34 @@ namespace Hybrid
         if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode() &&
             m_services.scene && m_services.scene->hasActiveScene())
         {
-            ctx.active_scene = m_services.scene->getActiveScene().get();
+            ctx.document.setSceneOverride(m_services.scene->getActiveScene().get());
+        }
+        else
+        {
+            ctx.document.clearSceneOverride();
         }
 
-        if (ctx.active_scene && ctx.activeEntity() != entt::null)
+        if (ctx.document.activeScene() && ctx.activeEntity() != entt::null)
         {
-            auto& reg = ctx.active_scene->getRegistry();
-            for (auto it = ctx.selection.items.begin(); it != ctx.selection.items.end();)
+            auto& reg = ctx.document.activeScene()->getRegistry();
+            for (auto it = ctx.selection.items().begin(); it != ctx.selection.items().end();)
             {
                 if (!reg.valid(*it))
-                    it = ctx.selection.items.erase(it);
+                    it = ctx.selection.items().erase(it);
                 else
                     ++it;
             }
 
-            if (ctx.selection.active != entt::null && !reg.valid(ctx.selection.active))
-                ctx.selection.active = entt::null;
-            if (ctx.selection.range_anchor != entt::null && !reg.valid(ctx.selection.range_anchor))
-                ctx.selection.range_anchor = entt::null;
-            if (ctx.selection.items.empty())
+            if (ctx.selection.active() != entt::null && !reg.valid(ctx.selection.active()))
+                ctx.selection.setActive(entt::null);
+            if (ctx.selection.rangeAnchor() != entt::null && !reg.valid(ctx.selection.rangeAnchor()))
+                ctx.selection.setRangeAnchor(entt::null);
+            if (ctx.selection.items().empty())
                 ctx.selection.clear();
         }
 
         ctx.setStatusMessage(m_scene_io.getStatusMessage());
-        m_editor_ui.setActiveScene(ctx.active_scene);
+        m_editor_ui.setActiveScene(ctx.document.activeScene());
     }
 
     void EditorLayer::syncSceneViewState()
@@ -518,7 +528,7 @@ namespace Hybrid
 
         auto& ctx = m_editor_ui.context();
         ctx.selection.clear();
-        ctx.request_pick = false;
+        ctx.picking.request = false;
         m_command_history.clear();
 
         if (m_active_scene_view_document)
@@ -550,17 +560,17 @@ namespace Hybrid
             if (m_services.consume_pick_result(picked))
             {
                 auto& ctx = m_editor_ui.context();
-                if (picked == kInvalidEntityID || !ctx.active_scene)
+                if (picked == kInvalidEntityID || !ctx.document.activeScene())
                 {
-                    if (!ctx.pick_toggle)
+                    if (!ctx.picking.toggle)
                         ctx.selection.clear();
                 }
                 else
                 {
                     const entt::entity entity = static_cast<entt::entity>(picked);
-                    auto& reg = ctx.active_scene->getRegistry();
+                    auto& reg = ctx.document.activeScene()->getRegistry();
                     const entt::entity resolved = reg.valid(entity) ? entity : entt::null;
-                    if (!ctx.pick_toggle)
+                    if (!ctx.picking.toggle)
                     {
                         ctx.selection.setSingle(resolved);
                     }
@@ -569,7 +579,7 @@ namespace Hybrid
                         ctx.selection.toggle(resolved);
                     }
                 }
-                ctx.pick_toggle = false;
+                ctx.picking.toggle = false;
             }
         }
 
@@ -584,8 +594,8 @@ namespace Hybrid
         syncContextDocumentState();
 
         auto& ctx = m_editor_ui.context();
-        ctx.gizmo_view = m_services.render->getLastView();
-        ctx.gizmo_proj = m_services.render->getLastProj();
+        ctx.gizmo.view = m_services.render->getLastView();
+        ctx.gizmo.proj = m_services.render->getLastProj();
 
         m_editor_ui.drawPanels();
         m_editor_ui.drawViewports(m_services.render->getSceneColorTexture(),
@@ -601,15 +611,15 @@ namespace Hybrid
             return;
 
         auto& ctx = m_editor_ui.context();
-        frame_context->viewport_size = {ctx.scene_viewport_size.x, ctx.scene_viewport_size.y};
-        editor_ext->viewport_active = ctx.scene_viewport_image_hovered;
-        editor_ext->render_scene_view = ctx.scene_viewport_size.x > 1.0f && ctx.scene_viewport_size.y > 1.0f;
-        editor_ext->render_game_view = ctx.game_viewport_size.x > 1.0f && ctx.game_viewport_size.y > 1.0f;
-        editor_ext->scene_viewport_size = {ctx.scene_viewport_size.x, ctx.scene_viewport_size.y};
-        editor_ext->game_viewport_size = {ctx.game_viewport_size.x, ctx.game_viewport_size.y};
+        frame_context->viewport_size = {ctx.scene_viewport.size.x, ctx.scene_viewport.size.y};
+        editor_ext->viewport_active = ctx.scene_viewport.image_hovered;
+        editor_ext->render_scene_view = ctx.scene_viewport.size.x > 1.0f && ctx.scene_viewport.size.y > 1.0f;
+        editor_ext->render_game_view = ctx.game_viewport.size.x > 1.0f && ctx.game_viewport.size.y > 1.0f;
+        editor_ext->scene_viewport_size = {ctx.scene_viewport.size.x, ctx.scene_viewport.size.y};
+        editor_ext->game_viewport_size = {ctx.game_viewport.size.x, ctx.game_viewport.size.y};
         editor_ext->selection.selected_entities.clear();
-        editor_ext->selection.selected_entities.reserve(ctx.selection.items.size());
-        for (entt::entity selected : ctx.selection.items)
+        editor_ext->selection.selected_entities.reserve(ctx.selection.items().size());
+        for (entt::entity selected : ctx.selection.items())
         {
             if (selected == entt::null)
                 continue;
@@ -618,9 +628,9 @@ namespace Hybrid
         editor_ext->selection.active_entity =
             (ctx.activeEntity() == entt::null) ? kInvalidEntityID : static_cast<uint32_t>(entt::to_integral(ctx.activeEntity()));
         editor_ext->selection.hovered_entity = kInvalidEntityID;
-        editor_ext->select_tool = ctx.select_tool;
-        editor_ext->show_collider_debug = ctx.show_collider_debug;
-        editor_ext->show_shadow_debug = ctx.show_shadow_debug;
+        editor_ext->select_tool = ctx.gizmo.select_tool;
+        editor_ext->show_collider_debug = ctx.debug.show_collider_debug;
+        editor_ext->show_shadow_debug = ctx.debug.show_shadow_debug;
 
         if (editor_ext->render_scene_view)
         {
@@ -638,12 +648,12 @@ namespace Hybrid
         if (!editor_ext->selection.selected_entities.empty())
             *render_flags |= RenderFlags::SelectionHighlight;
 
-        if (ctx.request_pick)
+        if (ctx.picking.request)
         {
             editor_ext->request_pick = true;
-            editor_ext->pick_x = ctx.pick_x;
-            editor_ext->pick_y = ctx.pick_y;
-            ctx.request_pick = false;
+            editor_ext->pick_x = ctx.picking.x;
+            editor_ext->pick_y = ctx.picking.y;
+            ctx.picking.request = false;
         }
         else
         {
@@ -737,12 +747,12 @@ namespace Hybrid
     entt::entity EditorLayer::createSceneEntity(SceneEntityTemplate type, entt::entity parent)
     {
         auto& ctx = m_editor_ui.context();
-        if (!ctx.active_scene || !ctx.active_document)
+        if (!ctx.document.activeScene() || !ctx.document.activeDocument())
             return entt::null;
-        if (ctx.is_play_mode && ctx.is_play_mode())
+        if (ctx.mode.is_play_mode && ctx.mode.is_play_mode())
             return entt::null;
 
-        Scene& scene = *ctx.active_scene;
+        Scene& scene = *ctx.document.activeScene();
         auto& registry = scene.getRegistry();
         const bool valid_parent = parent != entt::null && registry.valid(parent) && registry.all_of<TransformComponent>(parent);
         const EditorSelectionSnapshot before_selection = CaptureSelectionSnapshot(ctx, &scene);
@@ -784,7 +794,7 @@ namespace Hybrid
 
         const EntitySnapshot snapshot = CaptureEntitySubtree(scene, created.GetHandle());
 
-        auto command = std::make_unique<CreateEntityCommand>(ctx.active_document,
+        auto command = std::make_unique<CreateEntityCommand>(ctx.document.activeDocument(),
                                                              snapshot,
                                                              valid_parent ? parent : entt::null,
                                                              before_selection);
@@ -796,12 +806,12 @@ namespace Hybrid
     bool EditorLayer::deleteSceneEntity(entt::entity entity_handle)
     {
         auto& ctx = m_editor_ui.context();
-        if (!ctx.active_scene || !ctx.active_document || entity_handle == entt::null)
+        if (!ctx.document.activeScene() || !ctx.document.activeDocument() || entity_handle == entt::null)
             return false;
-        if (ctx.is_play_mode && ctx.is_play_mode())
+        if (ctx.mode.is_play_mode && ctx.mode.is_play_mode())
             return false;
 
-        Scene& scene = *ctx.active_scene;
+        Scene& scene = *ctx.document.activeScene();
         auto& registry = scene.getRegistry();
         if (!registry.valid(entity_handle) || !registry.all_of<TransformComponent>(entity_handle))
             return false;
@@ -811,7 +821,7 @@ namespace Hybrid
         const entt::entity parent =
             registry.get<TransformComponent>(entity_handle).Parent;
 
-        EditorSelection after_selection = ctx.selection;
+        EditorSelectionModel after_selection = ctx.selection.state();
         std::vector<entt::entity> removed_entities;
         std::function<void(entt::entity)> collect_subtree = [&](entt::entity current)
         {
@@ -857,7 +867,7 @@ namespace Hybrid
             return snapshot_result;
         }();
 
-        auto command = std::make_unique<DeleteEntityCommand>(ctx.active_document,
+        auto command = std::make_unique<DeleteEntityCommand>(ctx.document.activeDocument(),
                                                              snapshot,
                                                              parent,
                                                              before_selection,
@@ -870,12 +880,12 @@ namespace Hybrid
     bool EditorLayer::duplicateSceneSelection(entt::entity target_entity)
     {
         auto& ctx = m_editor_ui.context();
-        if (!ctx.active_scene || !ctx.active_document)
+        if (!ctx.document.activeScene() || !ctx.document.activeDocument())
             return false;
-        if (ctx.is_play_mode && ctx.is_play_mode())
+        if (ctx.mode.is_play_mode && ctx.mode.is_play_mode())
             return false;
 
-        Scene& scene = *ctx.active_scene;
+        Scene& scene = *ctx.document.activeScene();
         auto& registry = scene.getRegistry();
         if (target_entity == entt::null || !registry.valid(target_entity) || !registry.all_of<TransformComponent>(target_entity))
             return false;
@@ -883,7 +893,7 @@ namespace Hybrid
         std::vector<entt::entity> source_entities;
         if (ctx.selection.contains(target_entity))
         {
-            source_entities = ctx.selection.items;
+            source_entities = ctx.selection.items();
         }
         else
         {
@@ -937,7 +947,7 @@ namespace Hybrid
             if (parent != entt::null && registry.valid(parent) && registry.all_of<IDComponent>(parent))
                 entry.parent_id = registry.get<IDComponent>(parent).ID;
 
-            if (entity == ctx.selection.active)
+            if (entity == ctx.selection.active())
                 new_active_id = entry.snapshot.id;
 
             entries.push_back(std::move(entry));
@@ -955,7 +965,7 @@ namespace Hybrid
 
         after_selection.range_anchor = after_selection.active;
 
-        auto command = std::make_unique<DuplicateEntityCommand>(ctx.active_document,
+        auto command = std::make_unique<DuplicateEntityCommand>(ctx.document.activeDocument(),
                                                                 std::move(entries),
                                                                 before_selection,
                                                                 after_selection);
@@ -1017,13 +1027,13 @@ namespace Hybrid
     bool EditorLayer::tryGetSceneDropPosition(const ImVec2& drop_mouse_pos, glm::vec3& out_position)
     {
         const auto& ctx = m_editor_ui.context();
-        const float viewport_width = ctx.scene_viewport_size.x;
-        const float viewport_height = ctx.scene_viewport_size.y;
+        const float viewport_width = ctx.scene_viewport.size.x;
+        const float viewport_height = ctx.scene_viewport.size.y;
         if (viewport_width <= 1.0f || viewport_height <= 1.0f)
             return false;
 
-        const float local_x = drop_mouse_pos.x - ctx.scene_viewport_min.x;
-        const float local_y = drop_mouse_pos.y - ctx.scene_viewport_min.y;
+        const float local_x = drop_mouse_pos.x - ctx.scene_viewport.min.x;
+        const float local_y = drop_mouse_pos.y - ctx.scene_viewport.min.y;
         if (local_x < 0.0f || local_y < 0.0f || local_x > viewport_width || local_y > viewport_height)
             return false;
 
@@ -1038,16 +1048,16 @@ namespace Hybrid
     bool EditorLayer::instantiateSceneAsset(AssetID asset_id, const ImVec2& drop_mouse_pos)
     {
         auto& ctx = m_editor_ui.context();
-        if (asset_id.value == 0 || !ctx.active_scene)
+        if (asset_id.value == 0 || !ctx.document.activeScene())
         {
             HBD_CORE_WARN("{} instantiate_asset_rejected asset_id={} active_scene_ready={}",
                           kEditorLayerLogTag,
                           asset_id.value,
-                          ctx.active_scene != nullptr);
+                          ctx.document.activeScene() != nullptr);
             return false;
         }
 
-        if (ctx.is_play_mode && ctx.is_play_mode())
+        if (ctx.mode.is_play_mode && ctx.mode.is_play_mode())
         {
             ctx.setStatusMessage("Cannot instantiate assets during Play Mode.");
             HBD_CORE_WARN("{} instantiate_asset_rejected asset_id={} reason=play_mode",
@@ -1114,7 +1124,7 @@ namespace Hybrid
             return false;
         }
 
-        Entity entity = ctx.active_scene->createRenderableEntity(name);
+        Entity entity = ctx.document.activeScene()->createRenderableEntity(name);
         auto& tr = entity.GetComponent<TransformComponent>();
         tr.Position = drop_position;
         tr.DirtyLocal = true;
@@ -1123,7 +1133,7 @@ namespace Hybrid
         auto& renderer = entity.GetComponent<MeshRendererComponent>();
         renderer.Mesh = asset_id;
 
-        ctx.active_scene->MarkDirtyRecursive(entity);
+        ctx.document.activeScene()->MarkDirtyRecursive(entity);
         ctx.selection.setSingle(entity.GetHandle());
         ctx.markSceneDirty();
         ctx.setStatusMessage("Instantiated mesh into scene.");
@@ -1140,16 +1150,16 @@ namespace Hybrid
     bool EditorLayer::fitBoxColliderToMesh(entt::entity entity_handle)
     {
         auto& ctx = m_editor_ui.context();
-        if (!ctx.active_scene || entity_handle == entt::null)
+        if (!ctx.document.activeScene() || entity_handle == entt::null)
         {
             HBD_CORE_WARN("{} fit_box_collider_rejected entity={} active_scene_ready={}",
                           kEditorLayerLogTag,
                           entt::to_integral(entity_handle),
-                          ctx.active_scene != nullptr);
+                          ctx.document.activeScene() != nullptr);
             return false;
         }
 
-        auto& registry = ctx.active_scene->getRegistry();
+        auto& registry = ctx.document.activeScene()->getRegistry();
         if (!registry.valid(entity_handle))
         {
             HBD_CORE_WARN("{} fit_box_collider_rejected entity={} reason=invalid_entity",
@@ -1158,7 +1168,7 @@ namespace Hybrid
             return false;
         }
 
-        Entity entity(entity_handle, &registry, ctx.active_scene);
+        Entity entity(entity_handle, &registry, ctx.document.activeScene());
         if (!entity.HasComponent<ColliderComponent>() || !entity.HasComponent<MeshRendererComponent>())
         {
             HBD_CORE_WARN("{} fit_box_collider_rejected entity={} reason=missing_required_components",
@@ -1258,7 +1268,7 @@ namespace Hybrid
         collider.Center = (aabb_min + aabb_max) * 0.5f;
         collider.Box.HalfExtents = (glm::max)((aabb_max - aabb_min) * 0.5f, glm::vec3(0.0f));
 
-        ctx.active_scene->MarkDirtyRecursive(entity);
+        ctx.document.activeScene()->MarkDirtyRecursive(entity);
         ctx.markSceneDirty();
         ctx.setStatusMessage("Box collider fitted to mesh.");
         HBD_CORE_INFO("{} fit_box_collider_completed entity={} mesh_id={}",
@@ -1271,15 +1281,15 @@ namespace Hybrid
     void EditorLayer::updateEditorCamera(float dt)
     {
         auto& ctx = m_editor_ui.context();
-        ctx.suppress_tool_shortcuts = false;
+        ctx.gizmo.suppress_tool_shortcuts = false;
 
         if (!m_services.input || !m_services.editor_ext)
             return;
 
-        if (ctx.scene_viewport_size.x > 1.0f && ctx.scene_viewport_size.y > 1.0f)
-            m_editor_camera.setViewportSize(ctx.scene_viewport_size.x, ctx.scene_viewport_size.y);
+        if (ctx.scene_viewport.size.x > 1.0f && ctx.scene_viewport.size.y > 1.0f)
+            m_editor_camera.setViewportSize(ctx.scene_viewport.size.x, ctx.scene_viewport.size.y);
 
-        const bool camera_input_active = ctx.scene_viewport_image_hovered;
+        const bool camera_input_active = ctx.scene_viewport.image_hovered;
         const InputState& input = m_services.input->getState();
 
         const float mdx = camera_input_active ? input.getMouseDeltaX() : 0.0f;
@@ -1289,7 +1299,7 @@ namespace Hybrid
         const bool lmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
         const bool mmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_MIDDLE);
         const bool rmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
-        const bool mmb_for_camera = mmb_down || (ctx.select_tool && lmb_down);
+        const bool mmb_for_camera = mmb_down || (ctx.gizmo.select_tool && lmb_down);
 
         const bool key_w = camera_input_active && input.isKeyDown(GLFW_KEY_W);
         const bool key_a = camera_input_active && input.isKeyDown(GLFW_KEY_A);
@@ -1304,7 +1314,7 @@ namespace Hybrid
         const bool key_alt = camera_input_active &&
             (input.isKeyDown(GLFW_KEY_LEFT_ALT) || input.isKeyDown(GLFW_KEY_RIGHT_ALT));
 
-        ctx.suppress_tool_shortcuts = camera_input_active && rmb_down && !key_alt;
+        ctx.gizmo.suppress_tool_shortcuts = camera_input_active && rmb_down && !key_alt;
 
         m_editor_camera.update(dt,
                                camera_input_active,

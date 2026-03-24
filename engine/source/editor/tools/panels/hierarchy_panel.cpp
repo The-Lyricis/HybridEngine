@@ -1,6 +1,6 @@
 ﻿#include "hierarchy_panel.h"
 
-#include "editor/core/editor_context.h"
+#include "editor/core/context/editor_context.h"
 #include "editor/core/editor_drag_drop.h"
 
 #include "runtime/core/base/macro.h"
@@ -116,9 +116,9 @@ namespace Hybrid
         const bool ctrl = io.KeyCtrl;
         const bool shift = io.KeyShift;
 
-        if (shift && ctx.selection.range_anchor != entt::null && !m_visibleOrder.empty())
+        if (shift && ctx.selection.rangeAnchor() != entt::null && !m_visibleOrder.empty())
         {
-            const entt::entity anchor = ctx.selection.range_anchor;
+            const entt::entity anchor = ctx.selection.rangeAnchor();
             auto anchor_it = std::find(m_visibleOrder.begin(), m_visibleOrder.end(), anchor);
             auto target_it = std::find(m_visibleOrder.begin(), m_visibleOrder.end(), entity);
             if (anchor_it != m_visibleOrder.end() && target_it != m_visibleOrder.end())
@@ -132,11 +132,11 @@ namespace Hybrid
                 for (auto it = anchor_it; it != target_it + 1; ++it)
                 {
                     if (!ctx.selection.contains(*it))
-                        ctx.selection.items.push_back(*it);
+                        ctx.selection.items().push_back(*it);
                 }
 
-                ctx.selection.active = entity;
-                ctx.selection.range_anchor = anchor;
+                ctx.selection.setActive(entity);
+                ctx.selection.setRangeAnchor(anchor);
                 return;
             }
         }
@@ -172,7 +172,7 @@ namespace Hybrid
         if (ImGui::BeginMenu("3D Object"))
         {
             const bool can_create_cube =
-                ctx.get_builtin_mesh_id && ctx.get_builtin_mesh_id(BuiltinMesh::Cube).value != 0;
+                ctx.scene_actions.get_builtin_mesh_id && ctx.scene_actions.get_builtin_mesh_id(BuiltinMesh::Cube).value != 0;
             if (ImGui::MenuItem("Cube", nullptr, false, can_create_cube))
                 queueAction(PendingActionType::CreateRootCube, target);
             ImGui::EndMenu();
@@ -194,10 +194,10 @@ namespace Hybrid
 
     void HierarchyPanel::drawWindowContextMenu(EditorContext& ctx)
     {
-        if (!ctx.active_scene)
+        if (!ctx.document.activeScene())
             return;
 
-        auto& registry = ctx.active_scene->getRegistry();
+        auto& registry = ctx.document.activeScene()->getRegistry();
         drawCommonContextMenu(ctx, registry, entt::null);
     }
 
@@ -212,7 +212,7 @@ namespace Hybrid
 
     void HierarchyPanel::flushPendingAction(EditorContext& ctx, entt::registry& registry)
     {
-        if (!ctx.active_scene || m_pendingAction == PendingActionType::None)
+        if (!ctx.document.activeScene() || m_pendingAction == PendingActionType::None)
             return;
 
         auto reset = [this]()
@@ -225,7 +225,7 @@ namespace Hybrid
         {
         case PendingActionType::Delete:
         {
-            if (!registry.valid(m_pendingTarget) || !ctx.delete_scene_entity)
+            if (!registry.valid(m_pendingTarget) || !ctx.scene_actions.delete_entity)
             {
                 HBD_CORE_WARN("{} delete_rejected entity={} reason=invalid_entity",
                               kHierarchyPanelLogTag,
@@ -234,7 +234,7 @@ namespace Hybrid
             }
 
             const std::string entity_name = getEntityLabel(registry, m_pendingTarget);
-            if (ctx.delete_scene_entity(m_pendingTarget))
+            if (ctx.scene_actions.delete_entity(m_pendingTarget))
             {
                 HBD_CORE_INFO("{} delete_completed entity={} name={}",
                               kHierarchyPanelLogTag,
@@ -252,7 +252,7 @@ namespace Hybrid
         }
         case PendingActionType::Duplicate:
         {
-            if (!registry.valid(m_pendingTarget) || !ctx.duplicate_scene_selection)
+            if (!registry.valid(m_pendingTarget) || !ctx.scene_actions.duplicate_selection)
             {
                 HBD_CORE_WARN("{} duplicate_rejected entity={} reason=invalid_entity",
                               kHierarchyPanelLogTag,
@@ -260,7 +260,7 @@ namespace Hybrid
                 break;
             }
 
-            if (ctx.duplicate_scene_selection(m_pendingTarget))
+            if (ctx.scene_actions.duplicate_selection(m_pendingTarget))
             {
                 HBD_CORE_INFO("{} duplicate_completed entity={} name={}",
                               kHierarchyPanelLogTag,
@@ -286,8 +286,8 @@ namespace Hybrid
                 break;
             }
 
-            Entity child{m_pendingTarget, &registry, ctx.active_scene};
-            if (ctx.active_scene->Detach(child, true))
+            Entity child{m_pendingTarget, &registry, ctx.document.activeScene()};
+            if (ctx.document.activeScene()->Detach(child, true))
             {
                 ctx.selection.setSingle(m_pendingTarget);
                 ctx.markSceneDirty();
@@ -309,7 +309,7 @@ namespace Hybrid
         {
             const bool parent_requested = hasTransform(registry, m_pendingTarget);
             const entt::entity created =
-                ctx.create_scene_entity ? ctx.create_scene_entity(SceneEntityTemplate::Empty,
+                ctx.scene_actions.create_entity ? ctx.scene_actions.create_entity(SceneEntityTemplate::Empty,
                                                                   parent_requested ? m_pendingTarget : entt::null)
                                         : entt::null;
             if (created != entt::null)
@@ -325,7 +325,7 @@ namespace Hybrid
         {
             const bool parent_requested = hasTransform(registry, m_pendingTarget);
             const entt::entity created =
-                ctx.create_scene_entity ? ctx.create_scene_entity(SceneEntityTemplate::Cube,
+                ctx.scene_actions.create_entity ? ctx.scene_actions.create_entity(SceneEntityTemplate::Cube,
                                                                   parent_requested ? m_pendingTarget : entt::null)
                                         : entt::null;
             if (created != entt::null)
@@ -346,7 +346,7 @@ namespace Hybrid
         {
             const bool parent_requested = hasTransform(registry, m_pendingTarget);
             const entt::entity created =
-                ctx.create_scene_entity ? ctx.create_scene_entity(SceneEntityTemplate::Camera,
+                ctx.scene_actions.create_entity ? ctx.scene_actions.create_entity(SceneEntityTemplate::Camera,
                                                                   parent_requested ? m_pendingTarget : entt::null)
                                         : entt::null;
             if (created != entt::null)
@@ -362,7 +362,7 @@ namespace Hybrid
         {
             const bool parent_requested = hasTransform(registry, m_pendingTarget);
             const entt::entity created =
-                ctx.create_scene_entity ? ctx.create_scene_entity(SceneEntityTemplate::DirectionalLight,
+                ctx.scene_actions.create_entity ? ctx.scene_actions.create_entity(SceneEntityTemplate::DirectionalLight,
                                                                   parent_requested ? m_pendingTarget : entt::null)
                                         : entt::null;
             if (created != entt::null)
@@ -378,7 +378,7 @@ namespace Hybrid
         {
             const bool parent_requested = hasTransform(registry, m_pendingTarget);
             const entt::entity created =
-                ctx.create_scene_entity ? ctx.create_scene_entity(SceneEntityTemplate::PointLight,
+                ctx.scene_actions.create_entity ? ctx.scene_actions.create_entity(SceneEntityTemplate::PointLight,
                                                                   parent_requested ? m_pendingTarget : entt::null)
                                         : entt::null;
             if (created != entt::null)
@@ -451,21 +451,21 @@ namespace Hybrid
 
                     if (payload->IsDelivery())
                     {
-                        Entity child{dropped, &registry, ctx.active_scene};
+                        Entity child{dropped, &registry, ctx.document.activeScene()};
                         bool ok = false;
 
                         if (intent == DropIntent::AsChild)
                         {
-                            Entity parent{entity, &registry, ctx.active_scene};
-                            ok = ctx.active_scene->SetParent(child, parent, true);
+                            Entity parent{entity, &registry, ctx.document.activeScene()};
+                            ok = ctx.document.activeScene()->SetParent(child, parent, true);
                         }
                         else
                         {
                             // TODO: Replace with MoveBefore/MoveAfter when sibling reorder APIs are ready.
                             Entity parent{};
                             if (hasTransform(registry, transform.Parent))
-                                parent = Entity{transform.Parent, &registry, ctx.active_scene};
-                            ok = ctx.active_scene->SetParent(child, parent, true);
+                                parent = Entity{transform.Parent, &registry, ctx.document.activeScene()};
+                            ok = ctx.document.activeScene()->SetParent(child, parent, true);
                         }
 
                         if (ok)
@@ -525,8 +525,8 @@ namespace Hybrid
             entt::entity dropped = entt::null;
             if (EditorDragDrop::AcceptEntity(dropped) && hasTransform(registry, dropped))
             {
-                Entity child{dropped, &registry, ctx.active_scene};
-                if (ctx.active_scene->Detach(child, true))
+                Entity child{dropped, &registry, ctx.document.activeScene()};
+                if (ctx.document.activeScene()->Detach(child, true))
                 {
                     ctx.selection.setSingle(dropped);
                     ctx.markSceneDirty();
@@ -552,19 +552,19 @@ namespace Hybrid
 
         ImGui::Begin(getName(), &m_state.open);
 
-        if (!ctx.active_scene)
+        if (!ctx.document.activeScene())
         {
             ImGui::TextDisabled("No active scene.");
             ImGui::End();
             return;
         }
 
-        auto& registry = ctx.active_scene->getRegistry();
+        auto& registry = ctx.document.activeScene()->getRegistry();
 
         if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered())
             applySelectionClick(ctx, entt::null);
 
-        const auto roots = ctx.active_scene->getRootEntities();
+        const auto roots = ctx.document.activeScene()->getRootEntities();
         m_visibleOrder.clear();
         for (const Entity& root : roots)
             collectEntityOrder(registry, root.GetHandle(), m_visibleOrder);

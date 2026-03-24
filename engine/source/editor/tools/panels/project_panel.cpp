@@ -1,6 +1,6 @@
 #include "project_panel.h"
 
-#include "editor/core/editor_context.h"
+#include "editor/core/context/editor_context.h"
 #include "editor/core/editor_drag_drop.h"
 
 #include <algorithm>
@@ -56,7 +56,7 @@ namespace Hybrid
         const bool can_open = has_target && (is_dir || target->rel.extension() == ".scene");
         const bool can_copy_asset_path = has_target && !target->rel.empty();
         const bool can_duplicate = has_target;
-        const bool can_reimport = has_target && !is_dir && !target->rel.empty() && ctx.request_reimport_asset;
+        const bool can_reimport = has_target && !is_dir && !target->rel.empty() && ctx.asset_actions.request_reimport_asset;
         const bool can_show_in_explorer = has_target || !m_currentDir.empty();
         const bool can_new_folder_here = (!has_target || is_dir);
         const bool can_rename = has_target;
@@ -78,8 +78,8 @@ namespace Hybrid
         {
             if (ImGui::MenuItem("Scene"))
             {
-                if (ctx.request_new_scene)
-                    (void)ctx.request_new_scene();
+                if (ctx.documents.request_new_scene)
+                    (void)ctx.documents.request_new_scene();
             }
             if (ImGui::MenuItem("Folder", nullptr, false, can_new_folder_here))
                 openCreateFolderPopup(has_target ? target->physical : m_currentDir);
@@ -105,16 +105,16 @@ namespace Hybrid
 
         if (ImGui::MenuItem("Reimport", nullptr, false, can_reimport))
         {
-            if (ctx.request_reimport_asset)
-                (void)ctx.request_reimport_asset(relToAssetVPath(target->rel));
+            if (ctx.asset_actions.request_reimport_asset)
+                (void)ctx.asset_actions.request_reimport_asset(relToAssetVPath(target->rel));
         }
 
         ImGui::Separator();
 
         if (ImGui::MenuItem("Show in Explorer", nullptr, false, can_show_in_explorer))
         {
-            if (ctx.reveal_in_file_browser)
-                (void)ctx.reveal_in_file_browser(has_target ? target->physical : m_currentDir);
+            if (ctx.documents.reveal_in_file_browser)
+                (void)ctx.documents.reveal_in_file_browser(has_target ? target->physical : m_currentDir);
         }
 
         if (ImGui::MenuItem("Copy Asset Path", nullptr, false, can_copy_asset_path))
@@ -160,7 +160,7 @@ namespace Hybrid
 
     void ProjectPanel::notifyAssetChange(EditorContext& ctx, const std::filesystem::path& rel, bool removed) const
     {
-        if (rel.empty() || !ctx.notify_asset_source_event)
+        if (rel.empty() || !ctx.asset_actions.notify_asset_source_event)
             return;
 
         const auto ext = rel.extension();
@@ -170,7 +170,7 @@ namespace Hybrid
         AssetSourceEvent event{};
         event.type = removed ? AssetSourceEventType::Removed : AssetSourceEventType::Added;
         event.path = relToAssetVPath(rel);
-        ctx.notify_asset_source_event(event);
+        ctx.asset_actions.notify_asset_source_event(event);
     }
 
     void ProjectPanel::notifyAssetChangeRecursive(EditorContext& ctx,
@@ -288,7 +288,7 @@ namespace Hybrid
         if (e.rel.extension() == ".scene")
         {
             const auto vpath = relToAssetVPath(e.rel);
-            if (!ctx.open_scene)
+            if (!ctx.documents.open_scene)
             {
                 HBD_CORE_WARN("{} open_scene_rejected path={} reason=open_scene_not_bound",
                               kProjectPanelLogTag,
@@ -297,7 +297,7 @@ namespace Hybrid
             }
 
             HBD_CORE_INFO("{} open_scene_requested path={}", kProjectPanelLogTag, vpath);
-            ctx.open_scene(vpath);
+            ctx.documents.open_scene(vpath);
             return true;
         }
 
@@ -493,13 +493,13 @@ namespace Hybrid
             if (old_rel.extension() == ".meta" || new_rel.extension() == ".meta")
                 return;
 
-            if (ctx.notify_asset_source_event)
+            if (ctx.asset_actions.notify_asset_source_event)
             {
                 AssetSourceEvent event{};
                 event.type = AssetSourceEventType::Moved;
                 event.old_path = relToAssetVPath(old_rel);
                 event.new_path = relToAssetVPath(new_rel);
-                ctx.notify_asset_source_event(event);
+                ctx.asset_actions.notify_asset_source_event(event);
                 return;
             }
 
@@ -550,10 +550,10 @@ namespace Hybrid
                 return false;
             }
 
-            if (ctx.request_rename_folder)
+            if (ctx.asset_actions.request_rename_folder)
             {
                 const bool rename_requested =
-                    ctx.request_rename_folder(relToAssetVPath(old_rel), relToAssetVPath(new_rel));
+                    ctx.asset_actions.request_rename_folder(relToAssetVPath(old_rel), relToAssetVPath(new_rel));
                 if (!rename_requested)
                 {
                     HBD_CORE_WARN("{} rename_folder_request_failed from={} to={}",
@@ -1046,8 +1046,8 @@ namespace Hybrid
             if (!e.is_dir && !relStr.empty())
             {
                 AssetID asset_id{};
-                if (ctx.find_asset_by_vpath)
-                    asset_id = ctx.find_asset_by_vpath(relToAssetVPath(e.rel));
+                if (ctx.asset_actions.find_asset_by_vpath)
+                    asset_id = ctx.asset_actions.find_asset_by_vpath(relToAssetVPath(e.rel));
 
                 if (asset_id.value != 0)
                     EditorDragDrop::BeginDragAsset(asset_id);

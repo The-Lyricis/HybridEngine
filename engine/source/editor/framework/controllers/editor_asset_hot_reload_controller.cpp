@@ -7,7 +7,7 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-#include "editor/core/editor_context.h"
+#include "editor/core/context/editor_context.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/asset/asset_registry.h"
 #include "runtime/modules/asset/asset_type.h"
@@ -118,7 +118,7 @@ namespace Hybrid
 
     void EditorAssetHotReloadController::bindContext(EditorContext& ctx)
     {
-        ctx.notify_asset_source_event = [this](const AssetSourceEvent& event) {
+        ctx.asset_actions.notify_asset_source_event = [this](const AssetSourceEvent& event) {
             if (!m_services.editor_resources)
                 return;
 
@@ -157,7 +157,7 @@ namespace Hybrid
 
     void EditorAssetHotReloadController::unbindContext(EditorContext& ctx)
     {
-        ctx.notify_asset_source_event = {};
+        ctx.asset_actions.notify_asset_source_event = {};
     }
 
     void EditorAssetHotReloadController::update(float dt)

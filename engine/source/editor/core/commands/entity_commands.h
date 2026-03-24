@@ -4,9 +4,9 @@
 
 #include <entt/entt.hpp>
 
-#include "editor/core/editor_command_history.h"
-#include "editor/core/entity_snapshot.h"
-#include "editor/core/selection_snapshot.h"
+#include "editor/core/commands/editor_command_history.h"
+#include "editor/core/snapshot/entity_snapshot.h"
+#include "editor/core/snapshot/selection_snapshot.h"
 
 namespace Hybrid
 {

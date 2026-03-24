@@ -1,6 +1,6 @@
 #include "selection_snapshot.h"
 
-#include "editor/core/editor_context.h"
+#include "editor/core/context/editor_context.h"
 #include "runtime/modules/scene/entity.h"
 #include "runtime/modules/scene/scene.h"
 
@@ -27,16 +27,16 @@ namespace Hybrid
         if (!scene)
             return snapshot;
 
-        snapshot.items.reserve(ctx.selection.items.size());
-        for (entt::entity entity : ctx.selection.items)
+        snapshot.items.reserve(ctx.selection.items().size());
+        for (entt::entity entity : ctx.selection.items())
         {
             const UUID id = GetEntityUUID(const_cast<Scene*>(scene), entity);
             if (id.value != 0)
                 snapshot.items.push_back(id);
         }
 
-        snapshot.active = GetEntityUUID(const_cast<Scene*>(scene), ctx.selection.active);
-        snapshot.range_anchor = GetEntityUUID(const_cast<Scene*>(scene), ctx.selection.range_anchor);
+        snapshot.active = GetEntityUUID(const_cast<Scene*>(scene), ctx.selection.active());
+        snapshot.range_anchor = GetEntityUUID(const_cast<Scene*>(scene), ctx.selection.rangeAnchor());
         return snapshot;
     }
 
@@ -46,7 +46,7 @@ namespace Hybrid
         if (!scene)
             return;
 
-        ctx.selection.items.reserve(snapshot.items.size());
+        ctx.selection.items().reserve(snapshot.items.size());
         for (const UUID id : snapshot.items)
         {
             if (id.value == 0)
@@ -54,24 +54,24 @@ namespace Hybrid
 
             const Entity entity = scene->findEntityByUUID(id);
             if (entity)
-                ctx.selection.items.push_back(entity.GetHandle());
+                ctx.selection.items().push_back(entity.GetHandle());
         }
 
         if (snapshot.active.value != 0)
         {
             const Entity active = scene->findEntityByUUID(snapshot.active);
             if (active)
-                ctx.selection.active = active.GetHandle();
+                ctx.selection.setActive(active.GetHandle());
         }
 
         if (snapshot.range_anchor.value != 0)
         {
             const Entity anchor = scene->findEntityByUUID(snapshot.range_anchor);
             if (anchor)
-                ctx.selection.range_anchor = anchor.GetHandle();
+                ctx.selection.setRangeAnchor(anchor.GetHandle());
         }
 
-        if (ctx.selection.items.empty())
+        if (ctx.selection.items().empty())
             ctx.selection.clear();
     }
 } // namespace Hybrid

@@ -4,8 +4,8 @@
 
 #include <entt/entt.hpp>
 
-#include "editor/core/editor_command_history.h"
-#include "editor/core/transform_snapshot.h"
+#include "editor/core/commands/editor_command_history.h"
+#include "editor/core/snapshot/transform_snapshot.h"
 
 namespace Hybrid
 {

@@ -8,9 +8,9 @@
 #include <glm/glm.hpp>
 #include <imgui.h>
 
-#include "editor/core/component_value_command.h"
-#include "editor/core/editor_context.h"
-#include "editor/core/property_drawer.h"
+#include "editor/core/commands/component_value_command.h"
+#include "editor/core/context/editor_context.h"
+#include "editor/core/property/property_drawer.h"
 #include "runtime/core/base/math_util.h"
 #include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/scene.h"
@@ -49,7 +49,7 @@ namespace Hybrid
 
         bool DrawTransformComponent(EditorContext& ctx, Entity entity, void* componentPtr)
         {
-            if (componentPtr == nullptr || ctx.active_scene == nullptr)
+            if (componentPtr == nullptr || ctx.document.activeScene() == nullptr)
                 return false;
 
             auto* tr = static_cast<TransformComponent*>(componentPtr);
@@ -118,7 +118,7 @@ namespace Hybrid
             if (transform_changed)
             {
                 tr->DirtyLocal = true;
-                ctx.active_scene->MarkDirtyRecursive(entity);
+                ctx.document.activeScene()->MarkDirtyRecursive(entity);
             }
 
             return transform_changed;
@@ -221,16 +221,16 @@ namespace Hybrid
                 collider->Type == ColliderType::Box &&
                 entity.HasComponent<MeshRendererComponent>() &&
                 entity.GetComponent<MeshRendererComponent>().Mesh.value != 0 &&
-                static_cast<bool>(ctx.fit_box_collider_to_mesh);
+                static_cast<bool>(ctx.scene_actions.fit_box_collider_to_mesh);
 
             if (!can_fit)
                 ImGui::BeginDisabled();
             if (ImGui::Button("Fit To Mesh"))
             {
-                if (ctx.fit_box_collider_to_mesh)
+                if (ctx.scene_actions.fit_box_collider_to_mesh)
                 {
                     const ColliderComponent before = *collider;
-                    if (ctx.fit_box_collider_to_mesh(entity.GetHandle()))
+                    if (ctx.scene_actions.fit_box_collider_to_mesh(entity.GetHandle()))
                     {
                         CommitComponentValueChange(ctx,
                                                    entity,

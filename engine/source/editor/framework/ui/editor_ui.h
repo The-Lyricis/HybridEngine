@@ -10,7 +10,7 @@
 
 #include <functional>
 
-#include "editor/core/editor_dialogs.h"
+#include "editor/core/context/editor_dialogs.h"
 #include "editor/tools/panels/i_editor_panel.h"
 
 struct GLFWwindow;

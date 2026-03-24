@@ -1,6 +1,6 @@
 #include "editor_command_history.h"
 
-#include "editor/core/editor_context.h"
+#include "editor/core/context/editor_context.h"
 
 namespace Hybrid
 {

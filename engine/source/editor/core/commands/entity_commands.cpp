@@ -1,6 +1,6 @@
 #include "entity_commands.h"
 
-#include "editor/core/editor_context.h"
+#include "editor/core/context/editor_context.h"
 #include "editor/core/scene_document.h"
 #include "runtime/modules/scene/entity.h"
 #include "runtime/modules/scene/scene.h"

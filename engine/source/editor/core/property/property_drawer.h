@@ -1,8 +1,8 @@
 #pragma once
 
-#include "editor/core/component_value_command.h"
-#include "editor/core/component_registry.h"
-#include "editor/core/editor_context.h"
+#include "editor/core/commands/component_value_command.h"
+#include "editor/core/property/component_registry.h"
+#include "editor/core/context/editor_context.h"
 
 namespace Hybrid
 {

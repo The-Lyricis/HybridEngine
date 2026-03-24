@@ -6,8 +6,8 @@
 
 #include <imgui.h>
 
-#include "editor/core/editor_command_history.h"
-#include "editor/core/editor_context.h"
+#include "editor/core/commands/editor_command_history.h"
+#include "editor/core/context/editor_context.h"
 #include "editor/core/scene_document.h"
 #include "runtime/modules/scene/entity.h"
 #include "runtime/modules/scene/scene.h"
@@ -94,7 +94,7 @@ namespace Hybrid
                 return false;
 
             document->dirty = true;
-            if (ctx.active_document == document)
+            if (ctx.document.activeDocument() == document)
                 ctx.markSceneDirty();
             return true;
         }
@@ -114,17 +114,17 @@ namespace Hybrid
                                     const TComponent& before,
                                     const TComponent& after)
     {
-        if (!entity || !ctx.active_document || !ctx.submit_editor_command)
+        if (!entity || !ctx.document.activeDocument() || !ctx.commands.submit_editor_command)
             return;
-        if (ctx.is_play_mode && ctx.is_play_mode())
+        if (ctx.mode.is_play_mode && ctx.mode.is_play_mode())
             return;
 
-        auto command = std::make_unique<SetComponentValueCommand<TComponent>>(ctx.active_document,
+        auto command = std::make_unique<SetComponentValueCommand<TComponent>>(ctx.document.activeDocument(),
                                                                               entity.GetHandle(),
                                                                               command_name,
                                                                               before,
                                                                               after);
-        ctx.submit_editor_command(std::move(command));
+        ctx.commands.submit_editor_command(std::move(command));
     }
 
     template<typename TComponent, typename TDrawFn, typename TNormalizeFn>

@@ -5,7 +5,7 @@
 
 #include <entt/entt.hpp>
 
-#include "editor/core/transform_snapshot.h"
+#include "editor/core/snapshot/transform_snapshot.h"
 #include "runtime/modules/scene/component_schema.h"
 #include "runtime/modules/scene/components.h"
 

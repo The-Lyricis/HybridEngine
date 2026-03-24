@@ -21,12 +21,12 @@ namespace Hybrid
             if (const char* resolver_key = property.assetLabelResolverKey();
                 resolver_key != nullptr && ctx != nullptr)
             {
-                if (std::strcmp(resolver_key, "meshRendererMaterial") == 0 && ctx->describe_mesh_renderer_material)
-                    display = ctx->describe_mesh_renderer_material(entity.GetHandle());
+                if (std::strcmp(resolver_key, "meshRendererMaterial") == 0 && ctx->asset_actions.describe_mesh_renderer_material)
+                    display = ctx->asset_actions.describe_mesh_renderer_material(entity.GetHandle());
             }
-            else if (ctx != nullptr && ctx->describe_asset)
+            else if (ctx != nullptr && ctx->asset_actions.describe_asset)
             {
-                display = ctx->describe_asset(asset_id);
+                display = ctx->asset_actions.describe_asset(asset_id);
             }
             else if (asset_id.value != 0)
             {
@@ -52,7 +52,7 @@ namespace Hybrid
                 if (EditorDragDrop::AcceptAsset(dropped))
                 {
                     const uint64_t asset_type_hint = property.assetTypeHint();
-                    if (asset_type_hint == 0 || ctx == nullptr || !ctx->describe_asset)
+                    if (asset_type_hint == 0 || ctx == nullptr || !ctx->asset_actions.describe_asset)
                     {
                         asset_id = dropped;
                         changed = true;

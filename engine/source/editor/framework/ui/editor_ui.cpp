@@ -7,9 +7,9 @@
 #include <glad/gl.h>
 #include <stb_image.h>
 
-#include "editor/core/editor_commands.h"
-#include "editor/core/editor_dialogs.h"
-#include "editor/core/editor_context.h"
+#include "editor/core/commands/editor_commands.h"
+#include "editor/core/context/editor_dialogs.h"
+#include "editor/core/context/editor_context.h"
 #include "editor/core/editor_shortcuts.h"
 #include "editor/tools/panels/game_view_panel.h"
 #include "editor/tools/panels/hierarchy_panel.h"
@@ -292,7 +292,7 @@ namespace Hybrid
     {
         if (!m_ctx)
             return;
-        m_ctx->active_scene = scene;
+        m_ctx->document.setSceneOverride(scene);
     }
 
     EditorContext& EditorUI::context()
@@ -368,21 +368,21 @@ namespace Hybrid
         if (!ImGui::BeginMenuBar())
             return;
 
-        const bool is_playing = m_ctx && m_ctx->is_play_mode ? m_ctx->is_play_mode() : false;
+        const bool is_playing = m_ctx && m_ctx->mode.is_play_mode ? m_ctx->mode.is_play_mode() : false;
 
         if (ImGui::BeginMenu("File"))
         {
-            const bool can_open_project = m_ctx && m_ctx->can_execute_command &&
-                m_ctx->can_execute_command(EditorCommandId::OpenProject);
+            const bool can_open_project = m_ctx && m_ctx->commands.can_execute_command &&
+                m_ctx->commands.can_execute_command(EditorCommandId::OpenProject);
             if (ImGui::MenuItem("Open Project...", "Ctrl+Shift+O", false, can_open_project))
-                m_ctx->execute_command(EditorCommandId::OpenProject);
+                m_ctx->commands.execute_command(EditorCommandId::OpenProject);
 
             if (ImGui::BeginMenu("Open Recent Project"))
             {
                 bool has_recent_projects = false;
-                if (m_ctx && m_ctx->list_recent_projects && m_ctx->request_open_recent_project)
+                if (m_ctx && m_ctx->documents.list_recent_projects && m_ctx->documents.request_open_recent_project)
                 {
-                    const std::vector<std::filesystem::path> recent_projects = m_ctx->list_recent_projects();
+                    const std::vector<std::filesystem::path> recent_projects = m_ctx->documents.list_recent_projects();
                     for (const auto& project_path : recent_projects)
                     {
                         if (project_path.empty())
@@ -395,7 +395,7 @@ namespace Hybrid
                         if (label.empty())
                             label = project_path.generic_string();
                         if (ImGui::MenuItem(label.c_str()))
-                            m_ctx->request_open_recent_project(project_path);
+                            m_ctx->documents.request_open_recent_project(project_path);
 
                         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
                             ImGui::SetTooltip("%s", project_path.generic_string().c_str());
@@ -416,27 +416,27 @@ namespace Hybrid
 
             if (!is_playing)
             {
-                const bool can_new_scene = m_ctx && m_ctx->can_execute_command &&
-                    m_ctx->can_execute_command(EditorCommandId::NewScene);
+                const bool can_new_scene = m_ctx && m_ctx->commands.can_execute_command &&
+                    m_ctx->commands.can_execute_command(EditorCommandId::NewScene);
                 if (ImGui::MenuItem("New Scene", "Ctrl+N", false, can_new_scene))
-                    m_ctx->execute_command(EditorCommandId::NewScene);
+                    m_ctx->commands.execute_command(EditorCommandId::NewScene);
 
-                const bool can_open_scene = m_ctx && m_ctx->can_execute_command &&
-                    m_ctx->can_execute_command(EditorCommandId::OpenScene);
+                const bool can_open_scene = m_ctx && m_ctx->commands.can_execute_command &&
+                    m_ctx->commands.can_execute_command(EditorCommandId::OpenScene);
                 if (ImGui::MenuItem("Open Scene...", "Ctrl+O", false, can_open_scene))
-                    m_ctx->execute_command(EditorCommandId::OpenScene);
+                    m_ctx->commands.execute_command(EditorCommandId::OpenScene);
 
                 ImGui::Separator();
 
-                const bool can_save = m_ctx && m_ctx->can_execute_command &&
-                    m_ctx->can_execute_command(EditorCommandId::SaveScene);
+                const bool can_save = m_ctx && m_ctx->commands.can_execute_command &&
+                    m_ctx->commands.can_execute_command(EditorCommandId::SaveScene);
                 if (ImGui::MenuItem("Save", "Ctrl+S", false, can_save))
-                    m_ctx->execute_command(EditorCommandId::SaveScene);
+                    m_ctx->commands.execute_command(EditorCommandId::SaveScene);
 
-                const bool can_save_as = m_ctx && m_ctx->can_execute_command &&
-                    m_ctx->can_execute_command(EditorCommandId::SaveSceneAs);
+                const bool can_save_as = m_ctx && m_ctx->commands.can_execute_command &&
+                    m_ctx->commands.can_execute_command(EditorCommandId::SaveSceneAs);
                 if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, can_save_as))
-                    m_ctx->execute_command(EditorCommandId::SaveSceneAs);
+                    m_ctx->commands.execute_command(EditorCommandId::SaveSceneAs);
 
                 ImGui::Separator();
             }
@@ -456,8 +456,8 @@ namespace Hybrid
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout"))
             {
-                if (m_ctx && m_ctx->execute_command)
-                    m_ctx->execute_command(EditorCommandId::ResetLayout);
+                if (m_ctx && m_ctx->commands.execute_command)
+                    m_ctx->commands.execute_command(EditorCommandId::ResetLayout);
             }
 
             ImGui::EndMenu();
@@ -465,14 +465,14 @@ namespace Hybrid
 
         if (ImGui::BeginMenu("Edit"))
         {
-            const bool can_undo = m_ctx && m_ctx->can_undo && m_ctx->can_undo();
-            const bool can_redo = m_ctx && m_ctx->can_redo && m_ctx->can_redo();
+            const bool can_undo = m_ctx && m_ctx->commands.can_undo && m_ctx->commands.can_undo();
+            const bool can_redo = m_ctx && m_ctx->commands.can_redo && m_ctx->commands.can_redo();
 
-            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, can_undo) && m_ctx && m_ctx->undo)
-                m_ctx->undo();
+            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, can_undo) && m_ctx && m_ctx->commands.undo)
+                m_ctx->commands.undo();
 
-            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, can_redo) && m_ctx && m_ctx->redo)
-                m_ctx->redo();
+            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, can_redo) && m_ctx && m_ctx->commands.redo)
+                m_ctx->commands.redo();
 
             ImGui::EndMenu();
         }
@@ -485,8 +485,8 @@ namespace Hybrid
         if (!m_ctx)
             return;
 
-        const bool is_playing = m_ctx->is_play_mode ? m_ctx->is_play_mode() : false;
-        const bool is_paused = m_ctx->is_pause_mode ? m_ctx->is_pause_mode() : false;
+        const bool is_playing = m_ctx->mode.is_play_mode ? m_ctx->mode.is_play_mode() : false;
+        const bool is_paused = m_ctx->mode.is_pause_mode ? m_ctx->mode.is_pause_mode() : false;
         const float toolbar_height = 22.0f;
 
         if (!g_TopToolbarIcons.loaded)
@@ -516,14 +516,14 @@ namespace Hybrid
         const ImVec2 content_avail = ImGui::GetContentRegionAvail();
 
         std::string status_line;
-        if (m_ctx->active_document)
-            status_line = m_ctx->active_document->display_name.empty() ? std::string("Untitled") : m_ctx->active_document->display_name;
+        if (m_ctx->document.activeDocument())
+            status_line = m_ctx->document.activeDocument()->display_name.empty() ? std::string("Untitled") : m_ctx->document.activeDocument()->display_name;
         else
             status_line = "Untitled";
 
-        if (m_ctx->active_document && m_ctx->active_document->dirty)
+        if (m_ctx->document.activeDocument() && m_ctx->document.activeDocument()->dirty)
             status_line += " (Unsaved)";
-        else if (m_ctx->active_document && m_ctx->active_document->isSaved())
+        else if (m_ctx->document.activeDocument() && m_ctx->document.activeDocument()->isSaved())
             status_line += " (Saved)";
 
         const ImVec2 button_size(32.0f, 20.0f);
@@ -533,10 +533,10 @@ namespace Hybrid
 
         ImGui::SetCursorPosY(text_y);
         ImGui::TextUnformatted(status_line.c_str());
-        if (m_ctx->active_document && !m_ctx->active_document->native_path.empty() &&
+        if (m_ctx->document.activeDocument() && !m_ctx->document.activeDocument()->native_path.empty() &&
             ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
         {
-            ImGui::SetTooltip("%s", m_ctx->active_document->native_path.string().c_str());
+            ImGui::SetTooltip("%s", m_ctx->document.activeDocument()->native_path.string().c_str());
         }
 
         const float gap = ImGui::GetStyle().ItemSpacing.x;
@@ -581,33 +581,33 @@ namespace Hybrid
         {
             if (!is_playing)
             {
-                if (m_ctx->execute_command &&
-                    m_ctx->can_execute_command &&
-                    m_ctx->can_execute_command(EditorCommandId::EnterPlayMode))
+                if (m_ctx->commands.execute_command &&
+                    m_ctx->commands.can_execute_command &&
+                    m_ctx->commands.can_execute_command(EditorCommandId::EnterPlayMode))
                 {
                     HBD_CORE_INFO("{} play_mode_enter_requested", kEditorUILogTag);
-                    m_ctx->execute_command(EditorCommandId::EnterPlayMode);
+                    m_ctx->commands.execute_command(EditorCommandId::EnterPlayMode);
                 }
             }
-            else if (m_ctx->execute_command &&
-                     m_ctx->can_execute_command &&
-                     m_ctx->can_execute_command(EditorCommandId::ExitPlayMode))
+            else if (m_ctx->commands.execute_command &&
+                     m_ctx->commands.can_execute_command &&
+                     m_ctx->commands.can_execute_command(EditorCommandId::ExitPlayMode))
             {
                 HBD_CORE_INFO("{} play_mode_exit_requested", kEditorUILogTag);
-                m_ctx->execute_command(EditorCommandId::ExitPlayMode);
+                m_ctx->commands.execute_command(EditorCommandId::ExitPlayMode);
             }
         }
 
         ImGui::SameLine();
-        const bool pause_enabled = m_ctx && m_ctx->can_execute_command &&
-            m_ctx->can_execute_command(EditorCommandId::TogglePauseMode);
+        const bool pause_enabled = m_ctx && m_ctx->commands.can_execute_command &&
+            m_ctx->commands.can_execute_command(EditorCommandId::TogglePauseMode);
         if (!pause_enabled)
             ImGui::BeginDisabled();
         if (drawTopToolbarButton("##TopToolbarPause", g_TopToolbarIcons.pause, is_paused ? "Resume" : "Pause", is_paused ? "Resume" : "Pause", is_paused, false) &&
-            m_ctx->execute_command)
+            m_ctx->commands.execute_command)
         {
             HBD_CORE_INFO("{} play_mode_pause_toggle_requested paused={}", kEditorUILogTag, !is_paused);
-            m_ctx->execute_command(EditorCommandId::TogglePauseMode);
+            m_ctx->commands.execute_command(EditorCommandId::TogglePauseMode);
         }
         if (!pause_enabled)
             ImGui::EndDisabled();
@@ -731,10 +731,10 @@ namespace Hybrid
         case EditorPanelId::SceneView:
             if (!m_SceneViewportPanel || !m_SceneViewportPanel->isOpen())
             {
-                m_ctx->scene_viewport_hovered = false;
-                m_ctx->scene_viewport_image_hovered = false;
-                m_ctx->scene_viewport_focused = false;
-                m_ctx->scene_viewport_size = {0.0f, 0.0f};
+                m_ctx->scene_viewport.hovered = false;
+                m_ctx->scene_viewport.image_hovered = false;
+                m_ctx->scene_viewport.focused = false;
+                m_ctx->scene_viewport.size = {0.0f, 0.0f};
             }
             else
             {
@@ -744,10 +744,10 @@ namespace Hybrid
         case EditorPanelId::GameView:
             if (!m_GameViewportPanel || !m_GameViewportPanel->isOpen())
             {
-                m_ctx->game_viewport_hovered = false;
-                m_ctx->game_viewport_image_hovered = false;
-                m_ctx->game_viewport_focused = false;
-                m_ctx->game_viewport_size = {0.0f, 0.0f};
+                m_ctx->game_viewport.hovered = false;
+                m_ctx->game_viewport.image_hovered = false;
+                m_ctx->game_viewport.focused = false;
+                m_ctx->game_viewport.size = {0.0f, 0.0f};
             }
             else
             {

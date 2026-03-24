@@ -1,10 +1,10 @@
 #include "inspector_panel.h"
-#include "editor/core/component_registry.h"
-#include "editor/core/editor_command_history.h"
-#include "editor/core/editor_context.h"
-#include "editor/core/entity_commands.h"
-#include "editor/core/entity_snapshot.h"
-#include "editor/core/property_drawer.h"
+#include "editor/core/property/component_registry.h"
+#include "editor/core/commands/editor_command_history.h"
+#include "editor/core/context/editor_context.h"
+#include "editor/core/commands/entity_commands.h"
+#include "editor/core/snapshot/entity_snapshot.h"
+#include "editor/core/property/property_drawer.h"
 #include "editor/core/scene_document.h"
 
 #include "runtime/core/base/macro.h"
@@ -142,7 +142,7 @@ namespace Hybrid
 
                 *enabled_ptr = enabled;
                 document->dirty = true;
-                if (ctx.active_document == document)
+                if (ctx.document.activeDocument() == document)
                     ctx.markSceneDirty();
                 return true;
             }
@@ -287,15 +287,15 @@ namespace Hybrid
 
         ImGui::Begin(getName(), &m_state.open);
 
-        if (!ctx.active_scene)
+        if (!ctx.document.activeScene())
         {
             ImGui::TextDisabled("No active scene.");
             ImGui::End();
             return;
         }
 
-        auto& reg = ctx.active_scene->getRegistry();
-        Entity selected_entity(ctx.activeEntity(), &reg, ctx.active_scene);
+        auto& reg = ctx.document.activeScene()->getRegistry();
+        Entity selected_entity(ctx.activeEntity(), &reg, ctx.document.activeScene());
 
         if (ctx.activeEntity() == entt::null || !reg.valid(ctx.activeEntity()))
         {
@@ -323,7 +323,7 @@ namespace Hybrid
 
             ImGui::PushID(desc.name);
 
-            const bool is_play_mode = ctx.is_play_mode && ctx.is_play_mode();
+            const bool is_play_mode = ctx.mode.is_play_mode && ctx.mode.is_play_mode();
             const bool can_remove =
                 !is_play_mode &&
                 HasAny(desc.flags, ComponentFlags::Removable) &&
@@ -332,14 +332,14 @@ namespace Hybrid
             const ComponentHeaderResult header = DrawComponentHeader(desc, component_ptr, can_remove);
             if (header.enabled_changed)
             {
-                if (ctx.submit_editor_command && ctx.active_document && !(ctx.is_play_mode && ctx.is_play_mode()))
+                if (ctx.commands.submit_editor_command && ctx.document.activeDocument() && !(ctx.mode.is_play_mode && ctx.mode.is_play_mode()))
                 {
-                    auto command = std::make_unique<SetComponentEnabledCommand>(ctx.active_document,
+                    auto command = std::make_unique<SetComponentEnabledCommand>(ctx.document.activeDocument(),
                                                                                selected_entity.GetHandle(),
                                                                                &desc,
                                                                                header.enabled_before,
                                                                                header.enabled_after);
-                    ctx.submit_editor_command(std::move(command));
+                    ctx.commands.submit_editor_command(std::move(command));
                 }
                 else
                 {
@@ -371,22 +371,22 @@ namespace Hybrid
 
         if (pending_remove_desc != nullptr && pending_remove_desc->remove != nullptr)
         {
-            const EntitySnapshot before_snapshot = CaptureEntity(*ctx.active_scene, selected_entity.GetHandle());
+            const EntitySnapshot before_snapshot = CaptureEntity(*ctx.document.activeScene(), selected_entity.GetHandle());
             HBD_CORE_INFO("{} component_remove_requested entity={} component={}",
                           kInspectorPanelLogTag,
                           entityHandleValue(selected_entity.GetHandle()),
                           pending_remove_desc->name);
             pending_remove_desc->remove(selected_entity);
             ctx.markSceneDirty();
-            const EntitySnapshot after_snapshot = CaptureEntity(*ctx.active_scene, selected_entity.GetHandle());
-            if (ctx.submit_editor_command && ctx.active_document && !(ctx.is_play_mode && ctx.is_play_mode()))
+            const EntitySnapshot after_snapshot = CaptureEntity(*ctx.document.activeScene(), selected_entity.GetHandle());
+            if (ctx.commands.submit_editor_command && ctx.document.activeDocument() && !(ctx.mode.is_play_mode && ctx.mode.is_play_mode()))
             {
-                auto command = std::make_unique<RemoveComponentCommand>(ctx.active_document,
+                auto command = std::make_unique<RemoveComponentCommand>(ctx.document.activeDocument(),
                                                                         before_snapshot.id,
                                                                         pending_remove_desc->name,
                                                                         before_snapshot,
                                                                         after_snapshot);
-                ctx.submit_editor_command(std::move(command));
+                ctx.commands.submit_editor_command(std::move(command));
             }
             HBD_CORE_INFO("{} component_remove_completed entity={} component={}",
                           kInspectorPanelLogTag,
@@ -396,7 +396,7 @@ namespace Hybrid
 
         ImGui::Separator();
 
-        const bool is_play_mode = ctx.is_play_mode && ctx.is_play_mode();
+        const bool is_play_mode = ctx.mode.is_play_mode && ctx.mode.is_play_mode();
         if (is_play_mode)
             ImGui::BeginDisabled();
 
@@ -423,25 +423,25 @@ namespace Hybrid
 
                 if (ImGui::MenuItem(desc.name))
                 {
-                    const EntitySnapshot before_snapshot = CaptureEntity(*ctx.active_scene, selected_entity.GetHandle());
+                    const EntitySnapshot before_snapshot = CaptureEntity(*ctx.document.activeScene(), selected_entity.GetHandle());
                     if (!already_has_component && desc.add(selected_entity))
                     {
                         HBD_CORE_INFO("{} component_add_completed entity={} component={}",
                                       kInspectorPanelLogTag,
                                       entityHandleValue(selected_entity.GetHandle()),
                                       desc.name);
-                        if (std::strcmp(desc.name, "BoxCollider") == 0 && ctx.fit_box_collider_to_mesh)
-                            (void)ctx.fit_box_collider_to_mesh(selected_entity.GetHandle());
+                        if (std::strcmp(desc.name, "BoxCollider") == 0 && ctx.scene_actions.fit_box_collider_to_mesh)
+                            (void)ctx.scene_actions.fit_box_collider_to_mesh(selected_entity.GetHandle());
                         ctx.markSceneDirty();
-                        const EntitySnapshot after_snapshot = CaptureEntity(*ctx.active_scene, selected_entity.GetHandle());
-                        if (ctx.submit_editor_command && ctx.active_document && !(ctx.is_play_mode && ctx.is_play_mode()))
+                        const EntitySnapshot after_snapshot = CaptureEntity(*ctx.document.activeScene(), selected_entity.GetHandle());
+                        if (ctx.commands.submit_editor_command && ctx.document.activeDocument() && !(ctx.mode.is_play_mode && ctx.mode.is_play_mode()))
                         {
-                            auto command = std::make_unique<AddComponentCommand>(ctx.active_document,
+                            auto command = std::make_unique<AddComponentCommand>(ctx.document.activeDocument(),
                                                                                  before_snapshot.id,
                                                                                  desc.name,
                                                                                  before_snapshot,
                                                                                  after_snapshot);
-                            ctx.submit_editor_command(std::move(command));
+                            ctx.commands.submit_editor_command(std::move(command));
                         }
                     }
                     else if (already_has_component)

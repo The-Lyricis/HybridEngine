@@ -6,9 +6,10 @@
 
 #include <entt/entity/fwd.hpp>
 
-#include "editor/core/editor_commands.h"
-#include "editor/core/editor_command_history.h"
+#include "editor/core/commands/editor_commands.h"
+#include "editor/core/commands/editor_command_history.h"
 #include "editor/framework/camera/editor_camera.h"
+#include "editor/framework/bindings/editor_context_action_bindings.h"
 #include "editor/framework/controllers/editor_asset_hot_reload_controller.h"
 #include "editor/framework/ui/editor_ui.h"
 #include "editor/core/engine_services.h"
@@ -50,6 +51,12 @@ namespace Hybrid
         bool canExecuteCommand(EditorCommandId id) const;
         bool requestOpenProject();
         bool openProjectInNewInstance(const std::filesystem::path& requested_project_path);
+        EditorDocumentActions buildDocumentActions();
+        EditorSceneActions buildSceneActions();
+        EditorAssetActions buildAssetActions();
+        EditorCommandActions buildCommandActions();
+        EditorModeActions buildModeActions();
+        EditorContextActionBindings buildContextActionBindings();
         AssetID findAssetByVPath(const std::string& asset_vpath) const;
         std::string describeMeshRendererMaterial(entt::entity entity_handle) const;
         bool instantiateSceneAsset(AssetID asset_id, const ImVec2& drop_mouse_pos);

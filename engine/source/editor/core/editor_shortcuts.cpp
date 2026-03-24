@@ -2,8 +2,8 @@
 
 #include <imgui.h>
 
-#include "editor/core/editor_commands.h"
-#include "editor/core/editor_context.h"
+#include "editor/core/commands/editor_commands.h"
+#include "editor/core/context/editor_context.h"
 
 namespace Hybrid
 {
@@ -22,62 +22,62 @@ namespace Hybrid
             {
                 if (io.KeyShift)
                 {
-                    if (ctx.redo)
-                        (void)ctx.redo();
+                    if (ctx.commands.redo)
+                        (void)ctx.commands.redo();
                 }
                 else
                 {
-                    if (ctx.undo)
-                        (void)ctx.undo();
+                    if (ctx.commands.undo)
+                        (void)ctx.commands.undo();
                 }
                 return;
             }
 
             if (ImGui::IsKeyPressed(ImGuiKey_Y, false))
             {
-                if (ctx.redo)
-                    (void)ctx.redo();
+                if (ctx.commands.redo)
+                    (void)ctx.commands.redo();
                 return;
             }
 
-            if (ctx.execute_command)
+            if (ctx.commands.execute_command)
             {
                 if (ImGui::IsKeyPressed(ImGuiKey_N, false))
                 {
-                    (void)ctx.execute_command(EditorCommandId::NewScene);
+                    (void)ctx.commands.execute_command(EditorCommandId::NewScene);
                     return;
                 }
 
                 if (ImGui::IsKeyPressed(ImGuiKey_O, false))
                 {
                     if (io.KeyShift)
-                        (void)ctx.execute_command(EditorCommandId::OpenProject);
+                        (void)ctx.commands.execute_command(EditorCommandId::OpenProject);
                     else
-                        (void)ctx.execute_command(EditorCommandId::OpenScene);
+                        (void)ctx.commands.execute_command(EditorCommandId::OpenScene);
                     return;
                 }
 
                 if (ImGui::IsKeyPressed(ImGuiKey_S, false))
                 {
                     if (io.KeyShift)
-                        (void)ctx.execute_command(EditorCommandId::SaveSceneAs);
+                        (void)ctx.commands.execute_command(EditorCommandId::SaveSceneAs);
                     else
-                        (void)ctx.execute_command(EditorCommandId::SaveScene);
+                        (void)ctx.commands.execute_command(EditorCommandId::SaveScene);
                     return;
                 }
             }
         }
 
-        if (ctx.suppress_tool_shortcuts || ctx.gizmo_using || !ctx.scene_viewport_focused)
+        if (ctx.gizmo.suppress_tool_shortcuts || ctx.gizmo.using_gizmo || !ctx.scene_viewport.focused)
             return;
 
         if (ImGui::IsKeyPressed(ImGuiKey_Q, false))
-            ctx.scene_tool_mode = SceneToolMode::Select;
+            ctx.gizmo.tool_mode = SceneToolMode::Select;
         else if (ImGui::IsKeyPressed(ImGuiKey_W, false))
-            ctx.scene_tool_mode = SceneToolMode::Move;
+            ctx.gizmo.tool_mode = SceneToolMode::Move;
         else if (ImGui::IsKeyPressed(ImGuiKey_E, false))
-            ctx.scene_tool_mode = SceneToolMode::Rotate;
+            ctx.gizmo.tool_mode = SceneToolMode::Rotate;
         else if (ImGui::IsKeyPressed(ImGuiKey_R, false))
-            ctx.scene_tool_mode = SceneToolMode::Scale;
+            ctx.gizmo.tool_mode = SceneToolMode::Scale;
     }
 }

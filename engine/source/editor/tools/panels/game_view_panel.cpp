@@ -1,6 +1,6 @@
 #include "game_view_panel.h"
 
-#include "editor/core/editor_context.h"
+#include "editor/core/context/editor_context.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/render/runtime/render_system.h"
 
@@ -20,9 +20,9 @@ namespace Hybrid
     {
         if (!m_state.open)
         {
-            ctx.game_viewport_image_hovered = false;
-            ctx.game_viewport_hovered = false;
-            ctx.game_viewport_focused = false;
+            ctx.game_viewport.image_hovered = false;
+            ctx.game_viewport.hovered = false;
+            ctx.game_viewport.focused = false;
         }
     }
 
@@ -60,7 +60,7 @@ namespace Hybrid
         const ImVec2 viewport_max = ImGui::GetItemRectMax();
         const bool viewport_hovered = ImGui::IsItemHovered();
 
-        if (ctx.render_stats != nullptr)
+        if (ctx.debug.render_stats != nullptr)
         {
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             char line0[64] = {};
@@ -72,31 +72,31 @@ namespace Hybrid
             std::snprintf(line0,
                           sizeof(line0),
                           "Frame %.1f FPS | %.2f ms",
-                          ctx.render_stats->fps,
-                          ctx.render_stats->frame_time_ms);
+                          ctx.debug.render_stats->fps,
+                          ctx.debug.render_stats->frame_time_ms);
             std::snprintf(line1,
                           sizeof(line1),
                           "Render %.2f ms | Draws %u",
-                          ctx.render_stats->render_cpu_time_ms,
-                          ctx.render_stats->submitted_draw_calls);
+                          ctx.debug.render_stats->render_cpu_time_ms,
+                          ctx.debug.render_stats->submitted_draw_calls);
             std::snprintf(line2,
                           sizeof(line2),
                           "Submitted O %u | T %u | Tris %u",
-                          ctx.render_stats->submitted_opaque_items,
-                          ctx.render_stats->submitted_transparent_items,
-                          ctx.render_stats->submitted_triangles);
+                          ctx.debug.render_stats->submitted_opaque_items,
+                          ctx.debug.render_stats->submitted_transparent_items,
+                          ctx.debug.render_stats->submitted_triangles);
             std::snprintf(line3,
                           sizeof(line3),
                           "Cull Tested %u | Culled %u | Shadow %u",
-                          ctx.render_stats->tested_items,
-                          ctx.render_stats->culled_items,
-                          ctx.render_stats->shadow_caster_items);
+                          ctx.debug.render_stats->tested_items,
+                          ctx.debug.render_stats->culled_items,
+                          ctx.debug.render_stats->shadow_caster_items);
             std::snprintf(line4,
                           sizeof(line4),
                           "Scene Renderers %u | Submeshes %u | Lights %u",
-                          ctx.render_stats->scene_renderers,
-                          ctx.render_stats->scene_submeshes,
-                          ctx.render_stats->point_lights);
+                          ctx.debug.render_stats->scene_renderers,
+                          ctx.debug.render_stats->scene_submeshes,
+                          ctx.debug.render_stats->point_lights);
 
             const char* lines[] = {line0, line1, line2, line3, line4};
             float max_width = 0.0f;
@@ -118,12 +118,12 @@ namespace Hybrid
             }
         }
 
-        ctx.game_viewport_image_hovered = viewport_hovered;
-        ctx.game_viewport_hovered = viewport_hovered;
-        ctx.game_viewport_focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-        ctx.game_viewport_size = canvas_size;
-        ctx.game_viewport_min = viewport_min;
-        ctx.game_viewport_max = viewport_max;
+        ctx.game_viewport.image_hovered = viewport_hovered;
+        ctx.game_viewport.hovered = viewport_hovered;
+        ctx.game_viewport.focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        ctx.game_viewport.size = canvas_size;
+        ctx.game_viewport.min = viewport_min;
+        ctx.game_viewport.max = viewport_max;
 
         ImGui::End();
         ImGui::PopStyleVar();

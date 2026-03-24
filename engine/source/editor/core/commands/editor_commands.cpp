@@ -1,6 +1,6 @@
 #include "editor_commands.h"
 
-#include "editor/core/editor_context.h"
+#include "editor/core/context/editor_context.h"
 
 namespace Hybrid
 {
@@ -8,17 +8,17 @@ namespace Hybrid
     {
         bool isPlayMode(const EditorContext& ctx)
         {
-            return ctx.is_play_mode && ctx.is_play_mode();
+            return ctx.mode.is_play_mode && ctx.mode.is_play_mode();
         }
 
         bool hasActiveDocumentScene(const EditorContext& ctx)
         {
-            return ctx.active_document && ctx.active_document->scene != nullptr;
+            return ctx.document.activeDocument() && ctx.document.activeDocument()->scene != nullptr;
         }
 
         bool hasUnsavedSceneChanges(const EditorContext& ctx)
         {
-            return ctx.active_document && ctx.active_document->dirty;
+            return ctx.document.activeDocument() && ctx.document.activeDocument()->dirty;
         }
 
         void queueUnsavedChangesConfirm(EditorContext& editor,
@@ -26,7 +26,7 @@ namespace Hybrid
                                        std::function<bool()> on_save,
                                        std::function<void()> on_discard)
         {
-            if (!editor.request_confirm_dialog)
+            if (!editor.documents.request_confirm_dialog)
             {
                 if (on_discard)
                     on_discard();
@@ -45,7 +45,7 @@ namespace Hybrid
                     on_discard();
             };
             dialog.on_secondary = std::move(on_discard);
-            editor.request_confirm_dialog(std::move(dialog));
+            editor.documents.request_confirm_dialog(std::move(dialog));
         }
     } // namespace
 
@@ -59,23 +59,23 @@ namespace Hybrid
         switch (id)
         {
         case EditorCommandId::NewScene:
-            return !playing && static_cast<bool>(editor->request_new_scene);
+            return !playing && static_cast<bool>(editor->documents.request_new_scene);
         case EditorCommandId::OpenProject:
-            return static_cast<bool>(editor->request_open_project);
+            return static_cast<bool>(editor->documents.request_open_project);
         case EditorCommandId::OpenScene:
-            return !playing && static_cast<bool>(editor->request_open_scene);
+            return !playing && static_cast<bool>(editor->documents.request_open_scene);
         case EditorCommandId::SaveScene:
-            return !playing && static_cast<bool>(editor->request_save_scene) && hasActiveDocumentScene(*editor);
+            return !playing && static_cast<bool>(editor->documents.request_save_scene) && hasActiveDocumentScene(*editor);
         case EditorCommandId::SaveSceneAs:
-            return !playing && static_cast<bool>(editor->request_save_scene_as) && hasActiveDocumentScene(*editor);
+            return !playing && static_cast<bool>(editor->documents.request_save_scene_as) && hasActiveDocumentScene(*editor);
         case EditorCommandId::EnterPlayMode:
-            return !playing && static_cast<bool>(editor->enter_play_mode) && hasActiveDocumentScene(*editor);
+            return !playing && static_cast<bool>(editor->mode.enter_play_mode) && hasActiveDocumentScene(*editor);
         case EditorCommandId::ExitPlayMode:
-            return playing && static_cast<bool>(editor->exit_play_mode);
+            return playing && static_cast<bool>(editor->mode.exit_play_mode);
         case EditorCommandId::TogglePauseMode:
-            return playing && static_cast<bool>(editor->toggle_pause_mode);
+            return playing && static_cast<bool>(editor->mode.toggle_pause_mode);
         case EditorCommandId::ResetLayout:
-            return static_cast<bool>(editor->request_reset_layout);
+            return static_cast<bool>(editor->documents.request_reset_layout);
         }
 
         return false;
@@ -94,42 +94,42 @@ namespace Hybrid
             {
                 queueUnsavedChangesConfirm(*editor,
                                            "Discard",
-                                           [editor]() -> bool { return editor->request_save_scene(); },
+                                           [editor]() -> bool { return editor->documents.request_save_scene(); },
                                            [editor]() {
-                    editor->request_new_scene();
+                    editor->documents.request_new_scene();
                 });
                 return true;
             }
-            return editor->request_new_scene();
+            return editor->documents.request_new_scene();
         case EditorCommandId::OpenProject:
-            return editor->request_open_project();
+            return editor->documents.request_open_project();
         case EditorCommandId::OpenScene:
             if (hasUnsavedSceneChanges(*editor))
             {
                 queueUnsavedChangesConfirm(*editor,
                                            "Discard",
-                                           [editor]() -> bool { return editor->request_save_scene(); },
+                                           [editor]() -> bool { return editor->documents.request_save_scene(); },
                                            [editor]() {
-                    editor->request_open_scene();
+                    editor->documents.request_open_scene();
                 });
                 return true;
             }
-            return editor->request_open_scene();
+            return editor->documents.request_open_scene();
         case EditorCommandId::SaveScene:
-            return editor->request_save_scene();
+            return editor->documents.request_save_scene();
         case EditorCommandId::SaveSceneAs:
-            return editor->request_save_scene_as();
+            return editor->documents.request_save_scene_as();
         case EditorCommandId::EnterPlayMode:
-            editor->enter_play_mode();
+            editor->mode.enter_play_mode();
             return true;
         case EditorCommandId::ExitPlayMode:
-            editor->exit_play_mode();
+            editor->mode.exit_play_mode();
             return true;
         case EditorCommandId::TogglePauseMode:
-            editor->toggle_pause_mode();
+            editor->mode.toggle_pause_mode();
             return true;
         case EditorCommandId::ResetLayout:
-            editor->request_reset_layout();
+            editor->documents.request_reset_layout();
             return true;
         }
 
