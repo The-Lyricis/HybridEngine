@@ -1270,9 +1270,13 @@ namespace Hybrid
             {
                 m_SelectionOverlayPass.execute(context);
             };
-            callbacks.gizmo = [this](RenderContext& context)
+            callbacks.world_gizmo = [this](RenderContext& context)
             {
                 m_GizmoPass.execute(context);
+            };
+            callbacks.overlay_gizmo = [this](RenderContext& context)
+            {
+                m_OverlayGizmoPass.execute(context);
             };
             callbacks.shadow = [this](RenderContext& context)
             {

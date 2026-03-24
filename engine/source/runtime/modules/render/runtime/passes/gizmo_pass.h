@@ -10,6 +10,7 @@ namespace Hybrid
     class VertexBuffer;
     class IndexBuffer;
 
+    // World-space gizmos that preserve scene depth relationships.
     class GizmoPass
     {
     public:

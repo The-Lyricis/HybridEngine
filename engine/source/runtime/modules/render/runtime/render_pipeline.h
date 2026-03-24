@@ -15,7 +15,8 @@ namespace Hybrid
         Picking,
         SelectionMask,
         SelectionOverlay,
-        Gizmo,
+        WorldGizmo,
+        OverlayGizmo,
         // Grid,
         Shadow,
         PostProcess,
@@ -29,7 +30,8 @@ namespace Hybrid
         std::function<void(RenderContext&)> picking;
         std::function<void(RenderContext&)> selection_mask;
         std::function<void(RenderContext&)> selection_overlay;
-        std::function<void(RenderContext&)> gizmo;
+        std::function<void(RenderContext&)> world_gizmo;
+        std::function<void(RenderContext&)> overlay_gizmo;
         // std::function<void(RenderContext&)> grid;
         std::function<void(RenderContext&)> shadow;
         std::function<void(RenderContext&)> post_process;

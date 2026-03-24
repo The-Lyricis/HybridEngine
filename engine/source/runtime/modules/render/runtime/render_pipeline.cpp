@@ -11,7 +11,8 @@ namespace Hybrid
             RenderPassType::Picking,
             RenderPassType::SelectionMask,
             RenderPassType::SelectionOverlay,
-            RenderPassType::Gizmo,
+            RenderPassType::WorldGizmo,
+            RenderPassType::OverlayGizmo,
             //RenderPassType::Grid,
             RenderPassType::PostProcess,
             //RenderPassType::DebugNormals
@@ -46,7 +47,8 @@ namespace Hybrid
         case RenderPassType::SelectionMask:
         case RenderPassType::SelectionOverlay:
             return HasFlag(flags, RenderFlags::SelectionHighlight);
-        case RenderPassType::Gizmo:
+        case RenderPassType::WorldGizmo:
+        case RenderPassType::OverlayGizmo:
             return HasFlag(flags, RenderFlags::Gizmo);
         // case RenderPassType::Grid:
         //     return HasFlag(flags, RenderFlags::Grid);
@@ -85,9 +87,13 @@ namespace Hybrid
             if (callbacks.selection_overlay)
                 callbacks.selection_overlay(context);
             break;
-        case RenderPassType::Gizmo:
-            if (callbacks.gizmo)
-                callbacks.gizmo(context);
+        case RenderPassType::WorldGizmo:
+            if (callbacks.world_gizmo)
+                callbacks.world_gizmo(context);
+            break;
+        case RenderPassType::OverlayGizmo:
+            if (callbacks.overlay_gizmo)
+                callbacks.overlay_gizmo(context);
             break;
         // case RenderPassType::Grid:
         //     if (callbacks.grid)

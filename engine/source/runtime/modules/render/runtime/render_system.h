@@ -25,6 +25,7 @@
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/mesh_gpu.h"
+#include "runtime/modules/render/runtime/passes/overlay_gizmo_pass.h"
 #include "runtime/modules/render/runtime/render_uniforms.h"
 #include "runtime/modules/render/runtime/render_shadow_settings.h"
 #include "runtime/modules/render/runtime/selection_overlay_style.h"
@@ -150,6 +151,7 @@ namespace Hybrid
         SkyboxPass m_SkyboxPass;
         PickingPass m_PickingPass;
         GizmoPass m_GizmoPass;
+        OverlayGizmoPass m_OverlayGizmoPass;
         ShadowPass m_ShadowPass;
         PostProcessPass m_PostProcessPass;
         SelectionMaskPass m_SelectionMaskPass;
