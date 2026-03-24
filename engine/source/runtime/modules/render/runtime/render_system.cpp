@@ -884,7 +884,7 @@ namespace Hybrid
             RenderPointLightData point{};
             point.color = light.Color;
             point.intensity = light.Intensity;
-            point.position = transform.Position;
+            point.position = glm::vec3(transform.WorldMatrix[3]);
             point.range = light.Range;
             packet.lights.points.push_back(point);
         }
