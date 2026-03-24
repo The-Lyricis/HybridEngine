@@ -75,27 +75,6 @@ namespace Hybrid
                 drawList->AddRect(min, max, color, 0.0f, 0, 1.0f);
         }
 
-        Entity createDirectionalLight(Scene& scene, const char* name)
-        {
-            Entity entity = scene.createEntity(name);
-            entity.AddComponent<DirectionalLightComponent>();
-            return entity;
-        }
-
-        Entity createPointLight(Scene& scene, const char* name)
-        {
-            Entity entity = scene.createEntity(name);
-            entity.AddComponent<PointLightComponent>();
-            return entity;
-        }
-
-        Entity createBuiltinCube(Scene& scene, AssetID cube_mesh_id)
-        {
-            Entity entity = scene.createEntity("Cube");
-            auto& renderer = entity.AddComponent<MeshRendererComponent>();
-            renderer.Mesh = cube_mesh_id;
-            return entity;
-        }
     } // namespace
 
     void HierarchyPanel::queueAction(PendingActionType type, entt::entity target)
@@ -243,7 +222,7 @@ namespace Hybrid
         {
         case PendingActionType::Delete:
         {
-            if (!registry.valid(m_pendingTarget))
+            if (!registry.valid(m_pendingTarget) || !ctx.delete_scene_entity)
             {
                 HBD_CORE_WARN("{} delete_rejected entity={} reason=invalid_entity",
                               kHierarchyPanelLogTag,
@@ -252,16 +231,20 @@ namespace Hybrid
             }
 
             const std::string entity_name = getEntityLabel(registry, m_pendingTarget);
-            std::vector<entt::entity> deleted_entities;
-            collectEntityOrder(registry, m_pendingTarget, deleted_entities);
-            ctx.active_scene->DestroyEntityRecursive(Entity{m_pendingTarget, &registry, ctx.active_scene});
-            for (entt::entity deleted : deleted_entities)
-                ctx.selection.remove(deleted);
-            ctx.markSceneDirty();
-            HBD_CORE_INFO("{} delete_completed entity={} name={}",
-                          kHierarchyPanelLogTag,
-                          entityHandleValue(m_pendingTarget),
-                          entity_name);
+            if (ctx.delete_scene_entity(m_pendingTarget))
+            {
+                HBD_CORE_INFO("{} delete_completed entity={} name={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(m_pendingTarget),
+                              entity_name);
+            }
+            else
+            {
+                HBD_CORE_WARN("{} delete_failed entity={} name={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(m_pendingTarget),
+                              entity_name);
+            }
             break;
         }
         case PendingActionType::Unparent:
@@ -295,116 +278,87 @@ namespace Hybrid
         }
         case PendingActionType::CreateRootEmpty:
         {
-            Entity created = ctx.active_scene->createEntity("Empty");
             const bool parent_requested = hasTransform(registry, m_pendingTarget);
-            if (hasTransform(registry, m_pendingTarget))
-                ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
-            ctx.selection.setSingle(created.GetHandle());
-            ctx.markSceneDirty();
-            HBD_CORE_INFO("{} create_completed entity={} name=Empty parent_entity={}",
-                          kHierarchyPanelLogTag,
-                          entityHandleValue(created.GetHandle()),
-                          parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"));
+            const entt::entity created =
+                ctx.create_scene_entity ? ctx.create_scene_entity(SceneEntityTemplate::Empty,
+                                                                  parent_requested ? m_pendingTarget : entt::null)
+                                        : entt::null;
+            if (created != entt::null)
+            {
+                HBD_CORE_INFO("{} create_completed entity={} name=Empty parent_entity={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(created),
+                              parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"));
+            }
             break;
         }
         case PendingActionType::CreateRootCube:
         {
-            const AssetID cube_mesh_id =
-                ctx.get_builtin_mesh_id ? ctx.get_builtin_mesh_id(BuiltinMesh::Cube) : AssetID{};
-            if (cube_mesh_id.value == 0)
-            {
-                HBD_CORE_WARN("{} create_rejected entity_type=Cube reason=missing_builtin_mesh",
-                              kHierarchyPanelLogTag);
-                break;
-            }
-
-            Entity created = createBuiltinCube(*ctx.active_scene, cube_mesh_id);
             const bool parent_requested = hasTransform(registry, m_pendingTarget);
-            if (hasTransform(registry, m_pendingTarget))
-                ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
-            ctx.selection.setSingle(created.GetHandle());
-            ctx.markSceneDirty();
-            HBD_CORE_INFO("{} create_completed entity={} name=Cube parent_entity={} mesh_id={}",
-                          kHierarchyPanelLogTag,
-                          entityHandleValue(created.GetHandle()),
-                          parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"),
-                          cube_mesh_id.value);
+            const entt::entity created =
+                ctx.create_scene_entity ? ctx.create_scene_entity(SceneEntityTemplate::Cube,
+                                                                  parent_requested ? m_pendingTarget : entt::null)
+                                        : entt::null;
+            if (created != entt::null)
+            {
+                HBD_CORE_INFO("{} create_completed entity={} name=Cube parent_entity={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(created),
+                              parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"));
+            }
+            else
+            {
+                HBD_CORE_WARN("{} create_rejected entity_type=Cube reason=create_scene_entity_failed",
+                              kHierarchyPanelLogTag);
+            }
             break;
         }
         case PendingActionType::CreateRootCamera:
         {
-            Entity created = ctx.active_scene->createCameraEntity("Camera", false);
             const bool parent_requested = hasTransform(registry, m_pendingTarget);
-            if (hasTransform(registry, m_pendingTarget))
-                ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true);
-            ctx.selection.setSingle(created.GetHandle());
-            ctx.markSceneDirty();
-            HBD_CORE_INFO("{} create_completed entity={} name=Camera parent_entity={}",
-                          kHierarchyPanelLogTag,
-                          entityHandleValue(created.GetHandle()),
-                          parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"));
+            const entt::entity created =
+                ctx.create_scene_entity ? ctx.create_scene_entity(SceneEntityTemplate::Camera,
+                                                                  parent_requested ? m_pendingTarget : entt::null)
+                                        : entt::null;
+            if (created != entt::null)
+            {
+                HBD_CORE_INFO("{} create_completed entity={} name=Camera parent_entity={}",
+                              kHierarchyPanelLogTag,
+                              entityHandleValue(created),
+                              parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"));
+            }
             break;
         }
         case PendingActionType::CreateRootDirectionalLight:
         {
-            Entity created = createDirectionalLight(*ctx.active_scene, "Directional Light");
-            if (!hasTransform(registry, m_pendingTarget))
+            const bool parent_requested = hasTransform(registry, m_pendingTarget);
+            const entt::entity created =
+                ctx.create_scene_entity ? ctx.create_scene_entity(SceneEntityTemplate::DirectionalLight,
+                                                                  parent_requested ? m_pendingTarget : entt::null)
+                                        : entt::null;
+            if (created != entt::null)
             {
-                ctx.selection.setSingle(created.GetHandle());
-                ctx.markSceneDirty();
-                HBD_CORE_INFO("{} create_completed entity={} name=\"Directional Light\" parent_entity=<root>",
-                              kHierarchyPanelLogTag,
-                              entityHandleValue(created.GetHandle()));
-                break;
-            }
-
-            if (ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true))
-            {
-                ctx.selection.setSingle(created.GetHandle());
                 HBD_CORE_INFO("{} create_completed entity={} name=\"Directional Light\" parent_entity={}",
                               kHierarchyPanelLogTag,
-                              entityHandleValue(created.GetHandle()),
-                              entityHandleValue(m_pendingTarget));
+                              entityHandleValue(created),
+                              parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"));
             }
-            else
-            {
-                HBD_CORE_WARN("{} create_parent_failed entity={} name=\"Directional Light\" parent_entity={}",
-                              kHierarchyPanelLogTag,
-                              entityHandleValue(created.GetHandle()),
-                              entityHandleValue(m_pendingTarget));
-            }
-            ctx.markSceneDirty();
             break;
         }
         case PendingActionType::CreateRootPointLight:
         {
-            Entity created = createPointLight(*ctx.active_scene, "Point Light");
-            if (!hasTransform(registry, m_pendingTarget))
+            const bool parent_requested = hasTransform(registry, m_pendingTarget);
+            const entt::entity created =
+                ctx.create_scene_entity ? ctx.create_scene_entity(SceneEntityTemplate::PointLight,
+                                                                  parent_requested ? m_pendingTarget : entt::null)
+                                        : entt::null;
+            if (created != entt::null)
             {
-                ctx.selection.setSingle(created.GetHandle());
-                ctx.markSceneDirty();
-                HBD_CORE_INFO("{} create_completed entity={} name=\"Point Light\" parent_entity=<root>",
-                              kHierarchyPanelLogTag,
-                              entityHandleValue(created.GetHandle()));
-                break;
-            }
-
-            if (ctx.active_scene->SetParent(created, Entity{m_pendingTarget, &registry, ctx.active_scene}, true))
-            {
-                ctx.selection.setSingle(created.GetHandle());
                 HBD_CORE_INFO("{} create_completed entity={} name=\"Point Light\" parent_entity={}",
                               kHierarchyPanelLogTag,
-                              entityHandleValue(created.GetHandle()),
-                              entityHandleValue(m_pendingTarget));
+                              entityHandleValue(created),
+                              parent_requested ? std::to_string(entityHandleValue(m_pendingTarget)) : std::string("<root>"));
             }
-            else
-            {
-                HBD_CORE_WARN("{} create_parent_failed entity={} name=\"Point Light\" parent_entity={}",
-                              kHierarchyPanelLogTag,
-                              entityHandleValue(created.GetHandle()),
-                              entityHandleValue(m_pendingTarget));
-            }
-            ctx.markSceneDirty();
             break;
         }
         case PendingActionType::None:

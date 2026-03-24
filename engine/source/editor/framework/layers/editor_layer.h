@@ -7,6 +7,7 @@
 #include <entt/entity/fwd.hpp>
 
 #include "editor/core/editor_commands.h"
+#include "editor/core/editor_command_history.h"
 #include "editor/framework/camera/editor_camera.h"
 #include "editor/framework/controllers/editor_asset_hot_reload_controller.h"
 #include "editor/framework/ui/editor_ui.h"
@@ -16,6 +17,8 @@
 
 namespace Hybrid
 {
+    enum class SceneEntityTemplate : int;
+
     struct EditorModeCallbacks
     {
         std::function<bool(std::shared_ptr<Scene>)> enter_play_mode_from_scene;
@@ -53,6 +56,8 @@ namespace Hybrid
         bool instantiateSceneProjectPath(const std::string& rel_path, const ImVec2& drop_mouse_pos);
         bool tryGetSceneDropPosition(const ImVec2& drop_mouse_pos, glm::vec3& out_position);
         bool fitBoxColliderToMesh(entt::entity entity_handle);
+        entt::entity createSceneEntity(SceneEntityTemplate type, entt::entity parent);
+        bool deleteSceneEntity(entt::entity entity_handle);
 
     private:
         EngineServices m_services{};       // Injected runtime/editor services.
@@ -61,6 +66,7 @@ namespace Hybrid
         EditorAssetHotReloadController m_asset_hot_reload_controller;
         EditorSceneIOService m_scene_io;
         EditorCommandDispatcher m_command_dispatcher;
+        CommandHistory m_command_history;
         std::shared_ptr<SceneDocument> m_active_scene_view_document;
         bool m_initialized = false;        // Guard against partial startup/shutdown.
         EditorModeCallbacks m_mode_callbacks{};

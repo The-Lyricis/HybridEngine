@@ -4,6 +4,10 @@
 
 #include <cstdint>
 
+#include <entt/entt.hpp>
+
+#include "editor/core/transform_snapshot.h"
+
 namespace Hybrid
 {
     struct EditorContext;
@@ -20,5 +24,8 @@ namespace Hybrid
     private:
         uint32_t m_colorTextureID = 0;
         bool m_missingTextureLogged = false;
+        bool m_gizmo_drag_active = false;
+        entt::entity m_gizmo_drag_entity = entt::null;
+        TransformSnapshot m_gizmo_drag_before{};
     };
 } // namespace Hybrid

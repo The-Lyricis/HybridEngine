@@ -13,6 +13,7 @@
 #include "editor/core/editor_dialogs.h"
 #include "editor/core/editor_types.h"
 #include "editor/core/scene_document.h"
+#include "editor/core/transform_snapshot.h"
 #include "runtime/modules/asset/asset_type.h"
 #include "runtime/modules/asset/builtin_assets.h"
 
@@ -117,6 +118,15 @@ namespace Hybrid
         World
     };
 
+    enum class SceneEntityTemplate : int
+    {
+        Empty = 0,
+        Cube,
+        Camera,
+        DirectionalLight,
+        PointLight
+    };
+
     struct EditorContext
     {
         Scene* active_scene = nullptr;
@@ -163,8 +173,15 @@ namespace Hybrid
         std::function<void()> request_reset_layout;
         std::function<bool()> request_save_scene;
         std::function<bool()> request_save_scene_as;
+        std::function<entt::entity(SceneEntityTemplate, entt::entity)> create_scene_entity;
+        std::function<bool(entt::entity)> delete_scene_entity;
+        std::function<bool()> undo;
+        std::function<bool()> redo;
+        std::function<bool()> can_undo;
+        std::function<bool()> can_redo;
         std::function<bool(EditorCommandId)> execute_command;
         std::function<bool(EditorCommandId)> can_execute_command;
+        std::function<void(entt::entity, const TransformSnapshot&, const TransformSnapshot&)> commit_transform_command;
         std::function<void(EditorConfirmDialog)> request_confirm_dialog;
         std::function<bool(const std::filesystem::path&)> reveal_in_file_browser;
         std::function<AssetID(const std::string& asset_vpath)> find_asset_by_vpath;

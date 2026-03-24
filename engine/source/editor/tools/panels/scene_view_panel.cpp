@@ -399,6 +399,7 @@ namespace Hybrid
                 if (reg.valid(ctx.activeEntity()) && reg.all_of<TransformComponent>(ctx.activeEntity()))
                 {
                     auto &tr = reg.get<TransformComponent>(ctx.activeEntity());
+                    const TransformSnapshot before_snapshot = CaptureTransformSnapshot(tr);
                     glm::mat4 model = BuildModel(tr);
 
                     ImGuizmo::SetOrthographic(false);
@@ -441,6 +442,13 @@ namespace Hybrid
                     ctx.gizmo_using = ImGuizmo::IsUsing();
                     gizmo_over = ImGuizmo::IsOver();
 
+                    if (ctx.gizmo_using && !m_gizmo_drag_active)
+                    {
+                        m_gizmo_drag_active = true;
+                        m_gizmo_drag_entity = ctx.activeEntity();
+                        m_gizmo_drag_before = before_snapshot;
+                    }
+
                     if (ctx.gizmo_using)
                     {
                         glm::vec3 skew{};
@@ -470,6 +478,36 @@ namespace Hybrid
                         }
                     }
                 }
+            }
+
+            if (m_gizmo_drag_active && !ctx.gizmo_using)
+            {
+                bool committed = false;
+                if (ctx.active_scene &&
+                    m_gizmo_drag_entity != entt::null)
+                {
+                    auto& reg = ctx.active_scene->getRegistry();
+                    if (reg.valid(m_gizmo_drag_entity) && reg.all_of<TransformComponent>(m_gizmo_drag_entity))
+                    {
+                        const TransformSnapshot after_snapshot =
+                            CaptureTransformSnapshot(reg.get<TransformComponent>(m_gizmo_drag_entity));
+                        if (ctx.commit_transform_command)
+                        {
+                            ctx.commit_transform_command(m_gizmo_drag_entity, m_gizmo_drag_before, after_snapshot);
+                            committed = true;
+                        }
+                    }
+                }
+
+                if (!committed)
+                {
+                    m_gizmo_drag_entity = entt::null;
+                    m_gizmo_drag_before = {};
+                }
+
+                m_gizmo_drag_active = false;
+                m_gizmo_drag_entity = entt::null;
+                m_gizmo_drag_before = {};
             }
 
             if (ctx.scene_viewport_image_hovered &&

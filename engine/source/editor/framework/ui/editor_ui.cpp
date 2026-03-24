@@ -214,6 +214,30 @@ namespace Hybrid
         if (!m_initialized || !m_ctx)
             return;
 
+        const ImGuiIO& io = ImGui::GetIO();
+        const bool shortcut_modifier = io.KeyCtrl || io.KeySuper;
+        if (!io.WantTextInput && shortcut_modifier)
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_Z, false))
+            {
+                if (io.KeyShift)
+                {
+                    if (m_ctx->redo)
+                        (void)m_ctx->redo();
+                }
+                else
+                {
+                    if (m_ctx->undo)
+                        (void)m_ctx->undo();
+                }
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Y, false))
+            {
+                if (m_ctx->redo)
+                    (void)m_ctx->redo();
+            }
+        }
+
         ImGuizmo::SetImGuiContext(ImGui::GetCurrentContext());
         ImGuizmo::BeginFrame();
 
@@ -491,6 +515,20 @@ namespace Hybrid
                 if (m_ctx && m_ctx->execute_command)
                     m_ctx->execute_command(EditorCommandId::ResetLayout);
             }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Edit"))
+        {
+            const bool can_undo = m_ctx && m_ctx->can_undo && m_ctx->can_undo();
+            const bool can_redo = m_ctx && m_ctx->can_redo && m_ctx->can_redo();
+
+            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, can_undo) && m_ctx && m_ctx->undo)
+                m_ctx->undo();
+
+            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, can_redo) && m_ctx && m_ctx->redo)
+                m_ctx->redo();
 
             ImGui::EndMenu();
         }
