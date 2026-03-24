@@ -93,11 +93,12 @@ namespace Hybrid
             return;
 
         auto* debug_box_mesh = getOrCreateDebugBoxMeshGPU();
+        auto* camera_frustum_mesh = getOrCreateCameraFrustumMeshGPU();
         auto* debug_sphere_mesh = getOrCreateDebugSphereMeshGPU();
         auto* directional_light_mesh = getOrCreateDirectionalLightMeshGPU();
         auto* shadow_hull_mesh = getOrCreateShadowHullMeshGPU();
         auto* debug_quad_mesh = getOrCreateDebugQuadMeshGPU();
-        if (!debug_box_mesh || !debug_sphere_mesh || !directional_light_mesh || !shadow_hull_mesh || !debug_quad_mesh)
+        if (!debug_box_mesh || !camera_frustum_mesh || !debug_sphere_mesh || !directional_light_mesh || !shadow_hull_mesh || !debug_quad_mesh)
             return;
 
         auto& registry = packet.scene->getRegistry();
@@ -118,7 +119,7 @@ namespace Hybrid
                                                       RenderUniforms::kFrameUBOBinding);
         drawSelectedColliderGizmo(context, *collider_debug_shader, *debug_box_mesh);
         drawShadowDebugGizmos(packet, *collider_debug_shader, *shadow_hull_mesh);
-        drawSelectedCameraGizmo(context, *collider_debug_shader, *debug_box_mesh, *debug_quad_mesh);
+        drawSelectedCameraGizmo(context, *collider_debug_shader, *camera_frustum_mesh, *debug_quad_mesh);
         drawSelectedDirectionalLightGizmo(context, *collider_debug_shader, *directional_light_mesh);
         drawSelectedPointLightGizmo(context, *collider_debug_shader, *debug_sphere_mesh);
 
@@ -164,7 +165,7 @@ namespace Hybrid
 
     void GizmoPass::drawSelectedCameraGizmo(RenderContext& context,
                                             Shader& shader,
-                                            DebugLineMeshGPU& debug_box_mesh,
+                                            DebugLineMeshGPU& camera_frustum_mesh,
                                             DebugLineMeshGPU& debug_quad_mesh) const
     {
         if (!context.packet || !context.packet->scene || !context.editor_selection ||
@@ -187,12 +188,12 @@ namespace Hybrid
                                  : (16.0f / 9.0f);
         const std::array<glm::vec3, 8> frustum_vertices = buildCameraFrustumCorners(camera_transform, camera, aspect);
 
-        debug_box_mesh.vb->setData(frustum_vertices.data(),
-                                   static_cast<uint32_t>(frustum_vertices.size() * sizeof(glm::vec3)));
+        camera_frustum_mesh.vb->setData(frustum_vertices.data(),
+                                        static_cast<uint32_t>(frustum_vertices.size() * sizeof(glm::vec3)));
         shader.setMat4("u_Model", glm::mat4(1.0f));
         shader.setVec4("u_Color", glm::vec4(1.0f, 0.75f, 0.15f, 1.0f));
-        debug_box_mesh.vao->bind();
-        RenderCommand::drawLinesIndexed(debug_box_mesh.index_count);
+        camera_frustum_mesh.vao->bind();
+        RenderCommand::drawLinesIndexed(camera_frustum_mesh.index_count);
 
         const std::array<glm::vec3, 4> near_plane_vertices{
             frustum_vertices[0],
@@ -392,6 +393,44 @@ namespace Hybrid
         m_DebugSphereMeshGPU.index_count = static_cast<uint32_t>(indices.size());
         m_HasDebugSphereMeshGPU = true;
         return &m_DebugSphereMeshGPU;
+    }
+
+    GizmoPass::DebugLineMeshGPU* GizmoPass::getOrCreateCameraFrustumMeshGPU()
+    {
+        if (m_HasCameraFrustumMeshGPU)
+            return &m_CameraFrustumMeshGPU;
+
+        auto* box_mesh = getOrCreateDebugBoxMeshGPU();
+        if (!box_mesh || !box_mesh->ib)
+            return nullptr;
+
+        std::array<glm::vec3, 8> initial_vertices = {
+            glm::vec3{-0.5f, -0.5f, -0.5f},
+            glm::vec3{ 0.5f, -0.5f, -0.5f},
+            glm::vec3{ 0.5f,  0.5f, -0.5f},
+            glm::vec3{-0.5f,  0.5f, -0.5f},
+            glm::vec3{-0.5f, -0.5f,  0.5f},
+            glm::vec3{ 0.5f, -0.5f,  0.5f},
+            glm::vec3{ 0.5f,  0.5f,  0.5f},
+            glm::vec3{-0.5f,  0.5f,  0.5f},
+        };
+
+        m_CameraFrustumMeshGPU.vb =
+            VertexBuffer::Create(initial_vertices.data(), static_cast<uint32_t>(initial_vertices.size() * sizeof(glm::vec3)));
+        m_CameraFrustumMeshGPU.ib = box_mesh->ib;
+        m_CameraFrustumMeshGPU.vao = VertexArray::Create();
+
+        VertexLayout layout;
+        layout.stride = sizeof(glm::vec3);
+        layout.attributes = {
+            {0, 3, 0, false},
+        };
+
+        m_CameraFrustumMeshGPU.vao->setVertexBuffer(m_CameraFrustumMeshGPU.vb, layout);
+        m_CameraFrustumMeshGPU.vao->setIndexBuffer(m_CameraFrustumMeshGPU.ib);
+        m_CameraFrustumMeshGPU.index_count = box_mesh->index_count;
+        m_HasCameraFrustumMeshGPU = true;
+        return &m_CameraFrustumMeshGPU;
     }
 
     GizmoPass::DebugLineMeshGPU* GizmoPass::getOrCreateDirectionalLightMeshGPU()
