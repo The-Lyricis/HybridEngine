@@ -130,7 +130,6 @@ namespace Hybrid
         if (entity == entt::null)
         {
             ctx.selection.clear();
-            m_rangeAnchor = entt::null;
             return;
         }
 
@@ -138,9 +137,10 @@ namespace Hybrid
         const bool ctrl = io.KeyCtrl;
         const bool shift = io.KeyShift;
 
-        if (shift && m_rangeAnchor != entt::null && !m_visibleOrder.empty())
+        if (shift && ctx.selection.range_anchor != entt::null && !m_visibleOrder.empty())
         {
-            auto anchor_it = std::find(m_visibleOrder.begin(), m_visibleOrder.end(), m_rangeAnchor);
+            const entt::entity anchor = ctx.selection.range_anchor;
+            auto anchor_it = std::find(m_visibleOrder.begin(), m_visibleOrder.end(), anchor);
             auto target_it = std::find(m_visibleOrder.begin(), m_visibleOrder.end(), entity);
             if (anchor_it != m_visibleOrder.end() && target_it != m_visibleOrder.end())
             {
@@ -151,9 +151,13 @@ namespace Hybrid
                     std::swap(anchor_it, target_it);
 
                 for (auto it = anchor_it; it != target_it + 1; ++it)
-                    ctx.selection.add(*it);
+                {
+                    if (!ctx.selection.contains(*it))
+                        ctx.selection.items.push_back(*it);
+                }
 
                 ctx.selection.active = entity;
+                ctx.selection.range_anchor = anchor;
                 return;
             }
         }
@@ -161,13 +165,10 @@ namespace Hybrid
         if (ctrl)
         {
             ctx.selection.toggle(entity);
-            if (!ctx.selection.empty())
-                m_rangeAnchor = ctx.selection.active;
             return;
         }
 
         ctx.selection.setSingle(entity);
-        m_rangeAnchor = entity;
     }
 
     void HierarchyPanel::drawCommonContextMenu(EditorContext& ctx, entt::registry& registry, entt::entity target)
@@ -251,8 +252,11 @@ namespace Hybrid
             }
 
             const std::string entity_name = getEntityLabel(registry, m_pendingTarget);
+            std::vector<entt::entity> deleted_entities;
+            collectEntityOrder(registry, m_pendingTarget, deleted_entities);
             ctx.active_scene->DestroyEntityRecursive(Entity{m_pendingTarget, &registry, ctx.active_scene});
-            ctx.selection.remove(m_pendingTarget);
+            for (entt::entity deleted : deleted_entities)
+                ctx.selection.remove(deleted);
             ctx.markSceneDirty();
             HBD_CORE_INFO("{} delete_completed entity={} name={}",
                           kHierarchyPanelLogTag,

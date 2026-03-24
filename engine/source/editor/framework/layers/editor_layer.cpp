@@ -416,7 +416,11 @@ namespace Hybrid
             }
 
             if (ctx.selection.active != entt::null && !reg.valid(ctx.selection.active))
-                ctx.selection.active = ctx.selection.items.empty() ? entt::null : ctx.selection.items.back();
+                ctx.selection.active = entt::null;
+            if (ctx.selection.range_anchor != entt::null && !reg.valid(ctx.selection.range_anchor))
+                ctx.selection.range_anchor = entt::null;
+            if (ctx.selection.items.empty())
+                ctx.selection.clear();
         }
 
         ctx.setStatusMessage(m_scene_io.getStatusMessage());
@@ -530,7 +534,7 @@ namespace Hybrid
         editor_ext->selection.active_entity =
             (ctx.activeEntity() == entt::null) ? kInvalidEntityID : static_cast<uint32_t>(entt::to_integral(ctx.activeEntity()));
         editor_ext->selection.hovered_entity = kInvalidEntityID;
-        editor_ext->pan_tool = ctx.pan_tool;
+        editor_ext->select_tool = ctx.select_tool;
         editor_ext->show_collider_debug = ctx.show_collider_debug;
         editor_ext->show_shadow_debug = ctx.show_shadow_debug;
 
@@ -971,7 +975,7 @@ namespace Hybrid
         const bool lmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
         const bool mmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_MIDDLE);
         const bool rmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
-        const bool mmb_for_camera = mmb_down || (ctx.pan_tool && lmb_down);
+        const bool mmb_for_camera = mmb_down || (ctx.select_tool && lmb_down);
 
         const bool key_w = camera_input_active && input.isKeyDown(GLFW_KEY_W);
         const bool key_a = camera_input_active && input.isKeyDown(GLFW_KEY_A);

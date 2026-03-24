@@ -25,11 +25,13 @@ namespace Hybrid
     {
         std::vector<entt::entity> items;
         entt::entity active = entt::null;
+        entt::entity range_anchor = entt::null;
 
         void clear()
         {
             items.clear();
             active = entt::null;
+            range_anchor = entt::null;
         }
 
         bool empty() const
@@ -63,6 +65,7 @@ namespace Hybrid
             items.clear();
             items.push_back(entity);
             active = entity;
+            range_anchor = entity;
         }
 
         void add(entt::entity entity)
@@ -71,6 +74,7 @@ namespace Hybrid
                 return;
             items.push_back(entity);
             active = entity;
+            range_anchor = entity;
         }
 
         void remove(entt::entity entity)
@@ -85,7 +89,9 @@ namespace Hybrid
 
                 items.erase(it);
                 if (active == entity)
-                    active = items.empty() ? entt::null : items.back();
+                    active = entt::null;
+                if (range_anchor == entity)
+                    range_anchor = entt::null;
                 return;
             }
         }
@@ -103,6 +109,12 @@ namespace Hybrid
 
             add(entity);
         }
+    };
+
+    enum class GizmoSpace
+    {
+        Local = 0,
+        World
     };
 
     struct EditorContext
@@ -135,6 +147,7 @@ namespace Hybrid
 
         glm::mat4 gizmo_view = glm::mat4(1.0f);
         glm::mat4 gizmo_proj = glm::mat4(1.0f);
+        GizmoSpace gizmo_space = GizmoSpace::Local;
 
         bool gizmo_using = false;
 
@@ -160,7 +173,7 @@ namespace Hybrid
         std::function<bool(const std::string& rel_path, const ImVec2& drop_mouse_pos)> instantiate_scene_project_path;
         std::function<bool(entt::entity)> fit_box_collider_to_mesh;
         std::function<AssetID(BuiltinMesh)> get_builtin_mesh_id;
-        bool pan_tool = false;
+        bool select_tool = false;
         bool suppress_tool_shortcuts = false;
 
         std::function<void()> enter_play_mode;

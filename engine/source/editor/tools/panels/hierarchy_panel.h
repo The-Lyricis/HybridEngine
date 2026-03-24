@@ -47,6 +47,5 @@ namespace Hybrid
         PendingActionType m_pendingAction = PendingActionType::None;
         entt::entity m_pendingTarget = entt::null;
         std::vector<entt::entity> m_visibleOrder;
-        entt::entity m_rangeAnchor = entt::null;
     };
 }

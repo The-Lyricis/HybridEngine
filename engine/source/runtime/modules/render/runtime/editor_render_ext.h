@@ -27,7 +27,7 @@ namespace Hybrid
         bool render_game_view = false;
         glm::vec2 scene_viewport_size = glm::vec2(0.0f);
         glm::vec2 game_viewport_size = glm::vec2(0.0f);
-        bool pan_tool = false;
+        bool select_tool = false;
         bool use_game_camera = true;       // True: use scene primary camera, false: editor camera.
         EditorSelectionState selection;
 
