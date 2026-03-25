@@ -149,85 +149,6 @@ namespace Hybrid
         }
 
         // Returns false if no valid camera found.
-        static bool getSceneCameraMatrices(Hybrid::Scene& scene,
-            float aspect,
-            glm::mat4& outView,
-            glm::mat4& outProj,
-            glm::vec3& outCamPos,
-            glm::vec4* outClearColor = nullptr,
-            bool* outUseSkyboxClear = nullptr)
-        {
-            auto& reg = scene.getRegistry();
-            auto view = reg.view<Hybrid::TransformComponent, Hybrid::CameraComponent>();
-
-            entt::entity mainCam = entt::null;
-            for (auto e : view)
-            {
-                auto& cam = view.get<Hybrid::CameraComponent>(e);
-                if (!cam.Enabled)
-                    continue;
-                if (cam.Primary) { mainCam = e; break; }
-            }
-            if (mainCam == entt::null)
-            {
-                for (auto e : view)
-                {
-                    auto& cam = view.get<Hybrid::CameraComponent>(e);
-                    if (cam.Enabled)
-                    {
-                        mainCam = e;
-                        break;
-                    }
-                }
-            }
-            if (mainCam == entt::null) return false;
-
-            const auto& tr = reg.get<Hybrid::TransformComponent>(mainCam);
-            const auto& cam = reg.get<Hybrid::CameraComponent>(mainCam);
-
-            outProj = glm::perspective(glm::radians(cam.FovY), aspect, cam.Near, cam.Far);
-
-            outView = glm::inverse(tr.WorldMatrix);
-
-            outCamPos = glm::vec3(tr.WorldMatrix[3]);
-            if (outClearColor)
-                *outClearColor = cam.ClearColor;
-            if (outUseSkyboxClear)
-                *outUseSkyboxClear = (cam.ClearMode == CameraClearMode::Skybox);
-            return true;
-        }
-
-        static glm::vec3 lightDirectionFromTransform(const Hybrid::TransformComponent& tr)
-        {
-            const glm::vec3 dir = glm::vec3(tr.WorldMatrix * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
-            const float len = glm::length(dir);
-            if (len < 1e-4f)
-                return glm::vec3(0.0f, -1.0f, 0.0f);
-            return dir / len;
-        }
-
-        static void resolveMainDirectionalLight(const std::shared_ptr<Hybrid::Scene>& scene,
-                                                Hybrid::RenderDirLightData& out_light)
-        {
-            out_light = {};
-            if (!scene)
-                return;
-
-            auto& registry = scene->getRegistry();
-            auto dir_view = registry.view<Hybrid::TransformComponent, Hybrid::DirectionalLightComponent>();
-            for (auto entity : dir_view)
-            {
-                const auto& transform = dir_view.get<Hybrid::TransformComponent>(entity);
-                const auto& light = dir_view.get<Hybrid::DirectionalLightComponent>(entity);
-                if (!light.Enabled)
-                    continue;
-
-                out_light.color = light.Color;
-                out_light.intensity = light.Intensity;
-                out_light.direction = lightDirectionFromTransform(transform);
-                return;
-            }
-        }
     }
 
     void RenderSystem::setAssetManager(std::shared_ptr<AssetManager> mgr)
@@ -624,89 +545,38 @@ namespace Hybrid
                                                  const EditorRenderExt* editor_ext,
                                                  bool cache_editor_camera_state)
     {
-        const glm::vec2 viewport_size = frame_context.viewport_size;
         std::shared_ptr<Scene> scene = frame_context.scene ? frame_context.scene : m_Scene;
-
-        bool use_game_camera = true;
-        if (editor_ext)
-            use_game_camera = editor_ext->use_game_camera;
-
-        glm::mat4 viewM(1.0f), projM(1.0f);
-        glm::vec3 cameraPos(0.0f, 0.0f, 3.0f);
-        const float aspect = (viewport_size.y > 0.0f) ? (viewport_size.x / viewport_size.y) : 1.0f;
-        bool has_camera = false;
-
-        FrameViewData view_data{};
-        view_data.flags = flags;
-        view_data.frame.clearColor = glm::vec4(0.1f, 0.1f, 0.12f, 1.0f);
-        view_data.frame.useSkyboxClear = false;
-
-        if (use_game_camera && scene)
+        FrameViewResolveInput view_input{};
+        view_input.scene = scene;
+        view_input.frame = &frame_context;
+        view_input.editor_ext = editor_ext;
+        view_input.flags = flags;
+        view_input.resolve_cubemap = [this](AssetID id)
         {
-            has_camera = getSceneCameraMatrices(
-                *scene,
-                aspect,
-                viewM,
-                projM,
-                cameraPos,
-                &view_data.frame.clearColor,
-                &view_data.frame.useSkyboxClear);
-        }
-        else if (!use_game_camera && editor_ext && editor_ext->has_editor_camera)
-        {
-            viewM = editor_ext->editor_view;
-            projM = editor_ext->editor_proj;
-            cameraPos = editor_ext->editor_camera_pos;
-            has_camera = true;
-            if (scene && scene->environment().skybox_cubemap.value != 0)
-                view_data.frame.useSkyboxClear = true;
-        }
-
-        if (!has_camera && scene)
-            has_camera = getSceneCameraMatrices(*scene, aspect, viewM, projM, cameraPos);
-
-        if (!has_camera)
-        {
-            viewM = glm::mat4(1.0f);
-            projM = glm::mat4(1.0f);
-            cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
-        }
-
-        view_data.frame.view = viewM;
-        view_data.frame.proj = projM;
-        view_data.frame.viewProj = projM * viewM;
-        view_data.frame.cameraPos = cameraPos;
-        view_data.frame.time = frame_context.dt;
-        if (editor_ext && editor_ext->game_viewport_size.x > 1.0f && editor_ext->game_viewport_size.y > 1.0f)
-            view_data.frame.gameAspect = editor_ext->game_viewport_size.x / editor_ext->game_viewport_size.y;
-        else
-            view_data.frame.gameAspect = (aspect > 0.0f) ? aspect : (16.0f / 9.0f);
-
-        resolveMainDirectionalLight(scene, view_data.mainDirectionalLight);
+            return getOrCreateCubemapTexture(id);
+        };
+        const FrameViewResolveResult view_result = m_FrameViewResolver.resolve(view_input);
 
         if (cache_editor_camera_state)
         {
-            m_LastView = viewM;
-            m_LastProj = projM;
+            m_LastView = view_result.view.frame.view;
+            m_LastProj = view_result.view.frame.proj;
         }
 
         ShadowFrameBuildInput shadow_input{};
-        shadow_input.view = &view_data;
+        shadow_input.view = &view_result.view;
         shadow_input.settings = &m_DirectionalShadowSettings;
         RenderShadowData shadow_data{};
         m_ShadowFrameBuilder.build(shadow_input, shadow_data);
 
         RenderPacketBuildInput packet_input{};
         packet_input.scene = scene;
-        packet_input.view = view_data;
+        packet_input.view = view_result.view;
+        packet_input.environment = view_result.environment;
         packet_input.shadow = &shadow_data;
         packet_input.editor_ext = editor_ext;
         packet_input.asset_manager = m_AssetManager;
         packet_input.material_system = &m_MaterialSystem;
-        packet_input.resolve_cubemap = [this](AssetID id)
-        {
-            return getOrCreateCubemapTexture(id);
-        };
         packet_input.resolve_mesh_gpu = [this](AssetID id, const std::shared_ptr<Mesh>& mesh)
         {
             return getOrCreateMeshGPU(id, mesh);

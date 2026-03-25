@@ -13,6 +13,7 @@
 
 #include "runtime/modules/asset/asset_type.h"
 #include "runtime/modules/render/runtime/passes/scene_pass.h"
+#include "runtime/modules/render/runtime/builders/frame_view_resolver.h"
 #include "runtime/modules/render/runtime/builders/render_packet_builder.h"
 #include "runtime/modules/render/runtime/builders/render_context_builder.h"
 #include "runtime/modules/render/runtime/builders/shadow_frame_builder.h"
@@ -148,6 +149,7 @@ namespace Hybrid
         TexturePtr m_DefaultCubemapTexture;
         std::unique_ptr<TextureUploader> m_TextureUploader;
         DirectionalShadowSettings m_DirectionalShadowSettings{};
+        FrameViewResolver m_FrameViewResolver;
         ShadowFrameBuilder m_ShadowFrameBuilder;
         RenderPacketBuilder m_RenderPacketBuilder;
         RenderContextBuilder m_RenderContextBuilder;

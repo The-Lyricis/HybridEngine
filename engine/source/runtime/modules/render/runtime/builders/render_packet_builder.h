@@ -3,8 +3,8 @@
 #include <functional>
 #include <memory>
 
-#include "runtime/modules/render/runtime/builders/shadow_frame_builder.h"
 #include "runtime/modules/render/runtime/extraction/visibility_collector.h"
+#include "runtime/modules/render/runtime/frame_view_data.h"
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/render_packet.h"
 
@@ -18,11 +18,11 @@ namespace Hybrid
     {
         std::shared_ptr<Scene> scene;
         FrameViewData view;
+        RenderEnvironmentData environment;
         const RenderShadowData* shadow = nullptr;
         const EditorRenderExt* editor_ext = nullptr;
         std::shared_ptr<AssetManager> asset_manager;
         MaterialSystem* material_system = nullptr;
-        std::function<TexturePtr(AssetID)> resolve_cubemap;
         std::function<MeshGPU*(AssetID, const std::shared_ptr<Mesh>&)> resolve_mesh_gpu;
     };
 

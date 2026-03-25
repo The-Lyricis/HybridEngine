@@ -46,23 +46,12 @@ namespace Hybrid
         RenderPacket packet;
         packet.scene = input.scene;
         packet.frame = input.view.frame;
+        packet.environment = input.environment;
         if (input.shadow)
             packet.shadow = *input.shadow;
         packet.showColliderDebug = input.editor_ext ? input.editor_ext->show_collider_debug : false;
         packet.showShadowDebug = input.editor_ext ? input.editor_ext->show_shadow_debug : false;
         packet.activeEntityID = resolveActiveSelectionEntityID(input.editor_ext);
-
-        if (packet.scene)
-        {
-            const SceneEnvironmentSettings& environment = packet.scene->environment();
-            packet.environment.skyboxCubemap = environment.skybox_cubemap;
-            packet.environment.skyboxIntensity = environment.skybox_intensity;
-            packet.environment.skyboxRotationDegrees = environment.skybox_rotation_degrees;
-            if (environment.skybox_cubemap.value != 0 && input.resolve_cubemap)
-                packet.environment.skyboxTexture = input.resolve_cubemap(environment.skybox_cubemap);
-        }
-        if (packet.frame.useSkyboxClear && !packet.environment.skyboxTexture && input.resolve_cubemap)
-            packet.environment.skyboxTexture = input.resolve_cubemap({});
 
         if (!input.asset_manager || !input.material_system || !input.resolve_mesh_gpu)
             return packet;
