@@ -11,17 +11,15 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-#include "runtime/modules/asset/asset_manager.h"
-#include "runtime/modules/asset/cubemap_image.h"
-#include "runtime/modules/asset/material.h"
-#include "runtime/modules/asset/mesh.h"
-#include "runtime/modules/render/runtime/editor_render_ext.h"
+#include "runtime/modules/asset/asset_type.h"
 #include "runtime/modules/render/runtime/passes/scene_pass.h"
+#include "runtime/modules/render/runtime/builders/render_packet_builder.h"
+#include "runtime/modules/render/runtime/builders/render_context_builder.h"
+#include "runtime/modules/render/runtime/builders/shadow_frame_builder.h"
 #include "runtime/modules/render/runtime/passes/gizmo_pass.h"
 #include "runtime/modules/render/runtime/passes/picking_pass.h"
 #include "runtime/modules/render/runtime/passes/post_process_pass.h"
 #include "runtime/modules/render/runtime/passes/skybox_pass.h"
-#include "runtime/modules/render/runtime/render_context.h"
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/mesh_gpu.h"
@@ -32,17 +30,18 @@
 #include "runtime/modules/render/runtime/passes/selection_overlay_pass.h"
 #include "runtime/modules/render/runtime/passes/selection_mask_pass.h"
 #include "runtime/modules/render/runtime/render_packet.h"
-#include "runtime/modules/render/runtime/render_pipeline.h"
+#include "runtime/modules/render/runtime/pipeline/render_pipeline.h"
 #include "runtime/modules/render/runtime/render_flags.h"
 #include "runtime/modules/render/runtime/shader_library.h"
 #include "runtime/modules/render/runtime/passes/shadow_pass.h"
 #include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/texture.h"
 #include "runtime/modules/render/public/texture_uploader.h"
-#include "runtime/core/base/intersection.h"
 
 namespace Hybrid
 {
+    struct EditorRenderExt;
+    struct FrameContext;
     struct RenderStats
     {
         float frame_time_ms = 0.0f;
@@ -68,6 +67,8 @@ namespace Hybrid
     class UniformBuffer;
     class Shader;
     class Scene;
+    class AssetManager;
+    class Mesh;
 
     // Owns runtime render resources and executes render passes from FrameContext/Flags.
     class RenderSystem
@@ -103,22 +104,6 @@ namespace Hybrid
         void configureShaderBindings();
         void updateFrameUBO(const RenderPacket& packet, const glm::vec2& viewport_size);
         void updateLightUBO(const RenderPacket& packet);
-        void prepareShadowData(RenderPacket& packet, RenderFlags flags) const;
-        void collectPacketLights(RenderPacket& packet) const;
-        void collectItemsForFrustum(RenderPacket& packet,
-                                    const Frustum& frustum,
-                                    std::vector<RenderDrawItem>* opaque_items,
-                                    std::vector<RenderDrawItem>* transparent_items,
-                                    std::vector<RenderDrawItem>* shadow_items,
-                                    uint32_t* tested_items,
-                                    uint32_t* culled_items,
-                                    bool count_scene_totals);
-        void collectItemsForVolume(RenderPacket& packet,
-                                   const ConvexVolume& volume,
-                                   std::vector<RenderDrawItem>* shadow_items);
-        void collectPacketDrawItems(RenderPacket& packet, const Frustum& frustum);
-        void collectShadowCasterItems(RenderPacket& packet);
-        void sortRenderPacket(RenderPacket& packet) const;
         void updateStatsFromPacket(const RenderPacket& packet, float render_cpu_time_ms);
         TexturePtr getOrCreateCubemapTexture(AssetID id);
         TexturePtr getDefaultCubemapTexture();
@@ -163,6 +148,9 @@ namespace Hybrid
         TexturePtr m_DefaultCubemapTexture;
         std::unique_ptr<TextureUploader> m_TextureUploader;
         DirectionalShadowSettings m_DirectionalShadowSettings{};
+        ShadowFrameBuilder m_ShadowFrameBuilder;
+        RenderPacketBuilder m_RenderPacketBuilder;
+        RenderContextBuilder m_RenderContextBuilder;
 
         bool m_Initialized = false; // Render backend init state.
         float m_ShaderReloadTimer = 0.0f;

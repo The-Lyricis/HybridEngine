@@ -109,6 +109,8 @@ namespace Hybrid
         std::vector<RenderDrawItem> opaque_items;
         std::vector<RenderDrawItem> transparent_items;
         std::vector<RenderDrawItem> shadow_caster_items;
+        uint32_t scene_renderers = 0;
+        uint32_t scene_submeshes = 0;
         uint32_t tested_items = 0;
         uint32_t culled_items = 0;
         bool showColliderDebug = false;

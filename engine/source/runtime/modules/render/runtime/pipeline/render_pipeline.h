@@ -3,7 +3,7 @@
 #include <functional>
 #include <vector>
 
-#include "runtime/modules/render/runtime/render_context.h"
+#include "runtime/modules/render/runtime/pipeline/render_context.h"
 #include "runtime/modules/render/runtime/render_flags.h"
 
 namespace Hybrid
