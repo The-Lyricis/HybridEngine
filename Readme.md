@@ -119,6 +119,10 @@ Notes:
 
 ## Documentation
 
+Project site:
+
+- [Hybrid Engine Website](https://hybrid-engine-site.vercel.app)
+
 Project documentation lives under `docs/`:
 
 - [Changelog](docs/CHANGELOG.md): development history and milestone notes
