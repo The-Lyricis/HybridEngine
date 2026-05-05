@@ -26,6 +26,7 @@ echo !C_CYAN!===================================================================
 echo.
 
 set "CMAKE_EXE="
+set "VS_INSTALL_PATH="
 set "NEED_CMAKE=0"
 set "NEED_MSVC=0"
 
@@ -98,8 +99,16 @@ if not errorlevel 1 exit /b 0
 
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if exist "!VSWHERE!" (
-    for /f "usebackq delims=" %%I in (`"!VSWHERE!" -latest -products * -requires Microsoft.VisualStudio.Workload.NativeDesktop -property installationPath 2^>nul`) do (
-        exit /b 0
+    for /f "usebackq delims=" %%I in (`"!VSWHERE!" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2^>nul`) do (
+        set "VS_INSTALL_PATH=%%I"
+        for /d %%T in ("%%I\VC\Tools\MSVC\*") do (
+            if exist "%%T\bin\Hostx64\x64\cl.exe" exit /b 0
+            if exist "%%T\bin\Hostx86\x86\cl.exe" exit /b 0
+        )
+    )
+
+    for /f "usebackq delims=" %%I in (`"!VSWHERE!" -latest -products * -property installationPath 2^>nul`) do (
+        set "VS_INSTALL_PATH=%%I"
     )
 )
 exit /b 1
@@ -154,14 +163,32 @@ if "!NEED_CMAKE!"=="1" (
 if "!NEED_MSVC!"=="1" (
     echo.
     echo !C_YELLOW!Installing Visual Studio Build Tools C++ workload...!C_RESET!
-    winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--wait --add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended"
-    if errorlevel 1 (
-        echo !C_RED![ERROR] Visual Studio Build Tools installation failed.!C_RESET!
-        exit /b 1
-    )
+    call :install_msvc
+    if errorlevel 1 exit /b 1
 )
 
 echo.
 echo !C_GREEN![OK] Installation command finished.!C_RESET!
 echo Restart this terminal, then run build_windows.bat again.
+exit /b 0
+
+:install_msvc
+set "VS_SETUP=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\setup.exe"
+if defined VS_INSTALL_PATH if exist "!VS_SETUP!" (
+    echo Found Visual Studio installation:
+    echo   !VS_INSTALL_PATH!
+    echo Adding the C++ desktop workload to this installation...
+    "!VS_SETUP!" modify --installPath "!VS_INSTALL_PATH!" --add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --passive --norestart --wait
+    if errorlevel 1 (
+        echo !C_RED![ERROR] Visual Studio Installer failed to add the C++ workload.!C_RESET!
+        exit /b 1
+    )
+    exit /b 0
+)
+
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--wait --add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended"
+if errorlevel 1 (
+    echo !C_RED![ERROR] Visual Studio Build Tools installation failed.!C_RESET!
+    exit /b 1
+)
 exit /b 0
