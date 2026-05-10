@@ -1,6 +1,6 @@
 # Render ECS Asset Chain
 
-Updated: 2026-03-21
+Updated: 2026-05-11
 Scope: `TDA572/engine/source/runtime/modules/render/runtime`, `TDA572/engine/source/runtime/modules/asset`, `TDA572/engine/source/editor`
 
 ## Purpose
@@ -78,17 +78,39 @@ Directional-light rule:
 
 The current render pass set is:
 
+- `ShadowPass`
 - `ScenePass`
+- `SkyboxPass`
 - `PickingPass`
 - `SelectionMaskPass`
 - `SelectionOverlayPass`
 - `GizmoPass`
-- `ShadowPass`
+- `OverlayGizmoPass`
 - `PostProcessPass`
+
+The current code pass order is:
+
+- `Shadow`
+- `Scene`
+- `Skybox`
+- `Picking`
+- `SelectionMask`
+- `SelectionOverlay`
+- `WorldGizmo`
+- `OverlayGizmo`
+- `PostProcess`
+
+Current placeholder paths:
+
+- `PickingPass` piggybacks on the `ScenePass` EntityID attachment
+- `OverlayGizmoPass` is reserved for future screen-space editor overlays
+- `PostProcessPass` is reserved for the future post-process chain
 
 Current builtin shader registrations are centralized through `render_shaders.h`:
 
 - `Scene`
+- `Skybox`
+- `ShadowDepth`
 - `ColliderDebug`
 - `SelectionMask`
 - `SelectionOverlay`
@@ -233,11 +255,16 @@ Fix:
 - prepare / sort layering is still thin
 - the runtime render path is cleaner now, but asset-side OpenGL texture upload is still a backend-coupling point
 - shader binding and render protocol registration are now centralized, and future work should avoid turning those registration points into catch-all systems
+- pass ordering is still fixed rather than dependency-driven
+- render state is still set procedurally in passes instead of through explicit pipeline-state objects
+- post-processing, grid rendering, overlay gizmos, and debug-normal rendering are not yet complete
 
 ## Future Improvement Plan
 
 I plan to continue in this order:
 
-1. I will continue to fill in the prepare / sort layer.
-2. I will keep the centralized render protocols stable while avoiding new runtime/pass OpenGL leakage.
-3. After that, I will decide whether the next structural priority is asset-side GPU upload separation or further editor/platform isolation.
+1. I will keep this chain record aligned with `docs/systems/render_system.md`.
+2. I will continue to fill in the prepare / sort layer.
+3. I will keep the centralized render protocols stable while avoiding new runtime/pass OpenGL leakage.
+4. I will clean up pass boundaries before adding larger architecture.
+5. I will use the render plan document for the broader Render Graph, pipeline-state, frame-resource, and Forward+ roadmap.

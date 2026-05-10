@@ -1,11 +1,11 @@
 # Render System
 
-Updated: 2026-03-21
+Updated: 2026-05-11
 Scope: `TDA572/engine/source/runtime/modules/render`, `TDA572/engine/source/editor`
 
 ## Purpose
 
-This document describes the current render-system structure, pass naming, runtime/editor integration points, and the current platform/backend scope.
+This document describes the current render-system structure, pass naming, runtime/editor integration points, current platform/backend scope, and the next modernization direction for the render architecture.
 
 Detailed notes about the Mesh / Material / ECS / editor data path are tracked in:
 
@@ -26,23 +26,34 @@ Current high-level flow:
 
 The current pass naming is:
 
+- `ShadowPass`
 - `ScenePass`
+- `SkyboxPass`
 - `PickingPass`
 - `SelectionMaskPass`
 - `SelectionOverlayPass`
 - `GizmoPass`
-- `ShadowPass`
+- `OverlayGizmoPass`
 - `PostProcessPass`
 
-The current pipeline order is:
+The current code pipeline order is:
 
+- `Shadow`
 - `Scene`
+- `Skybox`
 - `Picking`
 - `SelectionMask`
 - `SelectionOverlay`
-- `Gizmo`
-- `Shadow`
+- `WorldGizmo`
+- `OverlayGizmo`
 - `PostProcess`
+
+Current notes:
+
+- `PickingPass` is a placeholder because entity picking currently piggybacks on `ScenePass` EntityID output.
+- `PostProcessPass` is a placeholder for the future post-process chain.
+- `OverlayGizmoPass` is reserved for screen-space editor handles and overlays.
+- `Grid` and `DebugNormals` are represented in `RenderFlags`, but their pass paths are not active in the current pipeline.
 
 ## Core Responsibilities
 
@@ -84,6 +95,37 @@ Each pass consumes explicit context data such as:
 - `editor_selection`
 
 This keeps pass inputs explicit instead of pulling state directly from `RenderSystem` internals.
+
+## Current Frame Flow
+
+The current frame flow is a forward-rendering editor pipeline:
+
+1. `HybridEngine::run()` updates input, layers, scene state, and physics.
+2. `RenderSystem::update(dt)` reloads changed shaders on its timer.
+3. `RenderSystem::renderFrame(...)` routes the frame to Scene View, Game View, or the default runtime target.
+4. `FrameViewResolver` resolves camera, projection, clear color, skybox state, and main directional light.
+5. `ShadowFrameBuilder` builds directional-light cascade data when shadows are enabled.
+6. `RenderPacketBuilder` extracts lights and draw items from ECS, resolves mesh/material GPU resources, culls visible objects, and sorts draw queues.
+7. `RenderSystem` updates `FrameBlock` and `LightBlock` UBOs.
+8. `RenderPipeline` executes the enabled passes in the fixed pass order.
+9. The editor UI displays the Scene View and Game View color textures.
+
+Scene View uses the editor camera and can run picking, selection highlight, gizmo, and shadow passes. Game View uses the game camera and currently renders only `Scene | Shadow`.
+
+## Render Targets
+
+The main Scene View and Game View framebuffers use:
+
+- color attachment 0: scene color (`RGBA8`)
+- color attachment 1: encoded EntityID (`R32UI`)
+- depth attachment: scene depth (`Depth32F`)
+
+The selection framebuffer uses:
+
+- color attachment 0: selected-union mask (`R8`)
+- depth attachment: selected-object depth (`Depth32F`)
+
+Directional shadow cascades use depth-only framebuffers.
 
 ## Shader Naming
 
@@ -181,7 +223,7 @@ Render-backend preparation goal:
 
 Current status:
 
-- `runtime/modules/render/runtime` no longer contains direct `gl*` calls
+- `runtime/modules/render/runtime` should not contain direct `gl*` calls
 - draw-buffer control, attachment clear/readback/copy, state toggles, and selection-overlay attachment binding now go through backend or render abstractions
 
 This is the real prerequisite for any future second graphics backend.
@@ -241,15 +283,66 @@ The current rules are:
 - shader-binding registration is now centralized, but `configureShaderBindings()` should not grow into a large catch-all registration function
 - the asset texture upload path still contains an OpenGL-specific texture loader and remains a known backend-coupling point
 - runtime still exposes framebuffer renderer IDs for some editor-facing usage, and that boundary should not spread back into runtime pass logic
+- pass ordering is still fixed and manually maintained by `RenderPipeline`
+- pass resource dependencies are implicit rather than declared
+- render state is still set procedurally inside passes instead of through pipeline-state objects
+- post-processing, grid rendering, overlay gizmos, and debug-normal rendering are not yet complete
+
+## Modernization Direction
+
+The next render-system direction is to move from a fixed sequential pass dispatcher toward a modern, resource-driven architecture while keeping the current OpenGL backend stable.
+
+The target architecture should introduce these concepts gradually:
+
+- Render Graph
+  - passes declare their input and output resources
+  - graph execution decides ordering from dependencies
+  - transient color/depth targets are owned by the graph
+  - resize and lifetime management are centralized
+- Pipeline State Object
+  - shader program, vertex layout, blend state, depth/stencil state, raster state, and render-target formats are grouped as explicit state
+  - passes and materials bind stable state objects instead of setting many global states ad hoc
+- Resource Binding Model
+  - textures, samplers, uniform buffers, storage buffers, and render targets should be described through backend-neutral handles
+  - OpenGL texture slots and uniform names should become implementation details behind binding layouts where possible
+- Frame Resource System
+  - per-frame dynamic uniform/storage data should move toward ring buffers or transient allocators
+  - upload and delayed GPU deletion should be centralized
+- HDR Post-Process Chain
+  - scene color should eventually support HDR formats
+  - tone mapping and gamma correction should become the minimum post-process path
+  - bloom, FXAA/TAA, and color grading can be layered after the base chain
+- Forward+ / Clustered Forward Lighting
+  - keep the current forward material path
+  - replace simple point-light iteration with tiled or clustered light lists when the renderer outgrows the current UBO light array
+- Editor Overlay Split
+  - world overlays should cover grid, colliders, lights, camera frustums, and physics/debug lines
+  - screen overlays should cover selection outlines, transform handles, icons, and viewport-space editor tools
+
+Important sequencing rule:
+
+- do not begin a second graphics backend before pass dependencies, pipeline state, resource binding, and frame resources are clearer under the current OpenGL backend.
 
 ## Future Improvement Plan
 
-I plan to continue with these steps:
+Planned refactor order:
 
-1. I will keep the runtime target OpenGL-only while continuing to remove avoidable platform-specific assumptions.
-2. I will keep the new render protocols stable and avoid turning the protocol headers into general constant dumps.
-3. I will isolate editor platform services behind interfaces before attempting broader editor portability.
-4. I will keep backend-facing work focused on remaining coupling points such as asset-side GPU upload and renderer-ID leakage, rather than reopening runtime pass GL usage.
+1. Align documentation and code naming around the real current pass order and active/inactive pass status.
+2. Clean up existing pass boundaries without changing visible behavior:
+   - split world overlay and screen overlay responsibilities
+   - remove accidental pass coupling such as debug options gating unrelated gizmos
+   - keep runtime pass code free of direct OpenGL calls
+3. Add a minimal post-process path:
+   - full-screen pass infrastructure
+   - tone mapping / gamma correction placeholder
+   - clear input/output target ownership
+4. Introduce explicit pipeline-state descriptions for existing passes.
+5. Introduce a small Render Graph prototype around the current fixed pass set.
+6. Move transient framebuffer creation, resize, and ownership into graph-managed resources.
+7. Normalize material and resource bindings around backend-neutral binding layouts.
+8. Add frame-resource utilities for dynamic buffers, upload staging, and delayed release.
+9. Upgrade lighting toward Forward+ / clustered forward when the resource model is ready.
+10. Treat a second backend as a later implementation target after the architecture above is stable.
 
 ## Related Documents
 
