@@ -48,12 +48,19 @@ namespace Hybrid::RenderShaders
         "SelectionOverlay.frag"
     };
 
-    inline constexpr std::array<ShaderSourceDesc, 6> kBuiltinShaders = {
+    inline constexpr ShaderSourceDesc kPostProcess{
+        "PostProcess",
+        "PostProcess.vert",
+        "PostProcess.frag"
+    };
+
+    inline constexpr std::array<ShaderSourceDesc, 7> kBuiltinShaders = {
         kScene,
         kColliderDebug,
         kSkybox,
         kShadowDepth,
         kSelectionMask,
-        kSelectionOverlay
+        kSelectionOverlay,
+        kPostProcess
     };
 } // namespace Hybrid::RenderShaders

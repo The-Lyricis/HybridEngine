@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "material_asset_serializer.h"
 #include "runtime/core/base/macro.h"
 
 namespace Hybrid
@@ -15,114 +16,76 @@ namespace Hybrid
 
         using json = nlohmann::json;
 
-        bool parseAssetId(const json& node, AssetID& out_id)
+        void logIssue(const AssetMetadata& meta, const std::string& path, const MaterialAssetIssue& issue)
         {
-            out_id = AssetID{};
-            if (node.is_null())
-                return true;
-
-            if (node.is_number_unsigned())
+            if (issue.fatal)
             {
-                out_id = AssetID::FromRaw(node.get<uint64_t>());
-                return true;
+                HBD_CORE_ERROR("{} load_failed asset_id={} path={} field={} reason={} value={}",
+                               kMaterialLoaderLogTag,
+                               meta.id.value,
+                               path,
+                               issue.field.empty() ? "<root>" : issue.field,
+                               issue.reason,
+                               issue.value.empty() ? "<none>" : issue.value);
             }
-            if (node.is_number_integer())
+            else
             {
-                const auto v = node.get<int64_t>();
-                if (v < 0)
-                    return false;
-                out_id = AssetID::FromRaw(static_cast<uint64_t>(v));
-                return true;
+                HBD_CORE_WARN("{} schema_warning asset_id={} path={} field={} reason={} value={}",
+                              kMaterialLoaderLogTag,
+                              meta.id.value,
+                              path,
+                              issue.field.empty() ? "<root>" : issue.field,
+                              issue.reason,
+                              issue.value.empty() ? "<none>" : issue.value);
             }
-            if (node.is_string())
-            {
-                const std::string s = node.get<std::string>();
-                if (s.empty())
-                    return true;
-                try
-                {
-                    size_t idx = 0;
-                    const uint64_t raw = std::stoull(s, &idx, 10);
-                    if (idx != s.size())
-                        return false;
-                    out_id = AssetID::FromRaw(raw);
-                    return true;
-                }
-                catch (...)
-                {
-                    return false;
-                }
-            }
-            return false;
-        }
-
-        bool parseVec4(const json& node, glm::vec4& out_v)
-        {
-            if (!node.is_array() || node.size() != 4)
-                return false;
-            for (size_t i = 0; i < 4; ++i)
-            {
-                if (!node[i].is_number())
-                    return false;
-            }
-            out_v = glm::vec4(node[0].get<float>(), node[1].get<float>(), node[2].get<float>(), node[3].get<float>());
-            return true;
-        }
-
-        bool parseSurfaceMode(const json& node, MaterialSurfaceMode& out_mode)
-        {
-            if (node.is_string())
-            {
-                const std::string value = node.get<std::string>();
-                if (value == "opaque")
-                {
-                    out_mode = MaterialSurfaceMode::Opaque;
-                    return true;
-                }
-                if (value == "masked" || value == "alphatest" || value == "alpha_test")
-                {
-                    out_mode = MaterialSurfaceMode::Masked;
-                    return true;
-                }
-                if (value == "transparent" || value == "alphablend" || value == "alpha_blend")
-                {
-                    out_mode = MaterialSurfaceMode::Transparent;
-                    return true;
-                }
-                return false;
-            }
-
-            if (node.is_number_integer() || node.is_number_unsigned())
-            {
-                const int value = node.get<int>();
-                if (value < static_cast<int>(MaterialSurfaceMode::Opaque) ||
-                    value > static_cast<int>(MaterialSurfaceMode::Transparent))
-                {
-                    return false;
-                }
-
-                out_mode = static_cast<MaterialSurfaceMode>(value);
-                return true;
-            }
-
-            return false;
         }
 
         void resolveTexturePathToId(const std::shared_ptr<AssetRegistry>& registry,
-                                    const std::string& path,
+                                    const AssetMetadata& meta,
+                                    const std::string& material_path,
+                                    const char* field,
+                                    const std::string& texture_path,
                                     AssetID& out_id)
         {
-            if (out_id.value != 0 || !registry || path.empty())
+            if (out_id.value != 0 || texture_path.empty())
                 return;
+            if (!registry)
+            {
+                HBD_CORE_WARN("{} texture_path_unresolved asset_id={} path={} field={} texture_path={} reason=no_registry",
+                              kMaterialLoaderLogTag,
+                              meta.id.value,
+                              material_path,
+                              field,
+                              texture_path);
+                return;
+            }
 
-            const AssetMetadata* texture_meta = registry->findByPath(path);
+            const AssetMetadata* texture_meta = registry->findByPath(texture_path);
             if (!texture_meta)
+            {
+                HBD_CORE_WARN("{} texture_path_unresolved asset_id={} path={} field={} texture_path={} reason=not_registered",
+                              kMaterialLoaderLogTag,
+                              meta.id.value,
+                              material_path,
+                              field,
+                              texture_path);
                 return;
+            }
 
             if (texture_meta->type == AssetType::Texture2D || texture_meta->type == AssetType::TextureCube)
+            {
                 out_id = texture_meta->id;
+                return;
+            }
+
+            HBD_CORE_WARN("{} texture_path_unresolved asset_id={} path={} field={} texture_path={} reason=asset_type_mismatch",
+                          kMaterialLoaderLogTag,
+                          meta.id.value,
+                          material_path,
+                          field,
+                          texture_path);
         }
-    } // namespace
+    }
 
     std::shared_ptr<Material> MaterialFileLoader::load(const AssetMetadata& meta, IVirtualFileSystem& vfs)
     {
@@ -158,53 +121,44 @@ namespace Hybrid
             return nullptr;
         }
 
-        MaterialData data{};
-        if (root.contains("albedo_color"))
-            parseVec4(root["albedo_color"], data.albedo_color);
-        if (root.contains("metallic") && root["metallic"].is_number())
-            data.metallic = root["metallic"].get<float>();
-        if (root.contains("roughness") && root["roughness"].is_number())
-            data.roughness = root["roughness"].get<float>();
-        if (root.contains("ao") && root["ao"].is_number())
-            data.ao = root["ao"].get<float>();
-        if (root.contains("emissive") && root["emissive"].is_number())
-            data.emissive = root["emissive"].get<float>();
-        if (root.contains("surface_mode"))
-            (void)parseSurfaceMode(root["surface_mode"], data.surface_mode);
-        if (root.contains("alpha_cutoff") && root["alpha_cutoff"].is_number())
-            data.alpha_cutoff = root["alpha_cutoff"].get<float>();
+        MaterialAssetParseResult parsed = ParseMaterialAssetJson(root);
+        for (const MaterialAssetIssue& issue : parsed.issues)
+            logIssue(meta, load_path, issue);
+        if (parsed.hasFatalIssue())
+            return nullptr;
 
-        const auto parseIdIfExists = [&](const char* key, AssetID& out_id) {
-            if (root.contains(key))
-                (void)parseAssetId(root[key], out_id);
-        };
-        parseIdIfExists("albedo_map_id", data.albedo_map);
-        parseIdIfExists("normal_map_id", data.normal_map);
-        parseIdIfExists("metallic_roughness_map_id", data.metallic_roughness_map);
-        parseIdIfExists("ao_map_id", data.ao_map);
-        parseIdIfExists("emissive_map_id", data.emissive_map);
+        MaterialAssetDesc& desc = parsed.desc;
+        resolveTexturePathToId(m_registry,
+                               meta,
+                               load_path,
+                               "base_color_texture_path",
+                               desc.base_color_texture_path,
+                               desc.data.base_color_texture.texture);
+        resolveTexturePathToId(m_registry,
+                               meta,
+                               load_path,
+                               "normal_texture_path",
+                               desc.normal_texture_path,
+                               desc.data.normal_texture.texture);
+        resolveTexturePathToId(m_registry,
+                               meta,
+                               load_path,
+                               "metallic_roughness_texture_path",
+                               desc.metallic_roughness_texture_path,
+                               desc.data.metallic_roughness_texture.texture);
+        resolveTexturePathToId(m_registry,
+                               meta,
+                               load_path,
+                               "occlusion_texture_path",
+                               desc.occlusion_texture_path,
+                               desc.data.occlusion_texture.texture);
+        resolveTexturePathToId(m_registry,
+                               meta,
+                               load_path,
+                               "emissive_texture_path",
+                               desc.emissive_texture_path,
+                               desc.data.emissive_texture.texture);
 
-        std::string albedo_path;
-        std::string normal_path;
-        std::string mr_path;
-        std::string ao_path;
-        std::string emissive_path;
-        const auto readPath = [&](const char* key, std::string& out_path) {
-            if (root.contains(key) && root[key].is_string())
-                out_path = root[key].get<std::string>();
-        };
-        readPath("albedo_map_path", albedo_path);
-        readPath("normal_map_path", normal_path);
-        readPath("metallic_roughness_map_path", mr_path);
-        readPath("ao_map_path", ao_path);
-        readPath("emissive_map_path", emissive_path);
-
-        resolveTexturePathToId(m_registry, albedo_path, data.albedo_map);
-        resolveTexturePathToId(m_registry, normal_path, data.normal_map);
-        resolveTexturePathToId(m_registry, mr_path, data.metallic_roughness_map);
-        resolveTexturePathToId(m_registry, ao_path, data.ao_map);
-        resolveTexturePathToId(m_registry, emissive_path, data.emissive_map);
-
-        return std::make_shared<Material>(data);
+        return std::make_shared<Material>(desc.data);
     }
-} // namespace Hybrid
+}

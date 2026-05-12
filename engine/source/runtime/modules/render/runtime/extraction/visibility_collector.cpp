@@ -143,16 +143,16 @@ namespace Hybrid
                 item.tint = resolved.renderer->Tint;
                 item.entityID = static_cast<uint32_t>(entt::to_integral(entity));
 
-                const MaterialSurfaceMode surface_mode = effective_material_gpu->data.surface_mode;
+                const MaterialAlphaMode alpha_mode = effective_material_gpu->alphaMode();
 
                 if (shadow_items)
                 {
-                    if (surface_mode != MaterialSurfaceMode::Transparent)
+                    if (effective_material_gpu->castsShadow())
                         shadow_items->push_back(item);
                     continue;
                 }
 
-                if (surface_mode == MaterialSurfaceMode::Transparent)
+                if (alpha_mode == MaterialAlphaMode::Blend)
                 {
                     if (transparent_items)
                         transparent_items->push_back(item);
@@ -205,7 +205,7 @@ namespace Hybrid
                     }
                 }
 
-                if (effective_material_gpu->data.surface_mode == MaterialSurfaceMode::Transparent)
+                if (!effective_material_gpu->castsShadow())
                     continue;
 
                 RenderDrawItem item{};

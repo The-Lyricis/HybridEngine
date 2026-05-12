@@ -10,6 +10,7 @@
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/vertex_array.h"
+#include "runtime/modules/render/runtime/pipeline/pipeline_state.h"
 #include "runtime/modules/render/runtime/render_bindings.h"
 #include "runtime/modules/render/runtime/render_targets.h"
 
@@ -32,11 +33,7 @@ namespace Hybrid
         framebuffer->setDrawColorAttachments({RenderTargets::kSceneColorAttachment});
         RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
 
-        RenderCommand::setBlendEnabled(false);
-        RenderCommand::setDepthTestEnabled(true);
-        RenderCommand::setDepthWriteEnabled(false);
-        RenderCommand::setDepthCompareFunc(DepthCompareFunc::LessEqual);
-        RenderCommand::setCullEnabled(false);
+        ScopedPipelineState pipeline_state(PipelineStates::Skybox());
 
         skybox_shader->bind();
         skybox_shader->setFloat("u_Intensity", packet.environment.skyboxIntensity);
@@ -46,9 +43,6 @@ namespace Hybrid
         cube->vao->bind();
         RenderCommand::drawIndexed(cube->index_count);
 
-        RenderCommand::setDepthCompareFunc(DepthCompareFunc::Less);
-        RenderCommand::setDepthWriteEnabled(true);
-        RenderCommand::setCullEnabled(true);
         framebuffer->setDrawColorAttachments({
             RenderTargets::kSceneColorAttachment,
             RenderTargets::kSceneEntityIDAttachment

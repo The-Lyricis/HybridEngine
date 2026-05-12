@@ -81,6 +81,11 @@ namespace Hybrid
         const RenderStats* render_stats = nullptr;
         bool show_collider_debug = true;
         bool show_shadow_debug = false;
+        bool enable_post_process = false;
+        bool enable_tone_mapping = false;
+        bool enable_gamma_correction = false;
+        float post_process_exposure = 1.0f;
+        float post_process_gamma = 2.2f;
     };
 
     struct EditorDocumentActions

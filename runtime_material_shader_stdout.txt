@@ -1,0 +1,39 @@
+[18:18:42] [tid=48840] HYBRID_CORE: [Engine] initialize_started cwd=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor requested_project=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/GameProject.hyproj resolved_hyproj=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/GameProject.hyproj
+[18:18:42] [tid=48840] HYBRID_CORE: [Engine] project_loaded hyproj=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/GameProject.hyproj project_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject assets_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Assets cache_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Cache build_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Build settings_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/ProjectSettings
+[18:18:42] [tid=48840] HYBRID_CORE: [OpenGLContext] initialize_completed vsync=1
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] initialize_started project_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject assets_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Assets cache_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Cache build_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Build
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] vfs_fallback_selected reason=null_injected_vfs implementation=NativeFileSystem
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] mounts_ready project_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject assets_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Assets cache_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Cache build_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Build
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] meta_load_completed assets_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Assets total=0 loaded=0 failed=0
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] loaders_registered count=5 types=TextureImageData,CubemapImageData,Mesh,Material,Scene
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] default_texture_registered width=1 height=1 format=RGBA8
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] builtin_cubemap_registered logical_path=engine:cubemaps/default_sky/default_sky.hcube.json asset_id=4129154087486650493
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] default_cubemap_registered asset_id=4129154087486650493
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] default_material_registered name=HybridDefault
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] builtin_mesh_registered logical_path=builtin:Cube asset_id=7323366660659920496
+[18:18:42] [tid=48840] HYBRID_CORE: [RuntimeResourceSystem] initialize_completed meta_total=0 meta_loaded=0 meta_failed=0 default_texture=true default_material=true builtin_cube_id=7323366660659920496 builtin_default_skybox_id=4129154087486650493
+[18:18:42] [tid=48840] HYBRID_CORE: [ShaderLibrary] reload_completed shader=Scene vertex_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/Scene.vert fragment_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/Scene.frag
+[18:18:42] [tid=48840] HYBRID_CORE: [ShaderLibrary] reload_completed shader=ColliderDebug vertex_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/ColliderDebug.vert fragment_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/ColliderDebug.frag
+[18:18:42] [tid=48840] HYBRID_CORE: [ShaderLibrary] reload_completed shader=Skybox vertex_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/Skybox.vert fragment_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/Skybox.frag
+[18:18:42] [tid=48840] HYBRID_CORE: [ShaderLibrary] reload_completed shader=ShadowDepth vertex_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/ShadowDepth.vert fragment_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/ShadowDepth.frag
+[18:18:42] [tid=48840] HYBRID_CORE: [ShaderLibrary] reload_completed shader=SelectionMask vertex_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/SelectionMask.vert fragment_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/SelectionMask.frag
+[18:18:42] [tid=48840] HYBRID_CORE: [ShaderLibrary] reload_completed shader=SelectionOverlay vertex_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/SelectionOverlay.vert fragment_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/SelectionOverlay.frag
+[18:18:42] [tid=48840] HYBRID_CORE: [ShaderLibrary] reload_completed shader=PostProcess vertex_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/PostProcess.vert fragment_path=C:/Users/PIG_CHICK/Desktop/HybridEngine/engine/shader/PostProcess.frag
+[18:18:42] [tid=48840] HYBRID_CORE: [RenderSystem] builtin_shaders_loaded scene=true skybox=true shadow=true collider_debug=true selection_mask=true selection_overlay=true scene_shader_ready=true skybox_shader_ready=true shadow_shader_ready=true collider_debug_shader_ready=true
+[18:18:42] [tid=48840] HYBRID_CORE: [RenderSystem] initialize_completed framebuffer_size=1280x720
+[18:18:42] [tid=48840] HYBRID_CORE: [Engine] editor_scene_set scene=Untitled mode=edit
+[18:18:42] [tid=48840] HYBRID_CORE: [PhysicsSystem] initialize_completed
+[18:18:42] [tid=48840] HYBRID_CORE: [Engine] initialize_completed scene=Untitled viewport=1280x720 mode=edit
+[18:18:42] [tid=48840] HYBRID_CORE: [EditorApp] engine_initialized
+[18:18:42] [tid=48840] HYBRID_CORE: [EditorApp] project_path_requested path=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/GameProject.hyproj
+[18:18:42] [tid=48840] HYBRID_CORE: [EditorApp] run_started
+[18:18:42] [tid=48840] HYBRID_CORE: [EditorResourceSystem] initialize_completed assets_root=C:\Users\PIG_CHICK\Desktop\HybridEngine\build\ninja-msvc\engine\source\editor\GameProject\Assets
+[18:18:42] [tid=48840] HYBRID_CORE: [ImGuiLayer] attach_completed
+[18:18:42] [tid=48840] HYBRID_CORE: [EditorUI] initialize_completed
+[18:18:42] [tid=48840] HYBRID_CORE: [EditorResourceSystem] bootstrap_completed scanned=0 queued_missing_meta=0 queued_missing_cooked=0
+[18:18:42] [tid=48840] HYBRID_CORE: [EditorAssetHotReloadController] initialize_completed assets_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Assets watcher_initialized=true
+[18:18:42] [tid=48840] HYBRID_CORE: [EditorSceneIOService] initialize_completed assets_root=C:/Users/PIG_CHICK/Desktop/HybridEngine/build/ninja-msvc/engine/source/editor/GameProject/Assets
+[18:18:42] [tid=48840] HYBRID_CORE: [Engine] editor_scene_set scene=Untitled mode=edit
+[18:18:42] [tid=48840] HYBRID_CORE: [EditorLayer] attach_completed
+[18:18:42] [tid=48840] HYBRID_CORE: [EditorApp] layers_attached
+[18:18:42] [tid=48840] HYBRID_CORE: [Engine] run_started mode=edit

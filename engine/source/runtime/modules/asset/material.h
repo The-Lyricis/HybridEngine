@@ -3,34 +3,53 @@
 #include <cstdint>
 #include <memory>
 
+#include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
 #include "asset_type.h"
 
 namespace Hybrid
 {
-    enum class MaterialSurfaceMode : uint8_t
+    enum class MaterialWorkflow : uint8_t
+    {
+        MetallicRoughness = 0,
+    };
+
+    enum class MaterialAlphaMode : uint8_t
     {
         Opaque = 0,
-        Masked = 1,
-        Transparent = 2,
+        Mask = 1,
+        Blend = 2,
+    };
+
+    struct MaterialTextureSlot
+    {
+        AssetID texture{};
+        uint32_t uv_set = 0;
     };
 
     struct MaterialData
     {
-        glm::vec4 albedo_color{1.0f};
-        float metallic  = 0.0f;
-        float roughness = 1.0f;
-        float ao        = 1.0f;
-        float emissive  = 0.0f;
-        MaterialSurfaceMode surface_mode = MaterialSurfaceMode::Opaque;
+        MaterialWorkflow workflow = MaterialWorkflow::MetallicRoughness;
+        MaterialAlphaMode alpha_mode = MaterialAlphaMode::Opaque;
+        bool double_sided = false;
         float alpha_cutoff = 0.5f;
 
-        AssetID albedo_map{};
-        AssetID normal_map{};
-        AssetID metallic_roughness_map{};
-        AssetID ao_map{};
-        AssetID emissive_map{};
+        glm::vec4 base_color_factor{1.0f};
+        MaterialTextureSlot base_color_texture{};
+
+        float metallic_factor = 0.0f;
+        float roughness_factor = 1.0f;
+        MaterialTextureSlot metallic_roughness_texture{};
+
+        MaterialTextureSlot normal_texture{};
+        float normal_scale = 1.0f;
+
+        MaterialTextureSlot occlusion_texture{};
+        float occlusion_strength = 1.0f;
+
+        glm::vec3 emissive_factor{0.0f};
+        MaterialTextureSlot emissive_texture{};
     };
 
     class Material

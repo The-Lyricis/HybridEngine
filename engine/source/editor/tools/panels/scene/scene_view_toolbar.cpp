@@ -1,5 +1,6 @@
 #include "scene_view_toolbar.h"
 
+#include <algorithm>
 #include <string>
 
 #include <glad/gl.h>
@@ -197,6 +198,48 @@ namespace Hybrid
             ctx.gizmo.space = GizmoSpace::World;
             result.interacted = true;
             HBD_CORE_INFO("{} gizmo_space_changed space={}", kSceneViewToolbarLogTag, gizmoSpaceName(GizmoSpace::World));
+        }
+
+        const float current_x = ImGui::GetCursorPosX();
+        const float controls_width = available_width >= 620.0f ? 430.0f : 176.0f;
+        if (available_width > current_x + controls_width + 18.0f)
+        {
+            ImGui::SameLine();
+            ImGui::SetCursorPosX((std::max)(current_x + 16.0f, available_width - controls_width));
+
+            if (ImGui::Checkbox("Post", &ctx.debug.enable_post_process))
+                result.interacted = true;
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+                ImGui::SetTooltip("Post Process");
+
+            ImGui::BeginDisabled(!ctx.debug.enable_post_process);
+            ImGui::SameLine(0.0f, 8.0f);
+            if (ImGui::Checkbox("TM", &ctx.debug.enable_tone_mapping))
+                result.interacted = true;
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+                ImGui::SetTooltip("Tone Mapping");
+
+            ImGui::SameLine(0.0f, 8.0f);
+            if (ImGui::Checkbox("Gamma", &ctx.debug.enable_gamma_correction))
+                result.interacted = true;
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+                ImGui::SetTooltip("Gamma Correction");
+
+            if (available_width >= 620.0f)
+            {
+                ImGui::SameLine(0.0f, 8.0f);
+                ImGui::SetNextItemWidth(90.0f);
+                if (ImGui::SliderFloat("Exp", &ctx.debug.post_process_exposure, 0.0f, 5.0f, "%.2f"))
+                    result.interacted = true;
+
+                ImGui::SameLine(0.0f, 8.0f);
+                ImGui::SetNextItemWidth(90.0f);
+                if (ImGui::SliderFloat("##GammaValue", &ctx.debug.post_process_gamma, 0.1f, 4.0f, "%.2f"))
+                    result.interacted = true;
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+                    ImGui::SetTooltip("Gamma Value");
+            }
+            ImGui::EndDisabled();
         }
 
         if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))

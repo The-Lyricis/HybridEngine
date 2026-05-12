@@ -56,6 +56,7 @@ The current code pass order is:
 - `Picking`
 - `SelectionMask`
 - `SelectionOverlay`
+- `Grid`
 - `WorldGizmo`
 - `OverlayGizmo`
 - `PostProcess`
@@ -63,9 +64,10 @@ The current code pass order is:
 Current inactive or placeholder paths:
 
 - `PickingPass` piggybacks on `ScenePass` EntityID output
+- `GridPass` is connected to the pipeline but still has placeholder implementation
 - `OverlayGizmoPass` is reserved for screen-space editor overlays
-- `PostProcessPass` is reserved for the future post-process chain
-- `Grid` and `DebugNormals` exist in flags but do not have active pass paths
+- `PostProcessPass` is connected as a fullscreen pass with tone-mapping and gamma-correction parameters. The correction toggles currently default to disabled.
+- `DebugNormals` exists in flags but does not have an active pass path
 
 ## Planning Constraints
 
@@ -202,7 +204,7 @@ I plan to continue in this order:
 
 1. Stabilize and document the current OpenGL render path.
 2. Clean up pass boundaries and inactive pass status.
-3. Add the minimal post-process foundation.
+3. Wire the post-process tone mapping / gamma settings to editor or project configuration.
 4. Add explicit pipeline-state descriptions for existing passes.
 5. Add a small Render Graph around the current pass set.
 6. Move transient render-target ownership into graph resources.
@@ -217,7 +219,7 @@ The most reasonable next steps are:
 
 1. update docs to match the current code pass order
 2. split overlay responsibilities into world overlay and screen overlay language
-3. implement or formalize the empty `PostProcessPass` path
+3. expose the existing `PostProcessPass` tone mapping / gamma settings through editor or project configuration
 4. define the first `PipelineStateDesc` shape without forcing all passes to migrate at once
 5. define the first `RenderGraph` resource/pass descriptor shape
 6. identify remaining OpenGL-shaped assumptions outside runtime passes, especially asset-side GPU upload and renderer-ID exposure

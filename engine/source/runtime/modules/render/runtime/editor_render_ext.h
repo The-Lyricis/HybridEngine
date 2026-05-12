@@ -19,6 +19,15 @@ namespace Hybrid
         uint32_t hovered_entity = kInvalidEntityID;
     };
 
+    struct EditorPostProcessState
+    {
+        bool enabled = false;
+        bool enable_tone_mapping = false;
+        bool enable_gamma_correction = false;
+        float exposure = 1.0f;
+        float gamma = 2.2f;
+    };
+
     // Optional editor-only extension passed to render pipeline.
     struct EditorRenderExt
     {
@@ -34,6 +43,7 @@ namespace Hybrid
         bool request_pick = false;         // Request one ID-buffer readback this frame.
         bool show_collider_debug = false;
         bool show_shadow_debug = false;
+        EditorPostProcessState post_process;
         int pick_x = 0;                    // Pixel x in render target space.
         int pick_y = 0;                    // Pixel y in render target space.
 

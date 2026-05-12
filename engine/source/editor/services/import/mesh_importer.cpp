@@ -17,6 +17,7 @@
 #include <tiny_obj_loader.h>
 
 #include "runtime/core/base/macro.h"
+#include "runtime/modules/asset/material_asset_serializer.h"
 #include "runtime/modules/asset/mesh.h"
 #include "runtime/modules/asset/mesh_cooked_format.h"
 #include "texture_importer.h"
@@ -202,6 +203,75 @@ namespace Hybrid
             return std::string("asset:") + combined.generic_string();
         }
 
+        float clamp01(float value)
+        {
+            return std::clamp(value, 0.0f, 1.0f);
+        }
+
+        float mtlShininessToRoughness(float shininess)
+        {
+            if (shininess <= 1.0f)
+                return 1.0f;
+
+            // Approximate Blinn-Phong exponent to microfacet roughness.
+            return clamp01(std::sqrt(2.0f / (shininess + 2.0f)));
+        }
+
+        float resolveObjRoughnessFactor(const tinyobj::material_t& material)
+        {
+            if (material.roughness > 0.0)
+                return clamp01(static_cast<float>(material.roughness));
+
+            return mtlShininessToRoughness(static_cast<float>(material.shininess));
+        }
+
+        MaterialAlphaMode resolveObjAlphaMode(const tinyobj::material_t& material)
+        {
+            if (!material.alpha_texname.empty())
+                return MaterialAlphaMode::Mask;
+            if (material.dissolve < 0.999)
+                return MaterialAlphaMode::Blend;
+            return MaterialAlphaMode::Opaque;
+        }
+
+        void warnUnsupportedObjMaterialFeatures(const std::string& source_path,
+                                                int material_index,
+                                                const std::string& material_name,
+                                                const tinyobj::material_t& material)
+        {
+            if (!material.roughness_texname.empty() || !material.metallic_texname.empty())
+            {
+                HBD_CORE_WARN("{} mtl_texture_unsupported source_path={} material_index={} material={} reason=separate_metallic_or_roughness_texture_not_supported metallic_texture={} roughness_texture={}",
+                              kMeshImporterLogTag,
+                              source_path,
+                              material_index,
+                              material_name,
+                              material.metallic_texname.empty() ? "<none>" : material.metallic_texname,
+                              material.roughness_texname.empty() ? "<none>" : material.roughness_texname);
+            }
+
+            if (!material.specular_texname.empty() || !material.specular_highlight_texname.empty())
+            {
+                HBD_CORE_WARN("{} mtl_texture_unsupported source_path={} material_index={} material={} reason=specular_workflow_texture_not_supported specular_texture={} shininess_texture={}",
+                              kMeshImporterLogTag,
+                              source_path,
+                              material_index,
+                              material_name,
+                              material.specular_texname.empty() ? "<none>" : material.specular_texname,
+                              material.specular_highlight_texname.empty() ? "<none>" : material.specular_highlight_texname);
+            }
+
+            if (!material.alpha_texname.empty())
+            {
+                HBD_CORE_WARN("{} mtl_alpha_texture_note source_path={} material_index={} material={} alpha_texture={} note=alpha_texture_marks_material_as_mask_but_is_not_imported_as_separate_texture_yet",
+                              kMeshImporterLogTag,
+                              source_path,
+                              material_index,
+                              material_name,
+                              material.alpha_texname);
+            }
+        }
+
         void appendUniqueAssets(std::vector<AssetMetadata>& dst,
                                 const std::vector<AssetMetadata>& src,
                                 std::unordered_set<uint64_t>& seen_ids)
@@ -358,6 +428,9 @@ namespace Hybrid
             std::unordered_map<VertexKey, uint32_t, VertexKeyHasher> vertex_lut;
             std::unordered_map<uint64_t, size_t> submesh_lut;
             bool need_recompute_normals = false;
+            bool missing_texcoords = false;
+            uint32_t skipped_non_triangle_faces = 0;
+            uint32_t invalid_material_refs = 0;
 
             for (uint32_t shape_index = 0; shape_index < shapes.size(); ++shape_index)
             {
@@ -370,12 +443,18 @@ namespace Hybrid
                     if (face_vertex_count != 3)
                     {
                         index_offset += face_vertex_count;
+                        ++skipped_non_triangle_faces;
                         continue;
                     }
 
                     int material_id = -1;
                     if (face_index < shape.mesh.material_ids.size())
                         material_id = shape.mesh.material_ids[face_index];
+                    if (material_id >= static_cast<int>(materials.size()))
+                    {
+                        material_id = -1;
+                        ++invalid_material_refs;
+                    }
 
                     const uint64_t submesh_key = makeSubmeshKey(shape_index, material_id);
                     auto submesh_it = submesh_lut.find(submesh_key);
@@ -418,7 +497,10 @@ namespace Hybrid
                             }
 
                             if (!readTexcoord(attrib, obj_index.texcoord_index, vertex.uv))
+                            {
                                 vertex.uv = glm::vec2(0.0f);
+                                missing_texcoords = true;
+                            }
 
                             vertex.tangent = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -455,7 +537,32 @@ namespace Hybrid
             }
 
             if (need_recompute_normals)
+            {
+                HBD_CORE_WARN("{} obj_missing_normals source_file={} action=recompute_vertex_normals",
+                              kMeshImporterLogTag,
+                              source_file.string());
                 recomputeVertexNormals(vertices, all_indices);
+            }
+            if (missing_texcoords)
+            {
+                HBD_CORE_WARN("{} obj_missing_texcoords source_file={} action=default_zero_uv",
+                              kMeshImporterLogTag,
+                              source_file.string());
+            }
+            if (skipped_non_triangle_faces > 0)
+            {
+                HBD_CORE_WARN("{} obj_skipped_faces source_file={} count={} reason=non_triangle_after_triangulate",
+                              kMeshImporterLogTag,
+                              source_file.string(),
+                              skipped_non_triangle_faces);
+            }
+            if (invalid_material_refs > 0)
+            {
+                HBD_CORE_WARN("{} obj_invalid_material_refs source_file={} count={} action=use_default_material",
+                              kMeshImporterLogTag,
+                              source_file.string(),
+                              invalid_material_refs);
+            }
 
             auto& dst_vertices = out_build.mesh.vertices();
             auto& dst_indices = out_build.mesh.indices();
@@ -621,6 +728,7 @@ namespace Hybrid
             const std::string material_name = material_name_raw.empty()
                                                   ? ("material_" + std::to_string(material_index))
                                                   : material_name_raw;
+            warnUnsupportedObjMaterialFeatures(request.source_path, material_index, material_name, src_material);
 
             const std::string material_source_path =
                 buildMaterialSubassetSourcePath(src_rel, material_name, material_index);
@@ -691,47 +799,51 @@ namespace Hybrid
                 return texture_result.primary_id;
             };
 
-            const std::string albedo_map_path = buildReferencedAssetPath(src_rel, src_material.diffuse_texname);
+            const std::string base_color_texture_path = buildReferencedAssetPath(src_rel, src_material.diffuse_texname);
             const std::string normal_ref = !src_material.normal_texname.empty() ? src_material.normal_texname
                                                                                 : src_material.bump_texname;
-            const std::string normal_map_path = buildReferencedAssetPath(src_rel, normal_ref);
-            const std::string ao_map_path = buildReferencedAssetPath(src_rel, src_material.ambient_texname);
-            const std::string emissive_map_path = buildReferencedAssetPath(src_rel, src_material.emissive_texname);
+            const std::string normal_texture_path = buildReferencedAssetPath(src_rel, normal_ref);
+            const std::string occlusion_texture_path = buildReferencedAssetPath(src_rel, src_material.ambient_texname);
+            const std::string emissive_texture_path = buildReferencedAssetPath(src_rel, src_material.emissive_texname);
 
-            const AssetID albedo_map_id = importTextureRef(src_material.diffuse_texname);
-            const AssetID normal_map_id = importTextureRef(normal_ref);
-            const AssetID ao_map_id = importTextureRef(src_material.ambient_texname);
-            const AssetID emissive_map_id = importTextureRef(src_material.emissive_texname);
+            const AssetID base_color_texture_id = importTextureRef(src_material.diffuse_texname);
+            const AssetID normal_texture_id = importTextureRef(normal_ref);
+            const AssetID occlusion_texture_id = importTextureRef(src_material.ambient_texname);
+            const AssetID emissive_texture_id = importTextureRef(src_material.emissive_texname);
 
-            json material_doc;
-            material_doc["version"] = 1;
-            material_doc["type"] = "Material";
-            material_doc["name"] = material_name;
-            material_doc["albedo_color"] = {
-                static_cast<float>(src_material.diffuse[0]),
-                static_cast<float>(src_material.diffuse[1]),
-                static_cast<float>(src_material.diffuse[2]),
-                static_cast<float>(src_material.dissolve)};
-            material_doc["metallic"] = static_cast<float>(src_material.metallic);
-            material_doc["roughness"] = (src_material.roughness > 0.0f) ? static_cast<float>(src_material.roughness)
-                                                                        : 1.0f;
-            material_doc["ao"] = 1.0f;
-            material_doc["emissive"] = static_cast<float>(std::max({src_material.emission[0],
-                                                                    src_material.emission[1],
-                                                                    src_material.emission[2]}));
-            if (albedo_map_id.value != 0)
-                material_doc["albedo_map_id"] = std::to_string(albedo_map_id.value);
-            if (normal_map_id.value != 0)
-                material_doc["normal_map_id"] = std::to_string(normal_map_id.value);
-            if (ao_map_id.value != 0)
-                material_doc["ao_map_id"] = std::to_string(ao_map_id.value);
-            if (emissive_map_id.value != 0)
-                material_doc["emissive_map_id"] = std::to_string(emissive_map_id.value);
-            material_doc["albedo_map_path"] = albedo_map_path;
-            material_doc["normal_map_path"] = normal_map_path;
-            material_doc["metallic_roughness_map_path"] = "";
-            material_doc["ao_map_path"] = ao_map_path;
-            material_doc["emissive_map_path"] = emissive_map_path;
+            MaterialAssetDesc material_desc;
+            material_desc.name = material_name;
+            material_desc.data.workflow = MaterialWorkflow::MetallicRoughness;
+            material_desc.data.base_color_factor = {
+                clamp01(static_cast<float>(src_material.diffuse[0])),
+                clamp01(static_cast<float>(src_material.diffuse[1])),
+                clamp01(static_cast<float>(src_material.diffuse[2])),
+                clamp01(static_cast<float>(src_material.dissolve))};
+            material_desc.data.metallic_factor = clamp01(static_cast<float>(src_material.metallic));
+            material_desc.data.roughness_factor = resolveObjRoughnessFactor(src_material);
+            material_desc.data.occlusion_strength = 1.0f;
+            material_desc.data.emissive_factor = {
+                std::max(0.0f, static_cast<float>(src_material.emission[0])),
+                std::max(0.0f, static_cast<float>(src_material.emission[1])),
+                std::max(0.0f, static_cast<float>(src_material.emission[2]))};
+            material_desc.data.alpha_mode = resolveObjAlphaMode(src_material);
+            material_desc.data.double_sided = false;
+            material_desc.import_source = "obj_mtl";
+            material_desc.import_notes = {
+                "OBJ/MTL is converted to Hybrid Standard metallic-roughness material.",
+                "Specular/glossiness inputs are approximated when possible."
+            };
+            material_desc.data.base_color_texture.texture = base_color_texture_id;
+            material_desc.data.normal_texture.texture = normal_texture_id;
+            material_desc.data.occlusion_texture.texture = occlusion_texture_id;
+            material_desc.data.emissive_texture.texture = emissive_texture_id;
+            material_desc.base_color_texture_path = base_color_texture_path;
+            material_desc.normal_texture_path = normal_texture_path;
+            material_desc.metallic_roughness_texture_path = "";
+            material_desc.occlusion_texture_path = occlusion_texture_path;
+            material_desc.emissive_texture_path = emissive_texture_path;
+
+            json material_doc = SerializeMaterialAssetJson(material_desc);
 
             auto material_native = vfs.resolveForWrite(material_source_path);
             if (!material_native)
@@ -782,14 +894,14 @@ namespace Hybrid
             material_meta.is_valid = true;
             material_meta.hard_deps.clear();
             material_meta.soft_deps.clear();
-            if (albedo_map_id.value != 0)
-                material_meta.hard_deps.push_back(albedo_map_id);
-            if (normal_map_id.value != 0)
-                material_meta.hard_deps.push_back(normal_map_id);
-            if (ao_map_id.value != 0)
-                material_meta.hard_deps.push_back(ao_map_id);
-            if (emissive_map_id.value != 0)
-                material_meta.hard_deps.push_back(emissive_map_id);
+            if (base_color_texture_id.value != 0)
+                material_meta.hard_deps.push_back(base_color_texture_id);
+            if (normal_texture_id.value != 0)
+                material_meta.hard_deps.push_back(normal_texture_id);
+            if (occlusion_texture_id.value != 0)
+                material_meta.hard_deps.push_back(occlusion_texture_id);
+            if (emissive_texture_id.value != 0)
+                material_meta.hard_deps.push_back(emissive_texture_id);
 
             material_index_to_id[material_index] = material_meta.id;
             if (generated_asset_ids.insert(material_meta.id.value).second)

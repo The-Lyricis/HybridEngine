@@ -35,21 +35,21 @@ layout(std140) uniform LightBlock
     ivec4 u_LightCounts;
 };
 
-uniform vec4 u_AlbedoColor;
+uniform vec4 u_BaseColorFactor;
 uniform vec4 u_TintColor;
-uniform float u_Metallic;
-uniform float u_Roughness;
-uniform float u_AO;
-uniform float u_Emissive;
+uniform float u_MetallicFactor;
+uniform float u_RoughnessFactor;
+uniform float u_OcclusionStrength;
+uniform vec3 u_EmissiveFactor;
 
-uniform sampler2D u_AlbedoMap;
+uniform sampler2D u_BaseColorTexture;
 uniform sampler2D u_NormalMap;
-uniform sampler2D u_MRMap;
-uniform sampler2D u_AOMap;
-uniform sampler2D u_EmissiveMap;
+uniform sampler2D u_MetallicRoughnessTexture;
+uniform sampler2D u_OcclusionTexture;
+uniform sampler2D u_EmissiveTexture;
 uniform sampler2D u_ShadowMaps[MAX_SHADOW_CASCADES];
 uniform int u_HasNormalMap;
-uniform int u_SurfaceMode;
+uniform int u_AlphaMode;
 uniform float u_AlphaCutoff;
 uniform int u_ShadowsEnabled;
 uniform int u_ShadowCascadeCount;
@@ -118,19 +118,19 @@ vec3 getNormal() {
 }
 
 void main() {
-    vec4 albedoSample = texture(u_AlbedoMap, vUV);
-    vec4 albedoTint = u_AlbedoColor * u_TintColor;
+    vec4 albedoSample = texture(u_BaseColorTexture, vUV);
+    vec4 albedoTint = u_BaseColorFactor * u_TintColor;
     vec3 albedo = albedoTint.rgb * albedoSample.rgb;
     float alpha = albedoTint.a * albedoSample.a;
 
-    if (u_SurfaceMode == 1 && alpha < u_AlphaCutoff)
+    if (u_AlphaMode == 1 && alpha < u_AlphaCutoff)
         discard;
 
-    vec2 mrTex = texture(u_MRMap, vUV).rg;
-    float metallic  = clamp(u_Metallic * mrTex.r, 0.0, 1.0);
-    float roughness = clamp(u_Roughness * mrTex.g, 0.04, 1.0);
-    float ao        = clamp(u_AO * texture(u_AOMap, vUV).r, 0.0, 1.0);
-    vec3 emissiveColor = texture(u_EmissiveMap, vUV).rgb * max(0.0, u_Emissive);
+    vec2 mrTex = texture(u_MetallicRoughnessTexture, vUV).rg;
+    float metallic  = clamp(u_MetallicFactor * mrTex.r, 0.0, 1.0);
+    float roughness = clamp(u_RoughnessFactor * mrTex.g, 0.04, 1.0);
+    float ao        = clamp(u_OcclusionStrength * texture(u_OcclusionTexture, vUV).r, 0.0, 1.0);
+    vec3 emissiveColor = texture(u_EmissiveTexture, vUV).rgb * max(u_EmissiveFactor, vec3(0.0));
 
     vec3 N = getNormal();
     vec3 V = normalize(u_CameraPos.xyz - vWorldPos);

@@ -32,6 +32,7 @@ The current pass naming is:
 - `PickingPass`
 - `SelectionMaskPass`
 - `SelectionOverlayPass`
+- `GridPass`
 - `GizmoPass`
 - `OverlayGizmoPass`
 - `PostProcessPass`
@@ -44,6 +45,7 @@ The current code pipeline order is:
 - `Picking`
 - `SelectionMask`
 - `SelectionOverlay`
+- `Grid`
 - `WorldGizmo`
 - `OverlayGizmo`
 - `PostProcess`
@@ -51,9 +53,10 @@ The current code pipeline order is:
 Current notes:
 
 - `PickingPass` is a placeholder because entity picking currently piggybacks on `ScenePass` EntityID output.
-- `PostProcessPass` is a placeholder for the future post-process chain.
+- `GridPass` is connected to the pipeline, but its implementation is still a placeholder.
+- `PostProcessPass` is connected as a fullscreen pass with tone-mapping and gamma-correction parameters. Both corrections default to disabled, so the current path remains visually passthrough until settings are wired in.
 - `OverlayGizmoPass` is reserved for screen-space editor handles and overlays.
-- `Grid` and `DebugNormals` are represented in `RenderFlags`, but their pass paths are not active in the current pipeline.
+- `DebugNormals` is represented in `RenderFlags`, but its pass path is not active in the current pipeline.
 
 ## Core Responsibilities
 
@@ -332,10 +335,9 @@ Planned refactor order:
    - split world overlay and screen overlay responsibilities
    - remove accidental pass coupling such as debug options gating unrelated gizmos
    - keep runtime pass code free of direct OpenGL calls
-3. Add a minimal post-process path:
-   - full-screen pass infrastructure
-   - tone mapping / gamma correction placeholder
-   - clear input/output target ownership
+3. Expand the minimal post-process path:
+   - wire tone mapping / gamma correction settings to editor or project configuration
+   - prepare HDR scene color support
 4. Introduce explicit pipeline-state descriptions for existing passes.
 5. Introduce a small Render Graph prototype around the current fixed pass set.
 6. Move transient framebuffer creation, resize, and ownership into graph-managed resources.

@@ -201,10 +201,10 @@ namespace Hybrid
     void RuntimeResourceSystem::createHybridDefaultMaterial()
     {
         MaterialData data;
-        data.albedo_color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        data.metallic = 0.0f;
-        data.roughness = 1.0f;
-        data.ao = 1.0f;
+        data.base_color_factor = { 1.0f, 1.0f, 1.0f, 1.0f };
+        data.metallic_factor = 0.0f;
+        data.roughness_factor = 1.0f;
+        data.occlusion_strength = 1.0f;
 
         m_hybridDefaultMaterial = std::make_shared<Material>(data);
         if (m_manager && m_hybridDefaultMaterial)

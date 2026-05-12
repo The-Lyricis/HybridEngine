@@ -4,25 +4,10 @@
 #include <vector>
 
 #include "runtime/modules/render/runtime/pipeline/render_context.h"
-#include "runtime/modules/render/runtime/render_flags.h"
+#include "runtime/modules/render/runtime/pipeline/render_graph.h"
 
 namespace Hybrid
 {
-    enum class RenderPassType : unsigned char
-    {
-        Scene,
-        Skybox,
-        Picking,
-        SelectionMask,
-        SelectionOverlay,
-        WorldGizmo,
-        OverlayGizmo,
-        // Grid,
-        Shadow,
-        PostProcess,
-        //DebugNormals
-    };
-
     struct RenderPipelineCallbacks
     {
         std::function<void(RenderContext&)> scene;
@@ -32,7 +17,7 @@ namespace Hybrid
         std::function<void(RenderContext&)> selection_overlay;
         std::function<void(RenderContext&)> world_gizmo;
         std::function<void(RenderContext&)> overlay_gizmo;
-        // std::function<void(RenderContext&)> grid;
+        std::function<void(RenderContext&)> grid;
         std::function<void(RenderContext&)> shadow;
         std::function<void(RenderContext&)> post_process;
         //std::function<void(RenderContext&)> debug_normals;
@@ -45,12 +30,17 @@ namespace Hybrid
         RenderPipeline();
 
         void execute(RenderContext& context, const RenderPipelineCallbacks& callbacks) const;
+        const RenderGraphCompileResult& getCompiledGraph() const { return m_compiled_graph; }
+        const std::vector<CompiledRenderGraphPass>& getPassGraph() const { return m_compiled_graph.passes; }
+        const std::vector<RenderGraphResourceDesc>& getGraphResources() const { return m_compiled_graph.resources; }
+        const RenderGraphValidationResult& validateGraph() const { return m_compiled_graph.validation; }
+        std::string describeGraph() const;
 
     private:
         bool shouldRun(RenderPassType pass, RenderFlags flags) const;
         void invoke(RenderPassType pass, RenderContext& context, const RenderPipelineCallbacks& callbacks) const;
 
     private:
-        std::vector<RenderPassType> m_pass_order;
+        RenderGraphCompileResult m_compiled_graph;
     };
 } // namespace Hybrid

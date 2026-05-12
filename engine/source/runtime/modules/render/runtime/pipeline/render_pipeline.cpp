@@ -3,27 +3,16 @@
 namespace Hybrid
 {
     RenderPipeline::RenderPipeline()
-        : m_pass_order
-        {
-            RenderPassType::Shadow,
-            RenderPassType::Scene,
-            RenderPassType::Skybox,
-            RenderPassType::Picking,
-            RenderPassType::SelectionMask,
-            RenderPassType::SelectionOverlay,
-            RenderPassType::WorldGizmo,
-            RenderPassType::OverlayGizmo,
-            //RenderPassType::Grid,
-            RenderPassType::PostProcess,
-            //RenderPassType::DebugNormals
-        }
+        : m_compiled_graph(CompileRenderGraph(CreateDefaultRenderGraphBuild()))
     {
     }
 
     void RenderPipeline::execute(RenderContext& context, const RenderPipelineCallbacks& callbacks) const
     {
-        for (RenderPassType pass : m_pass_order)
+        for (const CompiledRenderGraphPass& compiled_pass : m_compiled_graph.passes)
         {
+            const RenderGraphPassDesc& pass_desc = compiled_pass.desc;
+            RenderPassType pass = pass_desc.type;
             if (!shouldRun(pass, context.flags))
                 continue;
             invoke(pass, context, callbacks);
@@ -50,8 +39,8 @@ namespace Hybrid
         case RenderPassType::WorldGizmo:
         case RenderPassType::OverlayGizmo:
             return HasFlag(flags, RenderFlags::Gizmo);
-        // case RenderPassType::Grid:
-        //     return HasFlag(flags, RenderFlags::Grid);
+        case RenderPassType::Grid:
+            return HasFlag(flags, RenderFlags::Grid);
         case RenderPassType::Shadow:
             return HasFlag(flags, RenderFlags::Shadow);
         case RenderPassType::PostProcess:
@@ -95,10 +84,10 @@ namespace Hybrid
             if (callbacks.overlay_gizmo)
                 callbacks.overlay_gizmo(context);
             break;
-        // case RenderPassType::Grid:
-        //     if (callbacks.grid)
-        //         callbacks.grid(context);
-        //     break;
+        case RenderPassType::Grid:
+            if (callbacks.grid)
+                callbacks.grid(context);
+            break;
         case RenderPassType::Shadow:
             if (callbacks.shadow)
                 callbacks.shadow(context);
@@ -114,5 +103,17 @@ namespace Hybrid
         default:
             break;
         }
+    }
+
+    std::string RenderPipeline::describeGraph() const
+    {
+        std::vector<RenderGraphPassDesc> pass_descs;
+        pass_descs.reserve(m_compiled_graph.passes.size());
+        for (const CompiledRenderGraphPass& compiled_pass : m_compiled_graph.passes)
+        {
+            pass_descs.push_back(compiled_pass.desc);
+        }
+
+        return DescribeRenderGraph(pass_descs, m_compiled_graph.resources);
     }
 } // namespace Hybrid

@@ -4,6 +4,7 @@
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/vertex_array.h"
+#include "runtime/modules/render/runtime/pipeline/pipeline_state.h"
 #include "runtime/modules/render/runtime/render_bindings.h"
 
 namespace Hybrid
@@ -16,13 +17,9 @@ namespace Hybrid
         if (!packet.shadow.enabled || packet.shadow.cascadeCount == 0 || !context.shadow_cascade_framebuffers || !shadow_shader)
             return;
 
-        RenderCommand::setBlendEnabled(false);
-        RenderCommand::setDepthTestEnabled(true);
-        RenderCommand::setDepthWriteEnabled(true);
-        RenderCommand::setDepthCompareFunc(DepthCompareFunc::Less);
-        RenderCommand::setCullEnabled(true);
+        ApplyPipelineState(PipelineStates::DepthOnly());
         shadow_shader->bind();
-        shadow_shader->setInt(RenderBindings::kSceneAlbedoUniform, RenderBindings::kSceneAlbedoSlot);
+        shadow_shader->setInt(RenderBindings::kSceneBaseColorTextureUniform, RenderBindings::kSceneAlbedoSlot);
 
         for (uint32_t cascade_index = 0; cascade_index < packet.shadow.cascadeCount; ++cascade_index)
         {

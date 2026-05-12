@@ -3,6 +3,9 @@
 #include <memory>
 #include <unordered_map>
 
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+
 #include "runtime/modules/asset/asset_manager.h"
 #include "runtime/modules/asset/material.h"
 #include "runtime/modules/asset/texture_image.h"
@@ -16,15 +19,54 @@ namespace Hybrid
     class MaterialSystem
     {
     public:
+        struct MaterialParameterBlock
+        {
+            glm::vec4 base_color_factor{1.0f};
+            float metallic_factor = 0.0f;
+            float roughness_factor = 1.0f;
+            float occlusion_strength = 1.0f;
+            glm::vec3 emissive_factor{0.0f};
+            int has_normal_map = 0;
+            int alpha_mode = 0;
+            float alpha_cutoff = 0.5f;
+        };
+
+        struct MaterialTemplateDesc
+        {
+            MaterialWorkflow workflow = MaterialWorkflow::MetallicRoughness;
+            MaterialAlphaMode alpha_mode = MaterialAlphaMode::Opaque;
+            bool double_sided = false;
+            bool depth_write = true;
+            bool casts_shadow = true;
+        };
+
+        struct MaterialTextureBindingSet
+        {
+            AssetID base_color{};
+            AssetID normal{};
+            AssetID metallic_roughness{};
+            AssetID occlusion{};
+            AssetID emissive{};
+        };
+
+        struct MaterialInstanceDesc
+        {
+            MaterialTemplateDesc material_template;
+            MaterialParameterBlock parameters;
+            MaterialTextureBindingSet textures;
+        };
+
         struct MaterialGPU
         {
-            MaterialData data;
+            MaterialInstanceDesc instance;
             TexturePtr albedo;
             TexturePtr normal;
             TexturePtr mr;
             TexturePtr ao;
             TexturePtr emissive;
 
+            MaterialAlphaMode alphaMode() const { return instance.material_template.alpha_mode; }
+            bool castsShadow() const { return instance.material_template.casts_shadow; }
             void bind(Shader& shader) const;
         };
 

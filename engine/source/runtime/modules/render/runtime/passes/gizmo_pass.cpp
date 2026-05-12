@@ -16,6 +16,7 @@
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/vertex_array.h"
+#include "runtime/modules/render/runtime/pipeline/pipeline_state.h"
 #include "runtime/modules/render/runtime/render_targets.h"
 #include "runtime/modules/render/runtime/render_uniforms.h"
 #include "runtime/modules/scene/components.h"
@@ -86,44 +87,52 @@ namespace Hybrid
         const std::shared_ptr<Framebuffer>& framebuffer = context.framebuffer;
         const std::shared_ptr<Shader>& collider_debug_shader = context.collider_debug_shader;
 
-        if (!packet.showColliderDebug)
-            return;
-
         if (!framebuffer || !packet.scene || !collider_debug_shader)
             return;
 
-        auto* debug_box_mesh = getOrCreateDebugBoxMeshGPU();
-        auto* camera_frustum_mesh = getOrCreateCameraFrustumMeshGPU();
-        auto* debug_sphere_mesh = getOrCreateDebugSphereMeshGPU();
-        auto* directional_light_mesh = getOrCreateDirectionalLightMeshGPU();
-        auto* shadow_hull_mesh = getOrCreateShadowHullMeshGPU();
-        auto* debug_quad_mesh = getOrCreateDebugQuadMeshGPU();
-        if (!debug_box_mesh || !camera_frustum_mesh || !debug_sphere_mesh || !directional_light_mesh || !shadow_hull_mesh || !debug_quad_mesh)
+        const bool has_active_selection =
+            context.editor_selection && context.editor_selection->active_entity != kInvalidEntityID;
+        const bool should_draw_selected_helpers = has_active_selection;
+        const bool should_draw_collider_debug = packet.showColliderDebug && has_active_selection;
+        const bool should_draw_shadow_debug = packet.showShadowDebug && packet.shadow.enabled;
+
+        if (!should_draw_selected_helpers && !should_draw_shadow_debug)
             return;
 
-        auto& registry = packet.scene->getRegistry();
-        auto view = registry.view<TransformComponent, ColliderComponent>();
-        auto camera_view = registry.view<TransformComponent, CameraComponent>();
-        const float aspect = (packet.frame.gameAspect > 0.0f) ? packet.frame.gameAspect : (16.0f / 9.0f);
+        auto* debug_box_mesh = should_draw_collider_debug ? getOrCreateDebugBoxMeshGPU() : nullptr;
+        auto* camera_frustum_mesh = should_draw_selected_helpers ? getOrCreateCameraFrustumMeshGPU() : nullptr;
+        auto* debug_sphere_mesh = should_draw_selected_helpers ? getOrCreateDebugSphereMeshGPU() : nullptr;
+        auto* directional_light_mesh = should_draw_selected_helpers ? getOrCreateDirectionalLightMeshGPU() : nullptr;
+        auto* shadow_hull_mesh = should_draw_shadow_debug ? getOrCreateShadowHullMeshGPU() : nullptr;
+        auto* debug_quad_mesh = should_draw_selected_helpers ? getOrCreateDebugQuadMeshGPU() : nullptr;
+
+        if ((should_draw_collider_debug && !debug_box_mesh) ||
+            (should_draw_selected_helpers && (!camera_frustum_mesh || !debug_sphere_mesh || !directional_light_mesh || !debug_quad_mesh)) ||
+            (should_draw_shadow_debug && !shadow_hull_mesh))
+        {
+            return;
+        }
 
         framebuffer->bind();
         framebuffer->setDrawColorAttachments({RenderTargets::kSceneColorAttachment});
         RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
 
-        RenderCommand::setDepthTestEnabled(true);
-        RenderCommand::setCullEnabled(false);
-        RenderCommand::setLineWidth(2.0f);
+        ScopedPipelineState pipeline_state(PipelineStates::WorldOverlayLines(2.0f));
 
         collider_debug_shader->bind();
         collider_debug_shader->setUniformBlockBinding(RenderUniforms::kFrameBlockName,
                                                       RenderUniforms::kFrameUBOBinding);
-        drawSelectedColliderGizmo(context, *collider_debug_shader, *debug_box_mesh);
-        drawShadowDebugGizmos(packet, *collider_debug_shader, *shadow_hull_mesh);
-        drawSelectedCameraGizmo(context, *collider_debug_shader, *camera_frustum_mesh, *debug_quad_mesh);
-        drawSelectedDirectionalLightGizmo(context, *collider_debug_shader, *directional_light_mesh);
-        drawSelectedPointLightGizmo(context, *collider_debug_shader, *debug_sphere_mesh);
+        if (should_draw_collider_debug)
+            drawSelectedColliderGizmo(context, *collider_debug_shader, *debug_box_mesh);
+        if (should_draw_shadow_debug)
+            drawShadowDebugGizmos(packet, *collider_debug_shader, *shadow_hull_mesh);
+        if (should_draw_selected_helpers)
+        {
+            drawSelectedCameraGizmo(context, *collider_debug_shader, *camera_frustum_mesh, *debug_quad_mesh);
+            drawSelectedDirectionalLightGizmo(context, *collider_debug_shader, *directional_light_mesh);
+            drawSelectedPointLightGizmo(context, *collider_debug_shader, *debug_sphere_mesh);
+        }
 
-        RenderCommand::setCullEnabled(true);
         framebuffer->setDrawColorAttachments({
             RenderTargets::kSceneColorAttachment,
             RenderTargets::kSceneEntityIDAttachment
@@ -203,11 +212,11 @@ namespace Hybrid
         };
         debug_quad_mesh.vb->setData(near_plane_vertices.data(),
                                     static_cast<uint32_t>(near_plane_vertices.size() * sizeof(glm::vec3)));
-        RenderCommand::setLineWidth(3.0f);
+        ApplyPipelineState(PipelineStates::HighlightOverlayLines(3.0f));
         shader.setVec4("u_Color", glm::vec4(1.0f, 0.95f, 0.35f, 1.0f));
         debug_quad_mesh.vao->bind();
         RenderCommand::drawLinesIndexed(debug_quad_mesh.index_count);
-        RenderCommand::setLineWidth(1.5f);
+        ApplyPipelineState(PipelineStates::DebugOverlayLines(1.5f));
     }
 
     void GizmoPass::drawSelectedPointLightGizmo(RenderContext& context,
@@ -270,7 +279,7 @@ namespace Hybrid
         if (!packet.showShadowDebug || !packet.shadow.enabled)
             return;
 
-        RenderCommand::setLineWidth(1.5f);
+        ApplyPipelineState(PipelineStates::DebugOverlayLines(1.5f));
         shader.setMat4("u_Model", glm::mat4(1.0f));
 
         for (uint32_t cascade_index = 0; cascade_index < packet.shadow.cascadeCount; ++cascade_index)

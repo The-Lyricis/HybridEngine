@@ -1,31 +1,114 @@
 #include "material_system.h"
 
+#include <string>
+
 #include "runtime/modules/render/public/shader.h"
+#include "runtime/modules/render/runtime/render_binding_layout.h"
 #include "runtime/modules/render/runtime/render_bindings.h"
 
 namespace Hybrid
 {
+    namespace
+    {
+        MaterialSystem::MaterialTemplateDesc BuildMaterialTemplateDesc(const MaterialData& data)
+        {
+            MaterialSystem::MaterialTemplateDesc desc{};
+            desc.workflow = data.workflow;
+            desc.alpha_mode = data.alpha_mode;
+            desc.double_sided = data.double_sided;
+            desc.depth_write = data.alpha_mode != MaterialAlphaMode::Blend;
+            desc.casts_shadow = data.alpha_mode != MaterialAlphaMode::Blend;
+            return desc;
+        }
+
+        MaterialSystem::MaterialTextureBindingSet BuildMaterialTextureBindingSet(const MaterialData& data)
+        {
+            MaterialSystem::MaterialTextureBindingSet textures{};
+            textures.base_color = data.base_color_texture.texture;
+            textures.normal = data.normal_texture.texture;
+            textures.metallic_roughness = data.metallic_roughness_texture.texture;
+            textures.occlusion = data.occlusion_texture.texture;
+            textures.emissive = data.emissive_texture.texture;
+            return textures;
+        }
+
+        MaterialSystem::MaterialParameterBlock BuildMaterialParameterBlock(const MaterialData& data)
+        {
+            MaterialSystem::MaterialParameterBlock block{};
+            block.base_color_factor = data.base_color_factor;
+            block.metallic_factor = data.metallic_factor;
+            block.roughness_factor = data.roughness_factor;
+            block.occlusion_strength = data.occlusion_strength;
+            block.emissive_factor = data.emissive_factor;
+            block.has_normal_map = (data.normal_texture.texture.value != 0) ? 1 : 0;
+            block.alpha_mode = static_cast<int>(data.alpha_mode);
+            block.alpha_cutoff = data.alpha_cutoff;
+            return block;
+        }
+
+        MaterialSystem::MaterialInstanceDesc BuildMaterialInstanceDesc(const MaterialData& data)
+        {
+            MaterialSystem::MaterialInstanceDesc desc{};
+            desc.material_template = BuildMaterialTemplateDesc(data);
+            desc.parameters = BuildMaterialParameterBlock(data);
+            desc.textures = BuildMaterialTextureBindingSet(data);
+            return desc;
+        }
+
+        void BindTextureIfPresent(const TexturePtr& texture,
+                                  const RenderBindingLayoutDesc& layout,
+                                  std::string_view binding_name)
+        {
+            if (!texture)
+                return;
+
+            const RenderBindingDesc* binding = FindRenderBinding(layout, binding_name);
+            if (!binding)
+                return;
+
+            texture->bind(binding->slot);
+        }
+    } // namespace
+
     void MaterialSystem::MaterialGPU::bind(Shader& shader) const
     {
-        shader.setVec4(RenderBindings::kSceneAlbedoColorUniform, data.albedo_color);
-        shader.setFloat(RenderBindings::kSceneMetallicUniform, data.metallic);
-        shader.setFloat(RenderBindings::kSceneRoughnessUniform, data.roughness);
-        shader.setFloat(RenderBindings::kSceneAOScalarUniform, data.ao);
-        shader.setFloat(RenderBindings::kSceneEmissiveScalarUniform, data.emissive);
-        shader.setInt(RenderBindings::kSceneHasNormalMapUniform, (data.normal_map.value != 0) ? 1 : 0);
-        shader.setInt(RenderBindings::kSceneSurfaceModeUniform, static_cast<int>(data.surface_mode));
-        shader.setFloat(RenderBindings::kSceneAlphaCutoffUniform, data.alpha_cutoff);
+        const RenderBindingLayoutDesc& layout = GetSceneMaterialBindingLayout();
+        const auto set_float = [&shader, &layout](std::string_view name, float value)
+        {
+            if (const RenderBindingDesc* binding = FindRenderBinding(layout, name))
+                shader.setFloat(std::string(binding->name), value);
+        };
+        const auto set_int = [&shader, &layout](std::string_view name, int value)
+        {
+            if (const RenderBindingDesc* binding = FindRenderBinding(layout, name))
+                shader.setInt(std::string(binding->name), value);
+        };
+        const auto set_vec4 = [&shader, &layout](std::string_view name, const glm::vec4& value)
+        {
+            if (const RenderBindingDesc* binding = FindRenderBinding(layout, name))
+                shader.setVec4(std::string(binding->name), value);
+        };
+        const auto set_vec3 = [&shader, &layout](std::string_view name, const glm::vec3& value)
+        {
+            if (const RenderBindingDesc* binding = FindRenderBinding(layout, name))
+                shader.setVec3(std::string(binding->name), value);
+        };
 
-        if (albedo)
-            albedo->bind(RenderBindings::kSceneAlbedoSlot);
-        if (normal)
-            normal->bind(RenderBindings::kSceneNormalSlot);
-        if (mr)
-            mr->bind(RenderBindings::kSceneMRSlot);
-        if (ao)
-            ao->bind(RenderBindings::kSceneAOSlot);
-        if (emissive)
-            emissive->bind(RenderBindings::kSceneEmissiveSlot);
+        const MaterialParameterBlock& params = instance.parameters;
+        set_vec4(RenderBindings::kSceneBaseColorFactorUniform, params.base_color_factor);
+        set_float(RenderBindings::kSceneMetallicFactorUniform, params.metallic_factor);
+        set_float(RenderBindings::kSceneRoughnessFactorUniform, params.roughness_factor);
+        set_float(RenderBindings::kSceneOcclusionStrengthUniform, params.occlusion_strength);
+        set_vec3(RenderBindings::kSceneEmissiveFactorUniform, params.emissive_factor);
+        set_int(RenderBindings::kSceneHasNormalMapUniform, params.has_normal_map);
+        set_int(RenderBindings::kSceneAlphaModeUniform, params.alpha_mode);
+        set_float(RenderBindings::kSceneAlphaCutoffUniform, params.alpha_cutoff);
+
+        BindTextureIfPresent(albedo, layout, RenderBindings::kSceneBaseColorTextureUniform);
+        BindTextureIfPresent(normal, layout, RenderBindings::kSceneNormalUniform);
+        BindTextureIfPresent(mr, layout, RenderBindings::kSceneMetallicRoughnessTextureUniform);
+        BindTextureIfPresent(ao, layout, RenderBindings::kSceneOcclusionTextureUniform);
+        BindTextureIfPresent(emissive, layout, RenderBindings::kSceneEmissiveTextureUniform);
     }
 
     void MaterialSystem::initialize(std::shared_ptr<AssetManager> asset_manager)
@@ -73,12 +156,12 @@ namespace Hybrid
         };
 
         auto gpu = std::make_shared<MaterialGPU>();
-        gpu->data = material->getData();
-        gpu->albedo = texOrDefault(gpu->data.albedo_map, m_DefaultAlbedoTex);
-        gpu->normal = texOrDefault(gpu->data.normal_map, m_DefaultNormalTex);
-        gpu->mr = texOrDefault(gpu->data.metallic_roughness_map, m_DefaultMRTex);
-        gpu->ao = texOrDefault(gpu->data.ao_map, m_DefaultAOTex);
-        gpu->emissive = texOrDefault(gpu->data.emissive_map, m_DefaultEmissiveTex);
+        gpu->instance = BuildMaterialInstanceDesc(material->getData());
+        gpu->albedo = texOrDefault(gpu->instance.textures.base_color, m_DefaultAlbedoTex);
+        gpu->normal = texOrDefault(gpu->instance.textures.normal, m_DefaultNormalTex);
+        gpu->mr = texOrDefault(gpu->instance.textures.metallic_roughness, m_DefaultMRTex);
+        gpu->ao = texOrDefault(gpu->instance.textures.occlusion, m_DefaultAOTex);
+        gpu->emissive = texOrDefault(gpu->instance.textures.emissive, m_DefaultEmissiveTex);
 
         auto* out = gpu.get();
         m_MaterialCache[material_id] = std::move(gpu);

@@ -84,6 +84,7 @@ The current render pass set is:
 - `PickingPass`
 - `SelectionMaskPass`
 - `SelectionOverlayPass`
+- `GridPass`
 - `GizmoPass`
 - `OverlayGizmoPass`
 - `PostProcessPass`
@@ -96,6 +97,7 @@ The current code pass order is:
 - `Picking`
 - `SelectionMask`
 - `SelectionOverlay`
+- `Grid`
 - `WorldGizmo`
 - `OverlayGizmo`
 - `PostProcess`
@@ -103,8 +105,9 @@ The current code pass order is:
 Current placeholder paths:
 
 - `PickingPass` piggybacks on the `ScenePass` EntityID attachment
+- `GridPass` is connected to the pipeline but still has placeholder implementation
 - `OverlayGizmoPass` is reserved for future screen-space editor overlays
-- `PostProcessPass` is reserved for the future post-process chain
+- `PostProcessPass` is connected as a fullscreen pass with tone-mapping and gamma-correction parameters. The correction toggles currently default to disabled.
 
 Current builtin shader registrations are centralized through `render_shaders.h`:
 
@@ -257,7 +260,7 @@ Fix:
 - shader binding and render protocol registration are now centralized, and future work should avoid turning those registration points into catch-all systems
 - pass ordering is still fixed rather than dependency-driven
 - render state is still set procedurally in passes instead of through explicit pipeline-state objects
-- post-processing, grid rendering, overlay gizmos, and debug-normal rendering are not yet complete
+- editor/project wiring for tone mapping, HDR post-processing, grid rendering, overlay gizmos, and debug-normal rendering are not yet complete
 
 ## Future Improvement Plan
 

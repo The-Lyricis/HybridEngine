@@ -25,6 +25,7 @@
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/texture.h"
+#include "runtime/modules/render/runtime/render_binding_layout.h"
 #include "runtime/modules/render/runtime/render_bindings.h"
 #include "runtime/modules/render/runtime/render_shaders.h"
 #include "runtime/modules/render/runtime/render_targets.h"
@@ -336,51 +337,40 @@ namespace Hybrid
         if (m_SceneShader)
         {
             m_SceneShader->bind();
-            m_SceneShader->setUniformBlockBinding(RU::kFrameBlockName, RU::kFrameUBOBinding);
-            m_SceneShader->setUniformBlockBinding(RU::kLightBlockName, RU::kLightUBOBinding);
-            m_SceneShader->setInt(RenderBindings::kSceneAlbedoUniform, RenderBindings::kSceneAlbedoSlot);
-            m_SceneShader->setInt(RenderBindings::kSceneNormalUniform, RenderBindings::kSceneNormalSlot);
-            m_SceneShader->setInt(RenderBindings::kSceneMRUniform, RenderBindings::kSceneMRSlot);
-            m_SceneShader->setInt(RenderBindings::kSceneAOUniform, RenderBindings::kSceneAOSlot);
-            m_SceneShader->setInt(RenderBindings::kSceneEmissiveUniform, RenderBindings::kSceneEmissiveSlot);
-            for (uint32_t cascade_index = 0; cascade_index < kMaxDirectionalShadowCascades; ++cascade_index)
-            {
-                m_SceneShader->setInt(std::string(RenderBindings::kSceneShadowMapUniform) + "[" + std::to_string(cascade_index) + "]",
-                                      static_cast<int>(RenderBindings::kSceneShadowMapSlot + cascade_index));
-            }
+            ApplyStaticUniformBlockBindings(*m_SceneShader, GetSceneBindingLayout());
+            ApplyStaticTextureBindings(*m_SceneShader, GetSceneBindingLayout());
         }
 
         if (auto selection_mask_shader = m_ShaderLibrary.get(std::string(RenderShaders::kSelectionMask.name)))
         {
             selection_mask_shader->bind();
-            selection_mask_shader->setUniformBlockBinding(RU::kFrameBlockName, RU::kFrameUBOBinding);
-            selection_mask_shader->setInt(RenderBindings::kSceneAlbedoUniform, RenderBindings::kSceneAlbedoSlot);
+            ApplyStaticUniformBlockBindings(*selection_mask_shader, GetSelectionMaskBindingLayout());
+            ApplyStaticTextureBindings(*selection_mask_shader, GetSelectionMaskBindingLayout());
         }
 
         if (m_SkyboxShader)
         {
             m_SkyboxShader->bind();
-            m_SkyboxShader->setUniformBlockBinding(RU::kFrameBlockName, RU::kFrameUBOBinding);
-            m_SkyboxShader->setInt(RenderBindings::kSkyboxCubemapUniform, RenderBindings::kSkyboxCubemapSlot);
+            ApplyStaticUniformBlockBindings(*m_SkyboxShader, GetSkyboxBindingLayout());
+            ApplyStaticTextureBindings(*m_SkyboxShader, GetSkyboxBindingLayout());
         }
 
         if (m_ShadowShader)
         {
             m_ShadowShader->bind();
-            m_ShadowShader->setInt(RenderBindings::kSceneAlbedoUniform, RenderBindings::kSceneAlbedoSlot);
+            ApplyStaticTextureBindings(*m_ShadowShader, GetShadowDepthBindingLayout());
         }
 
         if (auto selection_overlay_shader = m_ShaderLibrary.get(std::string(RenderShaders::kSelectionOverlay.name)))
         {
             selection_overlay_shader->bind();
-            selection_overlay_shader->setInt(RenderBindings::kSelectionOverlaySceneColorUniform,
-                                             RenderBindings::kSelectionOverlaySceneColorSlot);
-            selection_overlay_shader->setInt(RenderBindings::kSelectionOverlaySceneDepthUniform,
-                                             RenderBindings::kSelectionOverlaySceneDepthSlot);
-            selection_overlay_shader->setInt(RenderBindings::kSelectionOverlayMaskUniform,
-                                             RenderBindings::kSelectionOverlayMaskSlot);
-            selection_overlay_shader->setInt(RenderBindings::kSelectionOverlaySelectedDepthUniform,
-                                             RenderBindings::kSelectionOverlaySelectedDepthSlot);
+            ApplyStaticTextureBindings(*selection_overlay_shader, GetSelectionOverlayBindingLayout());
+        }
+
+        if (auto post_process_shader = m_ShaderLibrary.get(std::string(RenderShaders::kPostProcess.name)))
+        {
+            post_process_shader->bind();
+            ApplyStaticTextureBindings(*post_process_shader, GetPostProcessBindingLayout());
         }
     }
 
@@ -665,6 +655,10 @@ namespace Hybrid
             {
                 m_OverlayGizmoPass.execute(context);
             };
+            callbacks.grid = [this](RenderContext& context)
+            {
+                m_GridPass.execute(context);
+            };
             callbacks.shadow = [this](RenderContext& context)
             {
                 m_ShadowPass.execute(context);
@@ -679,6 +673,7 @@ namespace Hybrid
         const auto execute_render = [this, &make_pipeline_callbacks](const FrameContext& current_frame,
                                                                      const RenderPacket& packet,
                                                                      const EditorSelectionState* editor_selection,
+                                                                     const EditorPostProcessState* post_process,
                                                                      RenderFlags current_flags,
                                                                      const ResolvedRenderTargets& targets)
         {
@@ -699,6 +694,16 @@ namespace Hybrid
             RenderContext context = m_RenderContextBuilder.build(context_input);
             updateFrameUBO(packet, current_frame.viewport_size);
             updateLightUBO(packet);
+
+            PostProcessPass::Settings post_process_settings{};
+            if (post_process)
+            {
+                post_process_settings.enable_tone_mapping = post_process->enable_tone_mapping;
+                post_process_settings.enable_gamma_correction = post_process->enable_gamma_correction;
+                post_process_settings.exposure = post_process->exposure;
+                post_process_settings.gamma = post_process->gamma;
+            }
+            m_PostProcessPass.setSettings(post_process_settings);
 
             const auto render_begin = std::chrono::steady_clock::now();
             m_RenderPipeline.execute(context, make_pipeline_callbacks());
@@ -738,7 +743,7 @@ namespace Hybrid
                 scene_targets.selection_framebuffer = m_SelectionFB;
                 scene_targets.shadow_framebuffer = m_ShadowCascadeFBs[0];
                 scene_targets.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
-                execute_render(scene_frame, scene_packet, &scene_ext.selection, flags, scene_targets);
+                execute_render(scene_frame, scene_packet, &scene_ext.selection, &scene_ext.post_process, flags, scene_targets);
                 rendered_any = true;
             }
 
@@ -763,7 +768,7 @@ namespace Hybrid
                 game_targets.selection_framebuffer = nullptr;
                 game_targets.shadow_framebuffer = m_ShadowCascadeFBs[0];
                 game_targets.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
-                execute_render(game_frame, game_packet, &game_ext.selection, game_flags, game_targets);
+                execute_render(game_frame, game_packet, &game_ext.selection, nullptr, game_flags, game_targets);
                 rendered_any = true;
             }
 
@@ -784,7 +789,12 @@ namespace Hybrid
         targets.selection_framebuffer = m_SelectionFB;
         targets.shadow_framebuffer = m_ShadowCascadeFBs[0];
         targets.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
-        execute_render(frame_context, packet, editor_ext ? &editor_ext->selection : nullptr, flags, targets);
+        execute_render(frame_context,
+                       packet,
+                       editor_ext ? &editor_ext->selection : nullptr,
+                       editor_ext ? &editor_ext->post_process : nullptr,
+                       flags,
+                       targets);
     }
     uint32_t RenderSystem::readEntityID(int x, int y) const
     {

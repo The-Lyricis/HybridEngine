@@ -631,6 +631,11 @@ namespace Hybrid
         editor_ext->select_tool = ctx.gizmo.select_tool;
         editor_ext->show_collider_debug = ctx.debug.show_collider_debug;
         editor_ext->show_shadow_debug = ctx.debug.show_shadow_debug;
+        editor_ext->post_process.enabled = ctx.debug.enable_post_process;
+        editor_ext->post_process.enable_tone_mapping = ctx.debug.enable_tone_mapping;
+        editor_ext->post_process.enable_gamma_correction = ctx.debug.enable_gamma_correction;
+        editor_ext->post_process.exposure = ctx.debug.post_process_exposure;
+        editor_ext->post_process.gamma = ctx.debug.post_process_gamma;
 
         if (editor_ext->render_scene_view)
         {
@@ -647,6 +652,8 @@ namespace Hybrid
         *render_flags = RenderFlags::Scene | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmo | RenderFlags::Shadow;
         if (!editor_ext->selection.selected_entities.empty())
             *render_flags |= RenderFlags::SelectionHighlight;
+        if (editor_ext->post_process.enabled)
+            *render_flags |= RenderFlags::PostProcess;
 
         if (ctx.picking.request)
         {

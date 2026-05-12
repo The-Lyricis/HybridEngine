@@ -6,6 +6,7 @@
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/vertex_array.h"
+#include "runtime/modules/render/runtime/pipeline/pipeline_state.h"
 #include "runtime/modules/render/runtime/render_bindings.h"
 #include "runtime/modules/render/runtime/render_uniforms.h"
 
@@ -28,10 +29,7 @@ namespace Hybrid
 
         framebuffer->bind();
         RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
-        RenderCommand::setBlendEnabled(false);
-        RenderCommand::setDepthTestEnabled(true);
-        RenderCommand::setDepthWriteEnabled(true);
-        RenderCommand::setCullEnabled(true);
+        ApplyPipelineState(PipelineStates::OpaqueDepth());
         RenderCommand::setClearColor(glm::vec4(0.0f));
         RenderCommand::setClearDepth(1.0f);
         RenderCommand::clear();
@@ -39,7 +37,7 @@ namespace Hybrid
         shader->bind();
         shader->setUniformBlockBinding(RenderUniforms::kFrameBlockName,
                                        RenderUniforms::kFrameUBOBinding);
-        shader->setInt(RenderBindings::kSceneAlbedoUniform, RenderBindings::kSceneAlbedoSlot);
+        shader->setInt(RenderBindings::kSceneBaseColorTextureUniform, RenderBindings::kSceneAlbedoSlot);
 
         const std::unordered_set<uint32_t> selected_entities(selection->selected_entities.begin(),
                                                              selection->selected_entities.end());

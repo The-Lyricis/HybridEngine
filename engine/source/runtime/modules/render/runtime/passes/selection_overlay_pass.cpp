@@ -9,6 +9,8 @@
 #include "runtime/modules/render/public/render_command.h"
 #include "runtime/modules/render/public/shader.h"
 #include "runtime/modules/render/public/vertex_array.h"
+#include "runtime/modules/render/runtime/pipeline/pipeline_state.h"
+#include "runtime/modules/render/runtime/render_binding_layout.h"
 #include "runtime/modules/render/runtime/render_bindings.h"
 #include "runtime/modules/render/runtime/render_targets.h"
 
@@ -51,31 +53,54 @@ namespace Hybrid
         scene_framebuffer->setDrawColorAttachments({RenderTargets::kSceneColorAttachment});
         RenderCommand::setViewport(0, 0, width, height);
 
-        RenderCommand::setDepthTestEnabled(false);
-        RenderCommand::setDepthWriteEnabled(false);
-        RenderCommand::setCullEnabled(false);
-        RenderCommand::setBlendEnabled(false);
+        ScopedPipelineState pipeline_state(PipelineStates::FullscreenNoDepth());
+
+        const RenderBindingLayoutDesc& binding_layout = GetSelectionOverlayBindingLayout();
+        const RenderBindingDesc* scene_color_binding =
+            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlaySceneColorUniform);
+        const RenderBindingDesc* scene_depth_binding =
+            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlaySceneDepthUniform);
+        const RenderBindingDesc* mask_binding =
+            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayMaskUniform);
+        const RenderBindingDesc* selected_depth_binding =
+            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlaySelectedDepthUniform);
+        const RenderBindingDesc* texel_width_binding =
+            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayTexelWidthUniform);
+        const RenderBindingDesc* texel_height_binding =
+            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayTexelHeightUniform);
+        const RenderBindingDesc* visible_color_binding =
+            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayVisibleColorUniform);
+        const RenderBindingDesc* occluded_color_binding =
+            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayOccludedColorUniform);
+        const RenderBindingDesc* fill_color_binding =
+            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayFillColorUniform);
+        const RenderBindingDesc* depth_epsilon_binding =
+            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayDepthEpsilonUniform);
+        if (!scene_color_binding || !scene_depth_binding || !mask_binding || !selected_depth_binding ||
+            !texel_width_binding || !texel_height_binding || !visible_color_binding || !occluded_color_binding ||
+            !fill_color_binding || !depth_epsilon_binding)
+        {
+            return;
+        }
 
         shader->bind();
-        shader->setFloat("u_TexelWidth", width > 0 ? 1.0f / static_cast<float>(width) : 0.0f);
-        shader->setFloat("u_TexelHeight", height > 0 ? 1.0f / static_cast<float>(height) : 0.0f);
-        shader->setFloat("u_DepthEpsilon", style->depth_epsilon);
-        shader->setVec4("u_VisibleOutlineColor", style->visible_outline_color);
-        shader->setVec4("u_OccludedOutlineColor", style->occluded_outline_color);
-        shader->setVec4("u_FillColor", style->fill_color);
+        shader->setFloat(std::string(texel_width_binding->name), width > 0 ? 1.0f / static_cast<float>(width) : 0.0f);
+        shader->setFloat(std::string(texel_height_binding->name), height > 0 ? 1.0f / static_cast<float>(height) : 0.0f);
+        shader->setFloat(std::string(depth_epsilon_binding->name), style->depth_epsilon);
+        shader->setVec4(std::string(visible_color_binding->name), style->visible_outline_color);
+        shader->setVec4(std::string(occluded_color_binding->name), style->occluded_outline_color);
+        shader->setVec4(std::string(fill_color_binding->name), style->fill_color);
 
         m_InputFramebuffer->bindColorAttachmentTexture(RenderTargets::kSceneColorAttachment,
-                                                      RenderBindings::kSelectionOverlaySceneColorSlot);
-        m_InputFramebuffer->bindDepthAttachmentTexture(RenderBindings::kSelectionOverlaySceneDepthSlot);
+                                                       scene_color_binding->slot);
+        m_InputFramebuffer->bindDepthAttachmentTexture(scene_depth_binding->slot);
         selection_framebuffer->bindColorAttachmentTexture(RenderTargets::kSelectionMaskAttachment,
-                                                         RenderBindings::kSelectionOverlayMaskSlot);
-        selection_framebuffer->bindDepthAttachmentTexture(RenderBindings::kSelectionOverlaySelectedDepthSlot);
+                                                         mask_binding->slot);
+        selection_framebuffer->bindDepthAttachmentTexture(selected_depth_binding->slot);
 
         quad->vao->bind();
         RenderCommand::drawIndexed(quad->index_count);
 
-        RenderCommand::setDepthWriteEnabled(true);
-        RenderCommand::setCullEnabled(true);
         scene_framebuffer->setDrawColorAttachments({
             RenderTargets::kSceneColorAttachment,
             RenderTargets::kSceneEntityIDAttachment

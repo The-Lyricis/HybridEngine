@@ -18,6 +18,7 @@
 #include "runtime/modules/render/runtime/builders/render_context_builder.h"
 #include "runtime/modules/render/runtime/builders/shadow_frame_builder.h"
 #include "runtime/modules/render/runtime/passes/gizmo_pass.h"
+#include "runtime/modules/render/runtime/passes/grid_pass.h"
 #include "runtime/modules/render/runtime/passes/picking_pass.h"
 #include "runtime/modules/render/runtime/passes/post_process_pass.h"
 #include "runtime/modules/render/runtime/passes/skybox_pass.h"
@@ -138,6 +139,7 @@ namespace Hybrid
         PickingPass m_PickingPass;
         GizmoPass m_GizmoPass;
         OverlayGizmoPass m_OverlayGizmoPass;
+        GridPass m_GridPass;
         ShadowPass m_ShadowPass;
         PostProcessPass m_PostProcessPass;
         SelectionMaskPass m_SelectionMaskPass;
