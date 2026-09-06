@@ -107,9 +107,8 @@ namespace Hybrid
         glm::mat4 view_m(1.0f), proj_m(1.0f);
         glm::vec3 camera_pos(0.0f, 0.0f, 3.0f);
 
-        bool use_game_camera = true;
-        if (input.editor_ext)
-            use_game_camera = input.editor_ext->use_game_camera;
+        const bool use_game_camera = !input.view_request ||
+            input.view_request->camera_source == RenderCameraSource::PrimarySceneCamera;
 
         if (use_game_camera && input.scene)
         {
@@ -121,11 +120,11 @@ namespace Hybrid
                                                        &result.view.frame.clearColor,
                                                        &result.view.frame.useSkyboxClear);
         }
-        else if (!use_game_camera && input.editor_ext && input.editor_ext->has_editor_camera)
+        else if (!use_game_camera && input.view_request)
         {
-            view_m = input.editor_ext->editor_view;
-            proj_m = input.editor_ext->editor_proj;
-            camera_pos = input.editor_ext->editor_camera_pos;
+            view_m = input.view_request->view;
+            proj_m = input.view_request->projection;
+            camera_pos = input.view_request->camera_position;
             result.has_camera = true;
             if (input.scene && input.scene->environment().skybox_cubemap.value != 0)
                 result.view.frame.useSkyboxClear = true;
@@ -146,10 +145,7 @@ namespace Hybrid
         result.view.frame.viewProj = proj_m * view_m;
         result.view.frame.cameraPos = camera_pos;
         result.view.frame.time = input.frame ? input.frame->dt : 0.0f;
-        if (input.editor_ext && input.editor_ext->game_viewport_size.x > 1.0f && input.editor_ext->game_viewport_size.y > 1.0f)
-            result.view.frame.gameAspect = input.editor_ext->game_viewport_size.x / input.editor_ext->game_viewport_size.y;
-        else
-            result.view.frame.gameAspect = (aspect > 0.0f) ? aspect : (16.0f / 9.0f);
+        result.view.frame.gameAspect = (aspect > 0.0f) ? aspect : (16.0f / 9.0f);
 
         resolveMainDirectionalLight(input.scene, result.view.mainDirectionalLight);
 

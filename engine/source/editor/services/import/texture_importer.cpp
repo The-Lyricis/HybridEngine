@@ -154,7 +154,7 @@ namespace Hybrid
         }
 
         AssetMetadata meta{};
-        if (const auto* existing = registry.findByPath(request.source_path))
+        if (const auto existing = registry.findByPath(request.source_path))
             meta = *existing;
         else
             meta.id = registry.generateUniqueID();

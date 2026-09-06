@@ -12,6 +12,9 @@
 #include "editor/core/context/editor_context.h"
 #include "editor/core/editor_shortcuts.h"
 #include "editor/tools/panels/game_view_panel.h"
+#include "editor/tools/panels/console_panel.h"
+#include "editor/tools/panels/project_settings_panel.h"
+#include "editor/tools/panels/tasks_panel.h"
 #include "editor/tools/panels/hierarchy_panel.h"
 #include "editor/tools/panels/inspector_panel.h"
 #include "editor/tools/panels/project_panel.h"
@@ -58,6 +61,9 @@ namespace Hybrid
             {EditorPanelId::Project, "Project", true, true, false, EditorDockSlot::LeftBottom},
             {EditorPanelId::SceneView, "Scene", true, true, true, EditorDockSlot::Main},
             {EditorPanelId::GameView, "Game", true, true, true, EditorDockSlot::Main},
+            {EditorPanelId::Console, "Console", true, true, false, EditorDockSlot::LeftBottom},
+            {EditorPanelId::ProjectSettings, "Project Settings", false, false, false, EditorDockSlot::Right},
+            {EditorPanelId::Tasks, "Tasks", true, true, false, EditorDockSlot::LeftBottom},
         };
         constexpr EditorLayoutSplitDesc kDefaultLayoutSplits[] = {
             {EditorLayoutNode::Main, EditorLayoutSplitDirection::Right, 0.25f, EditorLayoutNode::Right, EditorLayoutNode::LeftArea},
@@ -179,6 +185,9 @@ namespace Hybrid
         m_ProjectPanel = std::make_unique<ProjectPanel>();
         m_SceneViewportPanel = std::make_unique<SceneViewPanel>();
         m_GameViewportPanel = std::make_unique<GameViewPanel>();
+        m_ConsolePanel = std::make_unique<ConsolePanel>();
+        m_ProjectSettingsPanel = std::make_unique<ProjectSettingsPanel>();
+        m_TasksPanel = std::make_unique<TasksPanel>();
         registerPanels();
 
         m_initialized = true;
@@ -191,6 +200,9 @@ namespace Hybrid
             return;
 
         m_GameViewportPanel.reset();
+        m_ProjectSettingsPanel.reset();
+        m_TasksPanel.reset();
+        m_ConsolePanel.reset();
         m_SceneViewportPanel.reset();
         m_ProjectPanel.reset();
         m_InspectorPanel.reset();
@@ -324,6 +336,9 @@ namespace Hybrid
         m_panels[static_cast<size_t>(EditorPanelId::Project)] = m_ProjectPanel.get();
         m_panels[static_cast<size_t>(EditorPanelId::SceneView)] = m_SceneViewportPanel.get();
         m_panels[static_cast<size_t>(EditorPanelId::GameView)] = m_GameViewportPanel.get();
+        m_panels[static_cast<size_t>(EditorPanelId::Console)] = m_ConsolePanel.get();
+        m_panels[static_cast<size_t>(EditorPanelId::ProjectSettings)] = m_ProjectSettingsPanel.get();
+        m_panels[static_cast<size_t>(EditorPanelId::Tasks)] = m_TasksPanel.get();
 
         for (const EditorPanelDescriptor& descriptor : kPanelDescriptors)
         {
@@ -441,7 +456,10 @@ namespace Hybrid
                 ImGui::Separator();
             }
 
-            ImGui::MenuItem("Exit");
+            const bool can_exit = m_ctx && m_ctx->commands.can_execute_command &&
+                m_ctx->commands.can_execute_command(EditorCommandId::Exit);
+            if (ImGui::MenuItem("Exit", nullptr, false, can_exit))
+                m_ctx->commands.execute_command(EditorCommandId::Exit);
             ImGui::EndMenu();
         }
 
@@ -473,6 +491,10 @@ namespace Hybrid
 
             if (ImGui::MenuItem("Redo", "Ctrl+Y", false, can_redo) && m_ctx && m_ctx->commands.redo)
                 m_ctx->commands.redo();
+
+            ImGui::Separator();
+            if (ImGui::MenuItem("Project Settings..."))
+                m_ProjectSettingsPanel->setOpen(true);
 
             ImGui::EndMenu();
         }
@@ -525,6 +547,15 @@ namespace Hybrid
             status_line += " (Unsaved)";
         else if (m_ctx->document.activeDocument() && m_ctx->document.activeDocument()->isSaved())
             status_line += " (Saved)";
+
+        if (m_ctx->asset_actions.list_import_tasks)
+        {
+            size_t active_imports = 0;
+            for (const ImportTaskSnapshot& task : m_ctx->asset_actions.list_import_tasks())
+                active_imports += task.state == ImportTaskState::Queued || task.state == ImportTaskState::Running;
+            if (active_imports > 0)
+                status_line += " | Importing " + std::to_string(active_imports);
+        }
 
         const ImVec2 button_size(32.0f, 20.0f);
         const ImVec2 icon_size(18.0f, 18.0f);

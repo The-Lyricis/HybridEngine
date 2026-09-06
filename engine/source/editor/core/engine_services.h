@@ -14,9 +14,11 @@ namespace Hybrid
     class EditorResourceSystem;
     class IEditorPlatformServices;
     class InputLayer;
+    class JobSystem;
     struct FrameContext;
     enum class RenderFlags : uint32_t;
-    struct EditorRenderExt;
+    struct RenderFrameRequest;
+    struct RenderFrameResult;
 
     // Service locator-style bundle injected into editor layers.
     struct EngineServices
@@ -30,8 +32,11 @@ namespace Hybrid
         InputLayer* input = nullptr;                     // Per-frame input state.
         FrameContext* frame_context = nullptr;           // Shared frame payload for renderer.
         RenderFlags* render_flags = nullptr;             // Per-frame pass mask.
-        EditorRenderExt* editor_ext = nullptr;           // Editor-only render extension payload.
+        RenderFrameRequest* render_request = nullptr;    // Generic per-frame multi-view request.
+        const RenderFrameResult* render_result = nullptr;// Completed view textures/readbacks.
         std::function<bool(uint32_t&)> consume_pick_result; // Callback to read pick result from engine.
         std::function<bool(std::shared_ptr<Scene>)> set_editor_scene; // Replace the authoritative editor scene.
+        std::function<void()> request_exit;             // Final, already-confirmed application exit.
+        std::shared_ptr<JobSystem> jobs;                // Shared engine worker pool.
     };
 } // namespace Hybrid

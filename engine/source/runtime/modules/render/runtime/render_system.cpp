@@ -149,6 +149,19 @@ namespace Hybrid
             return (encoded_id == 0) ? kInvalidEntityID : (encoded_id - 1u);
         }
 
+        RenderViewId resolveViewId(const RenderViewRequest& view)
+        {
+            if (view.id != kInvalidRenderViewId)
+                return view.id;
+            uint64_t hash = 1469598103934665603ull;
+            for (unsigned char c : view.name)
+            {
+                hash ^= c;
+                hash *= 1099511628211ull;
+            }
+            return hash == kInvalidRenderViewId ? 1 : hash;
+        }
+
         // Returns false if no valid camera found.
     }
 
@@ -180,8 +193,6 @@ namespace Hybrid
 
         const uint32_t width = static_cast<uint32_t>(std::max(1, w));
         const uint32_t height = static_cast<uint32_t>(std::max(1, h));
-        ensureSceneViewRenderTargets(width, height);
-        ensureFramebuffer(m_GameFB, makeMainFramebufferSpec(width, height));
         const uint32_t shadow_cascade_count =
             std::clamp(m_DirectionalShadowSettings.cascade_count, 1u, kMaxDirectionalShadowCascades);
         for (uint32_t cascade_index = 0; cascade_index < shadow_cascade_count; ++cascade_index)
@@ -203,6 +214,34 @@ namespace Hybrid
                       kRenderSystemLogTag,
                       width,
                       height);
+    }
+
+    void RenderSystem::shutdown()
+    {
+        m_MaterialSystem.shutdown();
+        m_GizmoPass = GizmoPass{};
+        m_SkyboxPass = SkyboxPass{};
+        m_PostProcessPass = PostProcessPass{};
+        m_SelectionOverlayPass = SelectionOverlayPass{};
+        m_MeshCache.clear();
+        m_CubemapCache.clear();
+        m_DefaultCubemapTexture.reset();
+        m_TextureUploader.reset();
+        m_ViewTargets.clear();
+        m_RenderFrameIndex = 0;
+        for (auto& framebuffer : m_ShadowCascadeFBs)
+            framebuffer.reset();
+        m_FrameUBO.reset();
+        m_LightUBO.reset();
+        m_SceneShader.reset();
+        m_SkyboxShader.reset();
+        m_ShadowShader.reset();
+        m_ColliderDebugShader.reset();
+        m_ShaderLibrary.clear();
+        m_AssetManager.reset();
+        m_Scene.reset();
+        Renderer::shutdown();
+        m_Initialized = false;
     }
 
     void RenderSystem::update(float dt)
@@ -257,7 +296,10 @@ namespace Hybrid
 
     bool RenderSystem::loadBuiltinShaders()
     {
-        m_ShaderLibrary.setRoot(std::filesystem::path(HYBRID_PROJECT_ROOT_DIR) / "engine/shader");
+        std::filesystem::path shader_root = std::filesystem::path(HYBRID_BINARY_ROOT_DIR) / "shader";
+        if (!std::filesystem::exists(shader_root))
+            shader_root = std::filesystem::path(HYBRID_PROJECT_ROOT_DIR) / "engine/shader";
+        m_ShaderLibrary.setRoot(shader_root);
 
         bool scene_ok = false;
         bool skybox_ok = false;
@@ -431,30 +473,26 @@ namespace Hybrid
         }
     }
 
-    void RenderSystem::ensureSceneViewRenderTargets(uint32_t w, uint32_t h)
+    RenderSystem::ViewRenderTargets& RenderSystem::acquireViewTargets(RenderViewId id, const RenderViewRequest& view)
     {
-        const uint32_t width = std::max(1u, w);
-        const uint32_t height = std::max(1u, h);
-        ensureFramebuffer(m_SceneFB, makeMainFramebufferSpec(width, height));
-        ensureFramebuffer(m_SelectionFB, makeSelectionFramebufferSpec(width, height));
-    }
-
-    uint32_t RenderSystem::getSceneColorTexture() const
-    {
-        return m_SceneFB ? m_SceneFB->getColorAttachmentRendererID(RenderTargets::kSceneColorAttachment) : 0;
-    }
-
-    uint32_t RenderSystem::getGameColorTexture() const
-    {
-        return m_GameFB ? m_GameFB->getColorAttachmentRendererID(RenderTargets::kSceneColorAttachment) : 0;
+        const uint32_t width = std::max(1u, static_cast<uint32_t>(view.size.x));
+        const uint32_t height = std::max(1u, static_cast<uint32_t>(view.size.y));
+        auto& targets = m_ViewTargets[id];
+        ensureFramebuffer(targets.main, makeMainFramebufferSpec(width, height));
+        if (HasFlag(view.flags, RenderFlags::SelectionHighlight))
+            ensureFramebuffer(targets.selection, makeSelectionFramebufferSpec(width, height));
+        else
+            targets.selection.reset();
+        targets.last_used_frame = m_RenderFrameIndex;
+        return targets;
     }
 
     void RenderSystem::onWindowResize(uint32_t width, uint32_t height)
     {
         if (!m_Initialized)
             return;
-        ensureSceneViewRenderTargets(width, height);
-        ensureFramebuffer(m_GameFB, makeMainFramebufferSpec(width, height));
+        (void)width;
+        (void)height;
     }
 
     void RenderSystem::invalidateAsset(AssetID id, AssetType type)
@@ -532,14 +570,14 @@ namespace Hybrid
     
     RenderPacket RenderSystem::buildRenderPacket(const FrameContext& frame_context,
                                                  RenderFlags flags,
-                                                 const EditorRenderExt* editor_ext,
+                                                 const RenderViewRequest* view_request,
                                                  bool cache_editor_camera_state)
     {
         std::shared_ptr<Scene> scene = frame_context.scene ? frame_context.scene : m_Scene;
         FrameViewResolveInput view_input{};
         view_input.scene = scene;
         view_input.frame = &frame_context;
-        view_input.editor_ext = editor_ext;
+        view_input.view_request = view_request;
         view_input.flags = flags;
         view_input.resolve_cubemap = [this](AssetID id)
         {
@@ -564,7 +602,7 @@ namespace Hybrid
         packet_input.view = view_result.view;
         packet_input.environment = view_result.environment;
         packet_input.shadow = &shadow_data;
-        packet_input.editor_ext = editor_ext;
+        packet_input.view_request = view_request;
         packet_input.asset_manager = m_AssetManager;
         packet_input.material_system = &m_MaterialSystem;
         packet_input.resolve_mesh_gpu = [this](AssetID id, const std::shared_ptr<Mesh>& mesh)
@@ -616,10 +654,11 @@ namespace Hybrid
         m_Stats.submitted_entities = static_cast<uint32_t>(submitted_entities.size());
     }
 
-    void RenderSystem::renderFrame(const FrameContext& frame_context,
-                                   RenderFlags flags,
-                                   const EditorRenderExt* editor_ext)
+    void RenderSystem::renderFrameInternal(const FrameContext& frame_context,
+                                           const RenderViewRequest& view,
+                                           const ResolvedRenderTargets& view_targets)
     {
+        const RenderFlags flags = view.flags;
         m_Stats.frame_time_ms = std::max(0.0f, frame_context.dt * 1000.0f);
         m_Stats.fps = frame_context.dt > 1e-6f ? (1.0f / frame_context.dt) : 0.0f;
 
@@ -672,8 +711,8 @@ namespace Hybrid
 
         const auto execute_render = [this, &make_pipeline_callbacks](const FrameContext& current_frame,
                                                                      const RenderPacket& packet,
-                                                                     const EditorSelectionState* editor_selection,
-                                                                     const EditorPostProcessState* post_process,
+                                                                     const RenderSelectionState* editor_selection,
+                                                                     const RenderPostProcessState* post_process,
                                                                      RenderFlags current_flags,
                                                                      const ResolvedRenderTargets& targets)
         {
@@ -721,93 +760,78 @@ namespace Hybrid
         if (flags == RenderFlags::None)
             return;
 
-        if (editor_ext && (editor_ext->render_scene_view || editor_ext->render_game_view))
-        {
-            bool rendered_any = false;
-
-            if (editor_ext->render_scene_view &&
-                editor_ext->scene_viewport_size.x > 0.0f &&
-                editor_ext->scene_viewport_size.y > 0.0f)
-            {
-                FrameContext scene_frame = frame_context;
-                scene_frame.viewport_size = editor_ext->scene_viewport_size;
-                ensureSceneViewRenderTargets(static_cast<uint32_t>(scene_frame.viewport_size.x),
-                                             static_cast<uint32_t>(scene_frame.viewport_size.y));
-
-                EditorRenderExt scene_ext = *editor_ext;
-                scene_ext.use_game_camera = false;
-                auto scene_packet = buildRenderPacket(scene_frame, flags, &scene_ext, true);
-                ResolvedRenderTargets scene_targets{};
-                scene_targets.framebuffer = m_SceneFB;
-                scene_targets.scene_framebuffer = m_SceneFB;
-                scene_targets.selection_framebuffer = m_SelectionFB;
-                scene_targets.shadow_framebuffer = m_ShadowCascadeFBs[0];
-                scene_targets.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
-                execute_render(scene_frame, scene_packet, &scene_ext.selection, &scene_ext.post_process, flags, scene_targets);
-                rendered_any = true;
-            }
-
-            if (editor_ext->render_game_view &&
-                editor_ext->game_viewport_size.x > 0.0f &&
-                editor_ext->game_viewport_size.y > 0.0f)
-            {
-                FrameContext game_frame = frame_context;
-                game_frame.viewport_size = editor_ext->game_viewport_size;
-                ensureFramebuffer(m_GameFB,
-                                  makeMainFramebufferSpec(static_cast<uint32_t>(game_frame.viewport_size.x),
-                                                          static_cast<uint32_t>(game_frame.viewport_size.y)));
-
-                EditorRenderExt game_ext = *editor_ext;
-                game_ext.use_game_camera = true;
-                game_ext.has_editor_camera = false;
-                const RenderFlags game_flags = RenderFlags::Scene | RenderFlags::Shadow;
-                auto game_packet = buildRenderPacket(game_frame, game_flags, &game_ext, false);
-                ResolvedRenderTargets game_targets{};
-                game_targets.framebuffer = m_GameFB;
-                game_targets.scene_framebuffer = m_GameFB;
-                game_targets.selection_framebuffer = nullptr;
-                game_targets.shadow_framebuffer = m_ShadowCascadeFBs[0];
-                game_targets.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
-                execute_render(game_frame, game_packet, &game_ext.selection, nullptr, game_flags, game_targets);
-                rendered_any = true;
-            }
-
-            if (rendered_any)
-                return;
-        }
-
         if (frame_context.viewport_size.x <= 0.0f || frame_context.viewport_size.y <= 0.0f)
             return;
 
-        ensureSceneViewRenderTargets(static_cast<uint32_t>(frame_context.viewport_size.x),
-                                     static_cast<uint32_t>(frame_context.viewport_size.y));
-
-        auto packet = buildRenderPacket(frame_context, flags, editor_ext, true);
-        ResolvedRenderTargets targets{};
-        targets.framebuffer = m_SceneFB;
-        targets.scene_framebuffer = m_SceneFB;
-        targets.selection_framebuffer = m_SelectionFB;
-        targets.shadow_framebuffer = m_ShadowCascadeFBs[0];
-        targets.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
+        auto packet = buildRenderPacket(frame_context, flags, &view,
+                                        view.camera_source == RenderCameraSource::ExplicitMatrices);
         execute_render(frame_context,
                        packet,
-                       editor_ext ? &editor_ext->selection : nullptr,
-                       editor_ext ? &editor_ext->post_process : nullptr,
+                       &view.selection,
+                       &view.post_process,
                        flags,
-                       targets);
+                       view_targets);
     }
-    uint32_t RenderSystem::readEntityID(int x, int y) const
-    {
-        if (!m_SceneFB)
-            return kInvalidEntityID;
-        if (x < 0 || y < 0)
-            return kInvalidEntityID;
-        if (x >= static_cast<int>(m_SceneFB->getWidth()) ||
-            y >= static_cast<int>(m_SceneFB->getHeight()))
-            return kInvalidEntityID;
 
-        const uint32_t encoded_id = m_SceneFB->readPixelUInt(RenderTargets::kSceneEntityIDAttachment, x, y);
-        return decodeEntityID(encoded_id);
+    RenderFrameResult RenderSystem::renderFrame(const RenderFrameRequest& request)
+    {
+        ++m_RenderFrameIndex;
+        RenderFrameResult result;
+        result.views.reserve(request.views.size());
+
+        for (const RenderViewRequest& view : request.views)
+        {
+            if (view.size.x <= 0.0f || view.size.y <= 0.0f)
+                continue;
+
+            FrameContext frame{};
+            frame.dt = request.dt;
+            frame.scene = request.scene;
+            frame.window_handle = request.window_handle;
+            frame.input = request.input;
+            frame.viewport_size = view.size;
+
+            const RenderViewId view_id = resolveViewId(view);
+            ViewRenderTargets& targets = acquireViewTargets(view_id, view);
+            ResolvedRenderTargets resolved{};
+            resolved.framebuffer = targets.main;
+            resolved.scene_framebuffer = targets.main;
+            resolved.selection_framebuffer = targets.selection;
+            resolved.shadow_framebuffer = m_ShadowCascadeFBs[0];
+            resolved.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
+            renderFrameInternal(frame, view, resolved);
+
+            RenderViewResult view_result{};
+            view_result.name = view.name;
+            view_result.id = view_id;
+            view_result.color_texture = targets.main
+                ? targets.main->getColorAttachmentRendererID(RenderTargets::kSceneColorAttachment)
+                : 0;
+            if (view.picking && HasFlag(view.flags, RenderFlags::PickingID))
+            {
+                if (targets.main &&
+                    view.picking->x >= 0 && view.picking->y >= 0 &&
+                    view.picking->x < static_cast<int>(targets.main->getWidth()) &&
+                    view.picking->y < static_cast<int>(targets.main->getHeight()))
+                {
+                    const uint32_t encoded = targets.main->readPixelUInt(
+                        RenderTargets::kSceneEntityIDAttachment, view.picking->x, view.picking->y);
+                    view_result.picked_entity = decodeEntityID(encoded);
+                }
+                else
+                    view_result.picked_entity = kInvalidEntityID;
+            }
+            result.views.push_back(std::move(view_result));
+        }
+
+        for (auto it = m_ViewTargets.begin(); it != m_ViewTargets.end();)
+        {
+            if (m_RenderFrameIndex > it->second.last_used_frame + 120)
+                it = m_ViewTargets.erase(it);
+            else
+                ++it;
+        }
+        return result;
     }
 
 }

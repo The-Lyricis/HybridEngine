@@ -3,7 +3,7 @@
 #include <functional>
 #include <memory>
 
-#include "runtime/modules/render/runtime/editor_render_ext.h"
+#include "runtime/modules/render/runtime/render_frame_request.h"
 #include "runtime/modules/render/runtime/frame_view_data.h"
 #include "runtime/modules/render/runtime/frame_context.h"
 #include "runtime/modules/render/runtime/render_flags.h"
@@ -17,7 +17,7 @@ namespace Hybrid
     {
         std::shared_ptr<Scene> scene;
         const FrameContext* frame = nullptr;
-        const EditorRenderExt* editor_ext = nullptr;
+        const RenderViewRequest* view_request = nullptr;
         RenderFlags flags = RenderFlags::None;
         std::function<TexturePtr(AssetID)> resolve_cubemap;
     };

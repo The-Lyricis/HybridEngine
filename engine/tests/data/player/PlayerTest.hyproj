@@ -1,0 +1,7 @@
+format_version=2
+name=PlayerTest
+startup_scene=asset:Startup.scene
+assets=Assets
+cache=Cache
+build=Build
+settings=ProjectSettings

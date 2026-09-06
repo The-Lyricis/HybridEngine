@@ -32,8 +32,8 @@ if(NOT TARGET glm)
     set_target_properties(glm PROPERTIES FOLDER ${third_party_folder}/glm)
 endif()
 
-# ---- imgui ----
-if(NOT TARGET imgui)
+# ---- imgui (editor-only) ----
+if(HYBRID_BUILD_EDITOR AND NOT TARGET imgui)
     include(${CMAKE_CURRENT_LIST_DIR}/imgui.cmake)
     set_target_properties(imgui PROPERTIES FOLDER ${third_party_folder}/imgui)
 endif()

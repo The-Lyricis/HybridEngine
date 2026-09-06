@@ -16,7 +16,7 @@ namespace Hybrid
     {
         const RenderPacket& packet = *context.packet;
         const std::shared_ptr<Framebuffer>& framebuffer = context.selection_framebuffer;
-        const EditorSelectionState* selection = context.editor_selection;
+        const RenderSelectionState* selection = context.editor_selection;
 
         if (!framebuffer || !selection || selection->selected_entities.empty() || context.shader_library == nullptr)
         {

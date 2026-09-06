@@ -58,7 +58,7 @@ namespace Hybrid
             if (!registry || id.value == 0)
                 return {};
 
-            const auto* meta = registry->find(id);
+            const auto meta = registry->find(id);
             if (!meta || !meta->is_valid)
                 return {};
 
@@ -77,7 +77,7 @@ namespace Hybrid
                 const std::string logical = j[path_key].get<std::string>();
                 if (!logical.empty())
                 {
-                    if (const auto* meta = registry->findByPath(logical))
+                    if (const auto meta = registry->findByPath(logical))
                         return meta->id;
                 }
             }

@@ -7,6 +7,7 @@
 #include "runtime/modules/render/runtime/frame_view_data.h"
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/render_packet.h"
+#include "runtime/modules/render/runtime/render_frame_request.h"
 
 namespace Hybrid
 {
@@ -20,7 +21,7 @@ namespace Hybrid
         FrameViewData view;
         RenderEnvironmentData environment;
         const RenderShadowData* shadow = nullptr;
-        const EditorRenderExt* editor_ext = nullptr;
+        const RenderViewRequest* view_request = nullptr;
         std::shared_ptr<AssetManager> asset_manager;
         MaterialSystem* material_system = nullptr;
         std::function<MeshGPU*(AssetID, const std::shared_ptr<Mesh>&)> resolve_mesh_gpu;

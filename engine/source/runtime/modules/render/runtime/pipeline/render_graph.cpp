@@ -188,7 +188,7 @@ namespace Hybrid
 
         builder.addPass("Skybox", RenderPassType::Skybox, RenderFlags::Scene | RenderFlags::PickingID | RenderFlags::SelectionHighlight)
             .read(RenderResourceId::SceneDepth)
-            .write(RenderResourceId::SceneColor);
+            .readWrite(RenderResourceId::SceneColor);
 
         builder.addPass("Picking", RenderPassType::Picking, RenderFlags::PickingID, true)
             .read(RenderResourceId::SceneEntityID);
@@ -342,7 +342,7 @@ namespace Hybrid
                     std::ostringstream message;
                     message << "Writes " << ToString(usage.resource) << " after pass '" << last_writer[resource_index]
                             << "' also wrote it without an explicit read/write dependency.";
-                    AddIssue(result, RenderGraphIssueSeverity::Warning, pass_index, pass_name, message.str());
+                    AddIssue(result, RenderGraphIssueSeverity::Error, pass_index, pass_name, message.str());
                 }
 
                 if (IsWriteAccess(usage.access))

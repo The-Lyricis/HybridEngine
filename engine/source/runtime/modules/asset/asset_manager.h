@@ -4,7 +4,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
-#include <thread>
+#include <chrono>
 #include <typeindex>
 #include <unordered_map>
 
@@ -12,6 +12,7 @@
 #include "asset_registry.h"
 #include "asset_loader.h"
 #include "runtime/core/base/vfs/virtual_file_system.h"
+#include "runtime/core/job/job_system.h"
 
 namespace Hybrid
 {
@@ -31,6 +32,10 @@ namespace Hybrid
         explicit AssetFuture(std::shared_future<std::shared_ptr<void>> f) : m_future(std::move(f)) {}
 
         bool valid() const { return m_future.valid(); }
+        bool isReady() const
+        {
+            return m_future.valid() && m_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+        }
 
         std::shared_ptr<T> get() const
         {
@@ -46,10 +51,13 @@ namespace Hybrid
     // 杩愯鏃?Loader锛氫粠 cooked/婧愭枃浠舵瀯寤?T
     template <typename T> using AssetLoadFunc = std::function<std::shared_ptr<T>(const AssetMetadata&, IVirtualFileSystem&)>;
 
-    class AssetManager
+    class AssetManager : public std::enable_shared_from_this<AssetManager>
     {
     public:
-        AssetManager(std::shared_ptr<IVirtualFileSystem> vfs, std::shared_ptr<AssetRegistry> registry);
+        AssetManager(std::shared_ptr<IVirtualFileSystem> vfs,
+                     std::shared_ptr<AssetRegistry> registry,
+                     std::shared_ptr<JobSystem> job_system = nullptr);
+        ~AssetManager();
 
         template <typename T> void registerLoader(AssetType type, AssetLoadFunc<T> fn);
         template <typename T> void registerLoader(const std::shared_ptr<IAssetLoader<T>>& loader);
@@ -60,6 +68,7 @@ namespace Hybrid
         template <typename T> void registerResident(AssetID id, const std::shared_ptr<T>& asset);
 
         void unload(AssetID id);
+        void shutdown();
         AssetState getState(AssetID id) const;
 
         // 璁剧疆/鑾峰彇榛樿璧勬簮锛圠oader 澶辫触鎴栧紓姝ラ檺鍒舵椂鍙洖閫€锛?
@@ -80,6 +89,11 @@ namespace Hybrid
                 return std::hash<size_t>()(k.ti.hash_code()) ^ (static_cast<size_t>(k.assetType) << 1);
             }
         };
+        struct InFlightEntry
+        {
+            uint64_t generation = 0;
+            std::shared_future<std::shared_ptr<void>> future;
+        };
 
         std::shared_ptr<void> loadInternal(std::type_index ti, AssetType type, AssetID id);
         std::shared_future<std::shared_ptr<void>> loadInternalAsync(std::type_index ti, AssetType type, AssetID id);
@@ -98,11 +112,13 @@ namespace Hybrid
     private:
         std::shared_ptr<IVirtualFileSystem> m_vfs;
         std::shared_ptr<AssetRegistry>      m_registry;
+        std::shared_ptr<JobSystem>          m_jobSystem;
 
         mutable std::mutex m_mutex;
         std::unordered_map<AssetID, AssetState, AssetID::Hasher> m_state;
         std::unordered_map<AssetID, std::shared_ptr<void>, AssetID::Hasher> m_cache;
-        std::unordered_map<AssetID, std::shared_future<std::shared_ptr<void>>, AssetID::Hasher> m_inFlight;
+        std::unordered_map<AssetID, InFlightEntry, AssetID::Hasher> m_inFlight;
+        std::unordered_map<AssetID, uint64_t, AssetID::Hasher> m_generation;
 
         std::unordered_map<LoaderKey,
                            std::function<std::shared_ptr<void>(const AssetMetadata&, IVirtualFileSystem&)>,
@@ -110,6 +126,7 @@ namespace Hybrid
             m_loaders;
 
         std::unordered_map<std::type_index, std::shared_ptr<void>> m_default;
+        bool m_shutdown = false;
     };
 } // namespace Hybrid
 

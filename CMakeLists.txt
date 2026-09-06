@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.20)
 
 project(Hybrid VERSION 0.1.0)
 
+option(HYBRID_BUILD_EDITOR "Build the Windows editor" ${WIN32})
+option(HYBRID_BUILD_PLAYER "Build the standalone player" ON)
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

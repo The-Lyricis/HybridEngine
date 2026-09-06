@@ -28,10 +28,7 @@ namespace Hybrid
     void PhysicsSystem::shutdown()
     {
         if (!m_Initialized)
-        {
-            HBD_CORE_WARN("{} shutdown_skipped reason=not_initialized", kPhysicsSystemLogTag);
             return;
-        }
 
         m_Initialized = false;
         HBD_CORE_INFO("{} shutdown_completed", kPhysicsSystemLogTag);

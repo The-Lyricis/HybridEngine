@@ -11,6 +11,7 @@ namespace Hybrid
         EditorAssetActions asset_actions;
         EditorCommandActions commands;
         EditorModeActions mode;
+        EditorProjectActions project;
     };
 
     void BindEditorContextActions(EditorContext& ctx, EditorContextActionBindings bindings);

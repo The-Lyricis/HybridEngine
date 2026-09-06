@@ -33,11 +33,11 @@ namespace Hybrid
             return dir / len;
         }
 
-        uint32_t resolveActiveSelectionEntityID(const EditorRenderExt* editor_ext)
+        uint32_t resolveActiveSelectionEntityID(const RenderViewRequest* view_request)
         {
-            if (!editor_ext)
+            if (!view_request)
                 return kInvalidEntityID;
-            return editor_ext->selection.active_entity;
+            return view_request->selection.active_entity;
         }
     } // namespace
 
@@ -49,9 +49,9 @@ namespace Hybrid
         packet.environment = input.environment;
         if (input.shadow)
             packet.shadow = *input.shadow;
-        packet.showColliderDebug = input.editor_ext ? input.editor_ext->show_collider_debug : false;
-        packet.showShadowDebug = input.editor_ext ? input.editor_ext->show_shadow_debug : false;
-        packet.activeEntityID = resolveActiveSelectionEntityID(input.editor_ext);
+        packet.showColliderDebug = input.view_request ? input.view_request->show_collider_debug : false;
+        packet.showShadowDebug = input.view_request ? input.view_request->show_shadow_debug : false;
+        packet.activeEntityID = resolveActiveSelectionEntityID(input.view_request);
 
         if (!input.asset_manager || !input.material_system || !input.resolve_mesh_gpu)
             return packet;

@@ -30,6 +30,24 @@ namespace Hybrid
         // Main + sub-assets (future-proof for FBX/GLTF split).
         std::vector<AssetMetadata> assets;
     };
+
+    struct ImportPreparedResult
+    {
+        ImportRequest request;
+        ImportResult result;
+    };
+
+    enum class ImportTaskState : uint8_t { Queued = 0, Running, Succeeded, Failed };
+
+    struct ImportTaskSnapshot
+    {
+        uint64_t id = 0;
+        ImportTaskState state = ImportTaskState::Queued;
+        std::string source_path;
+        std::string stage;
+        uint64_t elapsed_ms = 0;
+        std::string message;
+    };
 } // namespace Hybrid
 
 

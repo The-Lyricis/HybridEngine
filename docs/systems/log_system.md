@@ -20,6 +20,7 @@ It also provides:
 
 - console output
 - file output
+- a bounded, thread-safe in-memory sink (4096 entries by default)
 - macro-based call sites
 
 ## Core Responsibilities
@@ -66,6 +67,8 @@ The current implementation already includes:
 - level / flush-level setup
 - Core / Client dual logger creation
 - macro wrappers
+- `LogSystem::bufferedEntries()` snapshots with sequence, timestamp, thread, logger, level, and message
+- `LogSystem::clearBufferedEntries()` for editor-side clearing
 
 The current default output patterns are:
 
@@ -350,6 +353,12 @@ If startup or shutdown order becomes loose, failures usually appear as:
 - missing early logs
 - shutdown-time logger misuse
 
+## Editor Console
+
+The Editor Console consumes immutable buffer snapshots on the main thread. It supports level and Core/Client filtering, text search, pause, clear, copy, and auto-scroll. Worker threads only emit normal log messages; they never access ImGui state.
+
+When paused, the panel retains its last snapshot while logging continues in the bounded sink. Clearing removes both the shared buffer and the paused panel snapshot.
+
 ## Recommended Follow-up Improvements
 
 The current implementation is usable, but these improvements are recommended:
@@ -357,7 +366,7 @@ The current implementation is usable, but these improvements are recommended:
 1. Consider module-tag helper macros to reduce repeated `"[Module]"` prefixes.
 2. Add build-dependent default log levels.
 3. Add optional module-level filtering if log volume grows further.
-4. If the editor log-view requirement becomes stable, connect log output to an ImGui panel.
+4. Add optional export and source-location navigation if the Console workflow needs them.
 
 ## Quick Checklist
 

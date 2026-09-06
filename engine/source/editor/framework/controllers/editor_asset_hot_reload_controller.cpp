@@ -220,12 +220,6 @@ namespace Hybrid
 
     void EditorAssetHotReloadController::handleAssetsReloaded(const AssetsReloadedEvent& event)
     {
-        if (m_services.resources)
-        {
-            for (const auto& meta : event.assets)
-                m_services.resources->invalidateAsset(meta.id);
-        }
-
         if (m_services.render)
         {
             for (const auto& meta : event.assets)

@@ -34,6 +34,7 @@
 #include "runtime/modules/render/runtime/render_packet.h"
 #include "runtime/modules/render/runtime/pipeline/render_pipeline.h"
 #include "runtime/modules/render/runtime/render_flags.h"
+#include "runtime/modules/render/runtime/render_frame_request.h"
 #include "runtime/modules/render/runtime/shader_library.h"
 #include "runtime/modules/render/runtime/passes/shadow_pass.h"
 #include "runtime/modules/render/public/framebuffer.h"
@@ -42,7 +43,6 @@
 
 namespace Hybrid
 {
-    struct EditorRenderExt;
     struct FrameContext;
     struct RenderStats
     {
@@ -77,30 +77,33 @@ namespace Hybrid
     {
     public:
         RenderSystem() = default;
-        ~RenderSystem() = default;
+        ~RenderSystem() { shutdown(); }
 
         void initialize(void* glfwWindowHandle);
+        void shutdown();
+        bool isInitialized() const { return m_Initialized; }
         void update(float dt);
         void setAssetManager(std::shared_ptr<AssetManager> mgr);
         void setScene(std::shared_ptr<Scene> scene) { m_Scene = std::move(scene); }
 
-        uint32_t getSceneColorTexture() const;
-        uint32_t getGameColorTexture() const;
         void onWindowResize(uint32_t width, uint32_t height);
-        uint32_t readEntityID(int x, int y) const;
         void invalidateAsset(AssetID id, AssetType type);
 
-        // Per-frame render entry driven by context + feature flags.
-        void renderFrame(const FrameContext& frame_context,
-                         RenderFlags flags,
-                         const EditorRenderExt* editor_ext = nullptr);
+        // Per-frame multi-view render entry.
+        RenderFrameResult renderFrame(const RenderFrameRequest& request);
         const glm::mat4& getLastView() const { return m_LastView; }
         const glm::mat4& getLastProj() const { return m_LastProj; }
         const RenderStats& getStats() const { return m_Stats; }
 
     private:
         void ensureFramebuffer(std::shared_ptr<Framebuffer>& framebuffer, const FramebufferSpec& spec);
-        void ensureSceneViewRenderTargets(uint32_t w, uint32_t h);
+        struct ViewRenderTargets
+        {
+            std::shared_ptr<Framebuffer> main;
+            std::shared_ptr<Framebuffer> selection;
+            uint64_t last_used_frame = 0;
+        };
+        ViewRenderTargets& acquireViewTargets(RenderViewId id, const RenderViewRequest& view);
         bool loadBuiltinShaders();
         void ensureGlobalUniformBuffers();
         void configureShaderBindings();
@@ -113,16 +116,18 @@ namespace Hybrid
         // Extract ECS data + camera/light state into a draw packet.
         RenderPacket buildRenderPacket(const FrameContext& frame_context,
                                        RenderFlags flags,
-                                       const EditorRenderExt* editor_ext,
+                                       const RenderViewRequest* view_request,
                                        bool cache_editor_camera_state = true);
         MeshGPU* getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh>& mesh);
+        void renderFrameInternal(const FrameContext& frame_context,
+                                 const RenderViewRequest& view,
+                                 const ResolvedRenderTargets& targets);
 
     private:
         std::shared_ptr<Scene> m_Scene; // Fallback scene source when frame context has no scene.
 
-        std::shared_ptr<Framebuffer> m_SceneFB;
-        std::shared_ptr<Framebuffer> m_SelectionFB;
-        std::shared_ptr<Framebuffer> m_GameFB;
+        std::unordered_map<RenderViewId, ViewRenderTargets> m_ViewTargets;
+        uint64_t m_RenderFrameIndex = 0;
         std::array<std::shared_ptr<Framebuffer>, kMaxDirectionalShadowCascades> m_ShadowCascadeFBs{};
         std::shared_ptr<UniformBuffer> m_FrameUBO;
         std::shared_ptr<UniformBuffer> m_LightUBO;

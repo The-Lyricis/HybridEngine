@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "runtime/modules/render/public/texture.h"
+#include "runtime/modules/asset/image_format.h"
 
 namespace Hybrid
 {

@@ -10,14 +10,16 @@
 
 namespace Hybrid
 {
-    void WindowSystem::initialize(int width, int height, const char* title)
+    void WindowSystem::initialize(int width, int height, const char* title, bool visible)
     {
         if (!glfwInit())
         {
             throw std::runtime_error("Failed to initialize GLFW");
         }
 
+        glfwWindowHint(GLFW_VISIBLE, visible ? GLFW_TRUE : GLFW_FALSE);
         m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
+        glfwDefaultWindowHints();
         if (!m_window)
         {
             glfwTerminate();

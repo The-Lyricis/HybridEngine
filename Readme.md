@@ -23,8 +23,8 @@ Hybrid Engine is a long-term implementation playground for understanding how ren
 
 Current development is mainly focused on:
 
-- editor-driven scene workflow
-- asset import, metadata, and cooked-cache pipeline
+- reliable editor document transitions, Console, Project Settings, and Game View workflow
+- observable asynchronous asset import, metadata, and cooked-cache pipeline
 - render architecture cleanup and pass evolution
 - play-mode transitions, scene switching, and early physics iteration
 
@@ -32,7 +32,7 @@ Current development is mainly focused on:
 
 | Platform | Toolchain |
 | --- | --- |
-| Windows 10 / 11 | Visual Studio 2022 + MSVC + CMake 3.20+ |
+| Windows 10 / 11, Linux runtime | Visual Studio 2022 / GCC / Clang + CMake 3.20+ |
 
 | Rendering | Main Entry |
 | --- | --- |
@@ -65,6 +65,7 @@ Configure and build manually:
 ```bash
 cmake -S . -B build
 cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 ```
 
 Or use the Windows helper script:
@@ -78,6 +79,15 @@ Run the editor:
 ```bat
 bin\HybridEditor.exe
 ```
+
+Run a project with the standalone player:
+
+```bat
+bin\HybridPlayer.exe --project F:\Projects\MyGame\MyGame.hyproj --max-frames 120
+bin\HybridPlayer.exe --project F:\Projects\MyGame\MyGame.hyproj --headless --max-frames 10
+```
+
+CMake options are `HYBRID_BUILD_EDITOR` (Windows-only), `HYBRID_BUILD_PLAYER`, and `BUILD_TESTING`.
 
 Runtime notes:
 
@@ -132,6 +142,9 @@ Project documentation lives under `docs/`:
 - [Render ECS Asset Chain](docs/systems/render_ecs_asset_chain.md): integration notes for mesh, material, ECS, and editor flow inside the render path
 - [Event System](docs/systems/event_system.md): event dispatch and input/event bridge notes
 - [Log System](docs/systems/log_system.md): logging structure and usage
+- [Runtime Architecture](docs/systems/runtime_architecture.md): target boundaries, lifecycle, multi-view rendering, and async assets
+- [Project Format v2](docs/project_format.md): startup-scene and Player contract
+- [Editor Workflow Reliability](docs/systems/editor_workflow.md): safe transitions, project settings, async tasks, and stable render views
 
 ## Features & Current Status
 
@@ -140,9 +153,9 @@ Already implemented or broadly usable:
 - Core runtime foundation: logging, events, input, window system, and main loop
 - Rendering baseline: OpenGL backend, framebuffer path, forward rendering, and Scene / Game viewport split
 - Scene system: EnTT-based entities and components, scene serialization, hierarchy data, and the `scene_document` flow
-- Editor basics: docking UI, Hierarchy, Inspector, Scene View, Game View, Project Panel, gizmo interaction, and object picking
+- Editor workflow: docking UI, safe dirty-scene exit, Hierarchy, Inspector, Scene/Game views, Project Settings, Console, Tasks, gizmo interaction, and object picking
 - Asset-system baseline: VFS logical paths, asset registry, `.meta` files, cooked cache output, and loading for textures, meshes, materials, and scenes
-- Import workflow: OBJ import, material generation, texture import, drag-and-drop scene placement, and initial hot-reload support
+- Import workflow: engine-pool background preparation, main-thread commit/cache invalidation, coalescing, retry/task visibility, OBJ/material/texture import, and hot reload
 - Lighting: directional lights and point lights in the current render path
 - Physics baseline: AABB collision, collider registration, rigidbody iteration, and collider gizmo debugging
 
@@ -151,7 +164,7 @@ Still under active development:
 - The render-pipeline split is still being refined and higher-level pass orchestration is not fully settled yet.
 - Shadow, outline, and post-process paths have started but are not complete yet.
 - The physics system is still in an early iteration phase and remains unstable overall.
-- The editor workflow is already useful for experiments and feature validation, but polish, reliability, and tooling depth still need work.
+- The editor workflow is reliable for routine scene work; broader undo/redo, packaging, and profiling depth still need work.
 - Audio and scripting systems have not been implemented yet.
 
 ## Roadmap
@@ -160,8 +173,8 @@ Near-term focus:
 
 - continue refining render-pipeline structure, including pass execution flow, shader management, and data upload paths
 - improve physics behavior, rigidbody flow, and editor-side debugging support
-- strengthen scene-editing reliability across edit/play transitions
-- keep improving asset hot reload, cache invalidation, and import stability
+- build a portable Windows/Linux cook/package pipeline on top of the new project and import contracts
+- expand automated editor transition and rendering coverage where platform UI automation is available
 
 Planned future work:
 

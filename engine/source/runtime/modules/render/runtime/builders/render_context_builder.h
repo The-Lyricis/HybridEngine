@@ -20,7 +20,7 @@ namespace Hybrid
     {
         const FrameContext* frame = nullptr;
         const RenderPacket* packet = nullptr;
-        const EditorSelectionState* editor_selection = nullptr;
+        const RenderSelectionState* editor_selection = nullptr;
         RenderFlags flags = RenderFlags::None;
         void* window_handle = nullptr;
         ResolvedRenderTargets targets;

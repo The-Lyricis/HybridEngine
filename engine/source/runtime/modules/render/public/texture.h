@@ -4,17 +4,12 @@
 #include <cstdint>
 #include <memory>
 
+#include "runtime/modules/asset/image_format.h"
+
 namespace Hybrid
 {
     class Texture;
     using TexturePtr = std::shared_ptr<Texture>;
-
-    enum class TextureFormat
-    {
-        Unknown = 0,
-        RGB8,
-        RGBA8,
-    };
 
     enum class TextureType : uint8_t
     {

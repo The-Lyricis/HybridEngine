@@ -11,7 +11,7 @@
 
 #include "runtime/modules/asset/asset_type.h"
 #include "runtime/modules/render/public/texture.h"
-#include "runtime/modules/render/runtime/editor_render_ext.h"
+#include "runtime/modules/render/runtime/render_frame_request.h"
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/mesh_gpu.h"
 #include "runtime/modules/render/runtime/render_shadow_settings.h"

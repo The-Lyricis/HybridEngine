@@ -1,6 +1,8 @@
 #include "engine.h"
 
 #include <algorithm>
+#include <cmath>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -39,12 +41,27 @@ namespace Hybrid
 
     bool HybridEngine::initialize(const std::filesystem::path& project_path)
     {
+        EngineConfig config{};
+        config.project_path = project_path;
+        return initialize(config);
+    }
+
+    bool HybridEngine::initialize(const EngineConfig& config)
+    {
+        if (m_Initialized)
+            return true;
         LogSystem::initialize();
+        m_Running = true;
+        m_Minimized = false;
+        m_Headless = config.headless;
+        m_FrameClock.configure({config.fixed_update_hz, 4});
+        m_FixedUpdateEnabled = false;
+        m_SceneUpdateEnabled = true;
 
         namespace fs = std::filesystem;
         const fs::path cwd = fs::current_path();
         fs::path hyproj_path;
-        if (project_path.empty())
+        if (config.project_path.empty())
         {
             const ProjectCreateDesc bootstrap_desc = MakeDebugBootstrapProjectDesc(cwd);
             HBD_CORE_INFO("{} debug_project_bootstrap_started cwd={} project_root={}",
@@ -66,11 +83,11 @@ namespace Hybrid
         else
         {
             std::string resolve_error;
-            if (!ResolveProjectFilePath(project_path, hyproj_path, resolve_error))
+            if (!ResolveProjectFilePath(config.project_path, hyproj_path, resolve_error))
             {
                 HBD_CORE_ERROR("{} project_path_resolve_failed requested_path={} reason={}",
                                kEngineLogTag,
-                               pathOrPlaceholder(project_path),
+                               pathOrPlaceholder(config.project_path),
                                resolve_error);
                 LogSystem::shutdown();
                 return false;
@@ -79,7 +96,7 @@ namespace Hybrid
             HBD_CORE_INFO("{} initialize_started cwd={} requested_project={} resolved_hyproj={}",
                           kEngineLogTag,
                           pathOrPlaceholder(cwd),
-                          pathOrPlaceholder(project_path),
+                          pathOrPlaceholder(config.project_path),
                           pathOrPlaceholder(hyproj_path));
         }
 
@@ -105,140 +122,150 @@ namespace Hybrid
                       pathOrPlaceholder(pctx.build),
                       pathOrPlaceholder(pctx.settings));
 
-        // ===== Window / Graphics =====
-        m_Window = std::make_shared<WindowSystem>();
-        m_Window->initialize(1280, 720, "Hybrid Engine");
-
-        GLFWwindow *window = m_Window->getNativeWindow();
-        if (!window)
+        m_JobSystem = std::make_shared<JobSystem>();
+        try
         {
-            HBD_CORE_ERROR("{} initialize_failed step=window_create reason=native_window_null",
-                           kEngineLogTag);
-            m_Window->cleanup();
-            LogSystem::shutdown();
+            m_JobSystem->initialize(JobSystemConfig{config.worker_count});
+        }
+        catch (const std::exception& error)
+        {
+            HBD_CORE_ERROR("{} initialize_failed step=job_system reason={}", kEngineLogTag, error.what());
+            shutdown();
             return false;
         }
 
-        m_GraphicsContext = GraphicsContext::Create(window);
-        if (!m_GraphicsContext)
+        GLFWwindow *window = nullptr;
+        if (!m_Headless)
         {
-            HBD_CORE_ERROR("{} initialize_failed step=graphics_context_create reason=create_failed",
-                           kEngineLogTag);
-            m_Window->cleanup();
-            LogSystem::shutdown();
-            return false;
+            try
+            {
+                m_Window = std::make_shared<WindowSystem>();
+                m_Window->initialize(1280, 720, "Hybrid Engine", config.window_visible);
+                window = m_Window->getNativeWindow();
+                m_GraphicsContext = GraphicsContext::Create(window);
+                if (!window || !m_GraphicsContext)
+                    throw std::runtime_error("window or graphics context creation failed");
+                m_GraphicsContext->init();
+            }
+            catch (const std::exception& error)
+            {
+                HBD_CORE_ERROR("{} initialize_failed step=window_graphics reason={}", kEngineLogTag, error.what());
+                shutdown();
+                return false;
+            }
         }
-        m_GraphicsContext->init();
 
         // ===== Resource System (Project-based) =====
         m_RuntimeResourceSystem = std::make_shared<RuntimeResourceSystem>();
 
         // Pass nullptr VFS to let RuntimeResourceSystem create the default NativeFileSystem.
-        m_RuntimeResourceSystem->initialize(Hybrid::ProjectService::Get(), nullptr);
+        if (!m_RuntimeResourceSystem->initialize(Hybrid::ProjectService::Get(), nullptr, m_JobSystem))
+        {
+            HBD_CORE_ERROR("{} initialize_failed step=resource_system", kEngineLogTag);
+            shutdown();
+            return false;
+        }
 
-        m_RenderSystem.setAssetManager(m_RuntimeResourceSystem->getManager());
+        if (!m_Headless)
+            m_RenderSystem.setAssetManager(m_RuntimeResourceSystem->getManager());
 
         // ===== Event / Layers =====
-        auto surface_io = m_Window->getSurfaceIO();
-        surface_io->registerOnEventFunc([this](Event &e)
-                                        { onEvent(e); });
+        if (m_Window)
+        {
+            auto surface_io = m_Window->getSurfaceIO();
+            surface_io->registerOnEventFunc([this](Event &e) { onEvent(e); });
+        }
 
-        m_InputLayer = new InputLayer();
-        pushLayer(m_InputLayer);
+        m_InputLayer = std::make_unique<InputLayer>();
 
         // ===== Render =====
-        m_RenderSystem.initialize(window);
+        if (!m_Headless)
+        {
+            m_RenderSystem.initialize(window);
+            if (!m_RenderSystem.isInitialized())
+            {
+                HBD_CORE_ERROR("{} initialize_failed step=render_system", kEngineLogTag);
+                shutdown();
+                return false;
+            }
+        }
 
         // ===== Scene =====
         auto scene = std::make_shared<Scene>();
         scene->setName("Untitled");
-        m_EditorScene = scene;
-        m_SceneManager.setActiveScene(scene);
-        m_RenderSystem.setScene(scene);
-        m_FrameContext.scene = scene;
         m_FrameContext.window_handle = window;
 
-        // 绑定到系统
-        if (!setEditorScene(scene))
+        if (!setActiveScene(scene))
         {
-            HBD_CORE_ERROR("{} initialize_failed step=editor_scene_bind scene={} reason=set_editor_scene_failed",
+            HBD_CORE_ERROR("{} initialize_failed step=active_scene_bind scene={} reason=set_active_scene_failed",
                            kEngineLogTag,
                            sceneNameOrPlaceholder(scene));
-            m_Window->cleanup();
-            LogSystem::shutdown();
+            shutdown();
             return false;
         }
         m_FrameContext.window_handle = window;
 
-        int fbw = 0, fbh = 0;
-        glfwGetFramebufferSize(window, &fbw, &fbh);
+        int fbw = 1, fbh = 1;
+        if (window)
+            glfwGetFramebufferSize(window, &fbw, &fbh);
         m_FrameContext.viewport_size.x = static_cast<float>(std::max(1, fbw));
         m_FrameContext.viewport_size.y = static_cast<float>(std::max(1, fbh));
+        m_RenderFrameRequest.scene = scene;
+        m_RenderFrameRequest.window_handle = window;
+        RenderViewRequest default_view{};
+        default_view.name = "Game";
+        default_view.kind = RenderViewKind::Game;
+        default_view.size = m_FrameContext.viewport_size;
+        default_view.id = 1;
+        m_RenderFrameRequest.views.push_back(std::move(default_view));
 
-        m_LastTime = static_cast<float>(glfwGetTime());
+        m_LastFrameTime = std::chrono::steady_clock::now();
 
         //物理系统初始化
         m_PhysicsSystem.initialize();
-        HBD_CORE_INFO("{} initialize_completed scene={} viewport={}x{} mode=edit",
+        m_Initialized = true;
+        m_FixedUpdateEnabled = false;
+        HBD_CORE_INFO("{} initialize_completed scene={} viewport={}x{}",
                       kEngineLogTag,
-                      sceneNameOrPlaceholder(m_EditorScene),
+                      sceneNameOrPlaceholder(m_ActiveScene),
                       static_cast<int>(m_FrameContext.viewport_size.x),
                       static_cast<int>(m_FrameContext.viewport_size.y));
         return true;
     }
 
-    bool HybridEngine::setEditorScene(std::shared_ptr<Scene> scene)
+    bool HybridEngine::setActiveScene(std::shared_ptr<Scene> scene)
     {
         if (!scene)
         {
-            HBD_CORE_WARN("{} editor_scene_set_rejected reason=null_scene", kEngineLogTag);
+            HBD_CORE_WARN("{} active_scene_set_rejected reason=null_scene", kEngineLogTag);
             return false;
         }
 
-        if (isPlayMode())
-            exitPlayMode();
-
+        m_ActiveScene = std::move(scene);
+        m_FrameClock.reset();
         m_HasPendingPickResult = false;
         m_LastPickResult = kInvalidEntityID;
-        m_EditorRenderExt.request_pick = false;
-        m_EditorRenderExt.selection.selected_entities.clear();
-        m_EditorRenderExt.selection.active_entity = kInvalidEntityID;
-        m_EditorRenderExt.selection.hovered_entity = kInvalidEntityID;
-
-        m_EditorScene = std::move(scene);
-        m_SceneManager.setActiveScene(m_EditorScene);
-        m_RenderSystem.setScene(m_EditorScene);
-
-        if (m_SceneRunState == SceneRunState::Edit)
-            m_FrameContext.scene = m_EditorScene;
-
-        const bool success = (m_EditorScene != nullptr) && (m_SceneManager.getActiveScene() == m_EditorScene);
-        if (success)
-        {
-            HBD_CORE_DEBUG("{} editor_scene_set scene={} mode={}",
-                           kEngineLogTag,
-                           sceneNameOrPlaceholder(m_EditorScene),
-                           isPlayMode() ? "play" : "edit");
-        }
-        else
-        {
-            HBD_CORE_ERROR("{} editor_scene_set_failed scene={} reason=activation_mismatch",
-                           kEngineLogTag,
-                           sceneNameOrPlaceholder(m_EditorScene));
-        }
-
-        return success;
+        m_SceneManager.setActiveScene(m_ActiveScene);
+        if (!m_Headless)
+            m_RenderSystem.setScene(m_ActiveScene);
+        m_FrameContext.scene = m_ActiveScene;
+        m_RenderFrameRequest.scene = m_ActiveScene;
+        return m_SceneManager.getActiveScene() == m_ActiveScene;
     }
 
-    void HybridEngine::run()
+    void HybridEngine::run(uint64_t max_frames)
     {
-        HBD_CORE_INFO("{} run_started mode={}", kEngineLogTag, isPlayMode() ? "play" : "edit");
-        while (m_Running && !m_Window->shouldClose())
+        if (!m_Initialized)
+            return;
+        HBD_CORE_INFO("{} run_started", kEngineLogTag);
+        uint64_t frame_count = 0;
+        while (m_Running && (m_Headless || (m_Window && !m_Window->shouldClose())))
         {
             const float dt = calculateDeltaTime();
-            m_Window->pollEvents();
+            if (m_Window)
+                m_Window->pollEvents();
 
-            for (Layer *layer : m_LayerStack)
+            for (const auto& layer : m_LayerStack)
             {
                 layer->onBeginFrame();
             }
@@ -249,59 +276,83 @@ namespace Hybrid
                 {
                     (*it)->onEndFrame();
                 }
-                m_GraphicsContext->swapBuffers();
+                m_InputLayer->onEndFrame();
+                if (m_GraphicsContext)
+                    m_GraphicsContext->swapBuffers();
+                ++frame_count;
+                if (max_frames != 0 && frame_count >= max_frames)
+                    m_Running = false;
                 continue;
             }
 
-            for (Layer *layer : m_LayerStack)
+            for (const auto& layer : m_LayerStack)
             {
                 layer->onUpdate(dt);
             }
 
-            if (isPlayMode())
-            {
-                updatePlayMode(dt);
-            }
-            else
-            {
-                updateEditMode(dt);
-            }
+            updateActiveScene(dt);
 
             m_FrameContext.dt = dt;
             m_FrameContext.input = &m_InputLayer->getState();
-            m_FrameContext.scene = getActiveGameScene();
-            m_RenderSystem.update(dt);
+            m_FrameContext.scene = m_ActiveScene;
+            if (!m_Headless)
+                m_RenderSystem.update(dt);
 
             glm::vec2 viewport_size = m_FrameContext.viewport_size;
             if (viewport_size.x <= 0.0f || viewport_size.y <= 0.0f)
             {
                 int fbw = 0, fbh = 0;
-                glfwGetFramebufferSize(m_Window->getNativeWindow(), &fbw, &fbh);
+                if (m_Window)
+                    glfwGetFramebufferSize(m_Window->getNativeWindow(), &fbw, &fbh);
                 viewport_size.x = static_cast<float>(std::max(1, fbw));
                 viewport_size.y = static_cast<float>(std::max(1, fbh));
                 m_FrameContext.viewport_size = viewport_size;
             }
 
-            m_RenderSystem.renderFrame(m_FrameContext, m_RenderFlags, &m_EditorRenderExt);
+            if (!m_Headless)
+            {
+                m_RenderFrameRequest.scene = m_FrameContext.scene;
+                m_RenderFrameRequest.dt = dt;
+                m_RenderFrameRequest.window_handle = m_FrameContext.window_handle;
+                m_RenderFrameRequest.input = m_FrameContext.input;
+                if (m_RenderFrameRequest.views.empty())
+                    m_RenderFrameRequest.views.push_back({"Game", RenderViewKind::Game, viewport_size, m_RenderFlags});
+                else if (m_RenderFrameRequest.views.size() == 1 &&
+                         m_RenderFrameRequest.views.front().id == 1 &&
+                         m_RenderFrameRequest.views.front().kind == RenderViewKind::Game)
+                    m_RenderFrameRequest.views.front().size = viewport_size;
+                m_RenderFrameResult = m_RenderSystem.renderFrame(m_RenderFrameRequest);
+            }
 
-            for (Layer *layer : m_LayerStack)
+            for (const auto& layer : m_LayerStack)
             {
                 layer->onImGuiRender();
             }
 
-            if (m_EditorRenderExt.request_pick && HasFlag(m_RenderFlags, RenderFlags::PickingID))
+            if (!m_Headless)
             {
-                m_LastPickResult = m_RenderSystem.readEntityID(m_EditorRenderExt.pick_x, m_EditorRenderExt.pick_y);
-                m_HasPendingPickResult = true;
-                m_EditorRenderExt.request_pick = false;
+                for (const RenderViewResult& view_result : m_RenderFrameResult.views)
+                {
+                    if (view_result.picked_entity)
+                    {
+                        m_LastPickResult = *view_result.picked_entity;
+                        m_HasPendingPickResult = true;
+                        break;
+                    }
+                }
             }
 
             for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
             {
                 (*it)->onEndFrame();
             }
+            m_InputLayer->onEndFrame();
 
-            m_GraphicsContext->swapBuffers();
+            if (m_GraphicsContext)
+                m_GraphicsContext->swapBuffers();
+            ++frame_count;
+            if (max_frames != 0 && frame_count >= max_frames)
+                m_Running = false;
         }
 
         HBD_CORE_INFO("{} run_stopped reason={}",
@@ -320,7 +371,16 @@ namespace Hybrid
         dispatcher.dispatch<WindowCloseEvent>([this](WindowCloseEvent &)
                                               {
             HBD_CORE_INFO("{} window_close_requested", kEngineLogTag);
-            m_Running = false;
+            if (m_ExitRequestHandler)
+            {
+                if (m_Window)
+                    m_Window->setShouldClose(false);
+                m_ExitRequestHandler();
+            }
+            else
+            {
+                requestExit();
+            }
             return true; });
 
         dispatcher.dispatch<WindowResizeEvent>([this](WindowResizeEvent &ev)
@@ -354,20 +414,25 @@ namespace Hybrid
         }
     }
 
-    void HybridEngine::pushLayer(Layer *layer)
+    Layer& HybridEngine::pushLayer(std::unique_ptr<Layer> layer)
     {
-        if (!layer)
-            return;
-        m_LayerStack.pushLayer(layer);
-        layer->onAttach();
+        Layer& result = m_LayerStack.pushLayer(std::move(layer));
+        result.onAttach();
+        return result;
     }
 
-    void HybridEngine::pushOverlay(Layer *layer)
+    void HybridEngine::requestExit() noexcept
     {
-        if (!layer)
-            return;
-        m_LayerStack.pushOverlay(layer);
-        layer->onAttach();
+        m_Running = false;
+        if (m_Window)
+            m_Window->setShouldClose(true);
+    }
+
+    Layer& HybridEngine::pushOverlay(std::unique_ptr<Layer> layer)
+    {
+        Layer& result = m_LayerStack.pushOverlay(std::move(layer));
+        result.onAttach();
+        return result;
     }
 
     bool HybridEngine::consumePickResult(uint32_t &out_entity_id)
@@ -380,124 +445,73 @@ namespace Hybrid
         return true;
     }
 
-    void HybridEngine::shutdown()
+    void HybridEngine::shutdown() noexcept
     {
-        HBD_CORE_INFO("{} shutdown_started mode={}", kEngineLogTag, isPlayMode() ? "play" : "edit");
-        if (isPlayMode())
-            exitPlayMode();
+        m_ExitRequestHandler = {};
+        if (!m_Initialized && !m_Window && !m_RuntimeResourceSystem && !m_JobSystem)
+            return;
+        m_Running = false;
+        HBD_CORE_INFO("{} shutdown_started", kEngineLogTag);
+
+        m_LayerStack.clear();
+        m_InputLayer.reset();
+
+        if (m_RuntimeResourceSystem && m_RuntimeResourceSystem->getManager())
+            m_RuntimeResourceSystem->getManager()->shutdown();
+        if (m_JobSystem)
+            m_JobSystem->waitIdle();
 
         m_PhysicsSystem.shutdown();
-        m_LayerStack.clear();
-        m_InputLayer = nullptr;
+        m_RenderSystem.shutdown();
+        m_ActiveScene.reset();
+        m_SceneManager.setActiveScene(nullptr);
+        m_RenderFrameRequest = {};
+        m_RenderFrameResult = {};
+        if (m_RuntimeResourceSystem)
+        {
+            m_RuntimeResourceSystem->shutdown();
+            m_RuntimeResourceSystem.reset();
+        }
+        if (m_JobSystem)
+        {
+            m_JobSystem->shutdown();
+            m_JobSystem.reset();
+        }
+        m_GraphicsContext.reset();
 
         if (m_Window)
         {
             m_Window->cleanup();
+            m_Window.reset();
         }
 
         HBD_CORE_INFO("{} shutdown_completed", kEngineLogTag);
         LogSystem::shutdown();
+        m_Initialized = false;
     }
 
     float HybridEngine::calculateDeltaTime()
     {
-        const float time = static_cast<float>(glfwGetTime());
-        const float dt = time - m_LastTime;
-        m_LastTime = time;
-        return dt;
+        const auto now = std::chrono::steady_clock::now();
+        const float dt = std::chrono::duration<float>(now - m_LastFrameTime).count();
+        m_LastFrameTime = now;
+        return std::clamp(dt, 0.0f, 0.25f);
     }
 
-    void HybridEngine::updateEditMode(float dt)
+    void HybridEngine::updateActiveScene(float dt)
     {
-        if (m_EditorScene)
-        {
-            m_EditorScene->onUpdate(dt);
-        }
-    }
-
-    void HybridEngine::updatePlayMode(float dt)
-    {
-        if (!m_RuntimeScene)
+        if (!m_ActiveScene || !m_SceneUpdateEnabled)
             return;
 
-        if (m_PlayPaused)
-            return;
-
-        m_PhysicsSystem.tick(dt, *m_RuntimeScene);
-        m_RuntimeScene->onUpdate(dt);
-    }
-
-    void HybridEngine::enterPlayMode()
-    {
-        (void)enterPlayModeFromScene(m_EditorScene);
-    }
-
-    bool HybridEngine::enterPlayModeFromScene(const std::shared_ptr<Scene>& source_scene)
-    {
-        if (isPlayMode())
+        if (m_FixedUpdateEnabled)
         {
-            HBD_CORE_DEBUG("{} play_mode_enter_skipped reason=already_in_play_mode", kEngineLogTag);
-            return false;
+            const FrameAdvanceResult result = m_FrameClock.advance(dt, [this](float fixed_dt) {
+                m_PhysicsSystem.tick(fixed_dt, *m_ActiveScene);
+            });
+            if (result.dropped_time)
+                HBD_CORE_WARN("{} fixed_update_time_dropped max_steps=4", kEngineLogTag);
         }
-
-        if (!source_scene)
-        {
-            HBD_CORE_WARN("{} play_mode_enter_rejected reason=null_source_scene", kEngineLogTag);
-            return false;
-        }
-
-        m_RuntimeScene = source_scene->cloneRuntime();
-        if (!m_RuntimeScene)
-        {
-            HBD_CORE_ERROR("{} play_mode_enter_failed scene={} reason=clone_runtime_failed",
-                           kEngineLogTag,
-                           sceneNameOrPlaceholder(source_scene));
-            return false;
-        }
-
-        m_SceneRunState = SceneRunState::Play;
-        m_PlayPaused = false;
-        m_SceneManager.setActiveScene(m_RuntimeScene);
-        m_RenderSystem.setScene(m_RuntimeScene);
-        m_FrameContext.scene = m_RuntimeScene;
-        HBD_CORE_INFO("{} play_mode_entered source_scene={} runtime_scene={}",
-                      kEngineLogTag,
-                      sceneNameOrPlaceholder(source_scene),
-                      sceneNameOrPlaceholder(m_RuntimeScene));
-        return true;
-    }
-
-    void HybridEngine::exitPlayMode()
-    {
-        if (isEditMode())
-        {
-            HBD_CORE_DEBUG("{} play_mode_exit_skipped reason=already_in_edit_mode", kEngineLogTag);
-            return;
-        }
-
-        const std::string runtime_scene_name = sceneNameOrPlaceholder(m_RuntimeScene);
-        m_RuntimeScene.reset();
-        m_SceneRunState = SceneRunState::Edit;
-        m_PlayPaused = false;
-        m_SceneManager.setActiveScene(m_EditorScene);
-        m_RenderSystem.setScene(m_EditorScene);
-        m_FrameContext.scene = m_EditorScene;
-        HBD_CORE_INFO("{} play_mode_exited runtime_scene={} editor_scene={}",
-                      kEngineLogTag,
-                      runtime_scene_name,
-                      sceneNameOrPlaceholder(m_EditorScene));
-    }
-
-    void HybridEngine::togglePlayPause()
-    {
-        if (!isPlayMode())
-            return;
-
-        m_PlayPaused = !m_PlayPaused;
-        HBD_CORE_INFO("{} play_mode_pause_toggled paused={} scene={}",
-                      kEngineLogTag,
-                      m_PlayPaused ? "true" : "false",
-                      sceneNameOrPlaceholder(m_RuntimeScene));
+        m_ActiveScene->onUpdate(dt);
     }
 
 } // namespace Hybrid

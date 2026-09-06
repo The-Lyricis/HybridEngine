@@ -1,5 +1,6 @@
 #include "project_loader.h"
 #include <fstream>
+#include <limits>
 #include <unordered_map>
 
 namespace Hybrid {
@@ -49,6 +50,30 @@ namespace Hybrid {
         if (!ParseKeyValueFile(absProj, kv, outError)) return false;
 
         const fs::path root = absProj.parent_path();
+
+        const auto version_it = kv.find("format_version");
+        if (version_it == kv.end())
+        {
+            outError = "missing required format_version in project file: " + absProj.string();
+            return false;
+        }
+        try
+        {
+            std::size_t parsed = 0;
+            const int version = std::stoi(version_it->second, &parsed);
+            if (parsed != version_it->second.size() || version != 2)
+            {
+                outError = "unsupported project format_version '" + version_it->second + "' in: " + absProj.string();
+                return false;
+            }
+            outCtx.format_version = version;
+        }
+        catch (const std::exception&)
+        {
+            outError = "invalid project format_version '" + version_it->second + "' in: " + absProj.string();
+            return false;
+        }
+        outCtx.startup_scene = kv.count("startup_scene") ? Trim(kv["startup_scene"]) : std::string{};
 
         const fs::path assetsRel = kv.count("assets") ? kv["assets"] : "Assets";
         const fs::path cacheRel = kv.count("cache") ? kv["cache"] : "Cache";

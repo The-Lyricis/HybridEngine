@@ -3,6 +3,7 @@
 #include "i_editor_panel.h"
 
 #include <cstdint>
+#include <filesystem>
 
 namespace Hybrid
 {
@@ -18,7 +19,10 @@ namespace Hybrid
         void onImGuiRender(EditorContext& ctx) override;
 
     private:
+        void loadSettings(EditorContext& ctx);
+        void saveSettings(const EditorContext& ctx);
         uint32_t m_colorTextureID = 0;
         bool m_missingTextureLogged = false;
+        std::filesystem::path m_loaded_project;
     };
 } // namespace Hybrid

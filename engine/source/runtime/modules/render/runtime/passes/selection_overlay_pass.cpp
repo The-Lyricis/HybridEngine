@@ -20,7 +20,7 @@ namespace Hybrid
     {
         const std::shared_ptr<Framebuffer>& scene_framebuffer = context.scene_framebuffer;
         const std::shared_ptr<Framebuffer>& selection_framebuffer = context.selection_framebuffer;
-        const EditorSelectionState* selection = context.editor_selection;
+        const RenderSelectionState* selection = context.editor_selection;
         const SelectionOverlayStyle* style = context.selection_overlay_style;
 
         if (!scene_framebuffer || !selection_framebuffer || !selection || selection->selected_entities.empty() ||

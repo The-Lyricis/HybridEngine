@@ -80,8 +80,9 @@ namespace Hybrid
         }
     } // namespace
 
-    bool EditorResourceSystem::initialize(RuntimeResourceSystem& runtime_system)
+    bool EditorResourceSystem::initialize(RuntimeResourceSystem& runtime_system, std::shared_ptr<JobSystem> jobs)
     {
+        shutdown();
         auto registry = runtime_system.getRegistry();
         if (!registry)
         {
@@ -97,6 +98,7 @@ namespace Hybrid
         }
 
         m_runtime = &runtime_system;
+        m_jobs = std::move(jobs);
         m_metaStore = std::make_unique<AssetMetaStore>(registry);
         m_importManager = std::make_shared<ImportManager>(
             registry,
@@ -106,17 +108,42 @@ namespace Hybrid
         registerDefaultImporters();
         m_event_queue.clear();
         m_pending_changes.clear();
+        m_running_imports.clear();
+        m_tasks.clear();
+        m_task_order.clear();
         m_assets_reloaded_callback = {};
         m_bootstrap_done = false;
+        m_accepting = true;
+        m_next_task_id = 1;
         HBD_CORE_INFO("{} initialize_completed assets_root={}",
                       kEditorResourceLogTag,
                       registry->getRoot().empty() ? "<empty>" : registry->getRoot().string());
         return true;
     }
 
+    void EditorResourceSystem::shutdown()
+    {
+        if (!m_runtime && !m_importManager && !m_jobs)
+            return;
+        m_accepting = false;
+        if (m_jobs)
+            m_jobs->waitIdle();
+        collectCompletedImports();
+        m_assets_reloaded_callback = {};
+        m_event_queue.clear();
+        m_pending_changes.clear();
+        m_running_imports.clear();
+        m_importManager.reset();
+        m_metaStore.reset();
+        m_jobs.reset();
+        m_runtime = nullptr;
+        m_bootstrap_done = false;
+        HBD_CORE_INFO("{} shutdown_completed", kEditorResourceLogTag);
+    }
+
     ImportResult EditorResourceSystem::importAsset(const ImportRequest& request)
     {
-        if (!m_importManager)
+        if (!m_accepting || !m_importManager)
         {
             ImportResult out{};
             out.success = false;
@@ -155,7 +182,7 @@ namespace Hybrid
                                               bool force_reimport,
                                               bool high_priority)
     {
-        if (!m_importManager)
+        if (!m_accepting || !m_importManager)
             return;
 
         std::string normalized;
@@ -180,11 +207,14 @@ namespace Hybrid
             PendingSourceChange pending{};
             pending.type = change;
             pending.force_reimport = force_reimport;
+            pending.task_id = m_next_task_id++;
             pending.last_event_time =
                 (high_priority && m_min_settle_ms > 0)
                     ? (now - std::chrono::milliseconds(m_min_settle_ms))
                     : now;
             m_pending_changes.emplace(normalized, pending);
+            updateTask(pending.task_id, ImportTaskState::Queued, "Queued");
+            m_tasks[pending.task_id].source_path = normalized;
             if (high_priority)
                 m_event_queue.push_front(normalized);
             else
@@ -227,7 +257,8 @@ namespace Hybrid
     // - For upsert, we attempt to import the asset and save its meta. For remove, we delete the meta and unregister from registry. 
     void EditorResourceSystem::processImportQueue(uint32_t max_jobs_per_frame, uint32_t max_ms_budget)
     {
-        if (!m_runtime || !m_importManager || max_jobs_per_frame == 0 || m_event_queue.empty())
+        collectCompletedImports();
+        if (!m_accepting || !m_runtime || !m_importManager || max_jobs_per_frame == 0 || m_event_queue.empty())
             return;
 
         const auto start = std::chrono::steady_clock::now();
@@ -254,6 +285,12 @@ namespace Hybrid
             if (pending_it == m_pending_changes.end())
                 continue;
 
+            if (m_running_imports.find(path) != m_running_imports.end())
+            {
+                m_event_queue.push_back(path);
+                continue;
+            }
+
             if (m_min_settle_ms > 0)
             {
                 const auto age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -266,12 +303,178 @@ namespace Hybrid
                 }
             }
 
-            const AssetSourceChangeType change = pending_it->second.type;
-            const bool force_reimport = pending_it->second.force_reimport;
+            const PendingSourceChange pending = pending_it->second;
             m_pending_changes.erase(pending_it);
-            (void)processOneEvent(path, change, force_reimport);
+            if (pending.type == AssetSourceChangeType::Removed)
+            {
+                updateTask(pending.task_id, ImportTaskState::Running, "Removing");
+                std::vector<AssetMetadata> changed_assets;
+                const bool removed = handleRemove(path, &changed_assets);
+                updateTask(pending.task_id,
+                           removed ? ImportTaskState::Succeeded : ImportTaskState::Failed,
+                           removed ? "Completed" : "Failed",
+                           removed ? std::string{} : "Failed to remove asset metadata");
+                if (removed && !changed_assets.empty())
+                    emitAssetsReloaded({pending.type, path, std::move(changed_assets)});
+            }
+            else
+            {
+                (void)dispatchPendingImport(path, pending);
+            }
             ++jobs;
         }
+    }
+
+    bool EditorResourceSystem::dispatchPendingImport(const std::string& source_vpath,
+                                                     const PendingSourceChange& pending)
+    {
+        auto registry = m_runtime ? m_runtime->getRegistry() : nullptr;
+        auto vfs = m_runtime ? m_runtime->getVFS() : nullptr;
+        if (!registry || !vfs)
+        {
+            updateTask(pending.task_id, ImportTaskState::Failed, "Failed", "Runtime asset services are unavailable");
+            return false;
+        }
+        if (!vfs->exists(source_vpath))
+        {
+            std::vector<AssetMetadata> removed_assets;
+            const bool removed = handleRemove(source_vpath, &removed_assets);
+            updateTask(pending.task_id, removed ? ImportTaskState::Succeeded : ImportTaskState::Failed,
+                       removed ? "Completed" : "Failed", removed ? std::string{} : "Source file disappeared");
+            if (removed && !removed_assets.empty())
+                emitAssetsReloaded({AssetSourceChangeType::Removed, source_vpath, std::move(removed_assets)});
+            return removed;
+        }
+
+        const auto source_physical = vfs->resolve(source_vpath);
+        if (!source_physical)
+        {
+            updateTask(pending.task_id, ImportTaskState::Failed, "Failed", "Cannot resolve source path");
+            return false;
+        }
+        const std::string new_hash = makeSimpleHash(*source_physical);
+        const auto existing = registry->findByPath(source_vpath);
+        const bool cooked_exists = existing && !existing->cooked_path.empty() && vfs->exists(existing->cooked_path);
+        if (!pending.force_reimport && existing && existing->is_valid && existing->hash == new_hash && cooked_exists)
+        {
+            updateTask(pending.task_id, ImportTaskState::Succeeded, "Up to date");
+            return true;
+        }
+
+        ImportRequest request{};
+        request.source_path = source_vpath;
+        request.hash = new_hash;
+        request.preferred_type = existing ? existing->type : AssetType::Unknown;
+        request.force_reimport = pending.force_reimport;
+        updateTask(pending.task_id, ImportTaskState::Running, "Reading / cooking");
+
+        if (!m_jobs)
+        {
+            ImportResult result = m_importManager->commitImport(m_importManager->prepareImport(request));
+            updateTask(pending.task_id, result.success ? ImportTaskState::Succeeded : ImportTaskState::Failed,
+                       result.success ? "Completed" : "Failed", result.message);
+            if (result.success && !result.assets.empty())
+                emitAssetsReloaded({pending.type, source_vpath, std::move(result.assets)});
+            return result.success;
+        }
+
+        RunningImport running{};
+        running.task_id = pending.task_id;
+        running.change = pending.type;
+        running.started = std::chrono::steady_clock::now();
+        const auto manager = m_importManager;
+        running.future = m_jobs->submit([manager, request]() { return manager->prepareImport(request); });
+        m_running_imports.emplace(source_vpath, std::move(running));
+        return true;
+    }
+
+    void EditorResourceSystem::collectCompletedImports()
+    {
+        for (auto it = m_running_imports.begin(); it != m_running_imports.end();)
+        {
+            if (it->second.future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready)
+            {
+                ++it;
+                continue;
+            }
+
+            const std::string source_path = it->first;
+            const uint64_t task_id = it->second.task_id;
+            const AssetSourceChangeType change = it->second.change;
+            const auto started = it->second.started;
+            ImportResult result{};
+            try
+            {
+                updateTask(task_id, ImportTaskState::Running, "Committing metadata");
+                result = m_importManager->commitImport(it->second.future.get());
+            }
+            catch (const std::exception& error)
+            {
+                result.success = false;
+                result.message = error.what();
+            }
+            const uint64_t elapsed = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started).count());
+            updateTask(task_id, result.success ? ImportTaskState::Succeeded : ImportTaskState::Failed,
+                       result.success ? "Completed" : "Failed", result.message);
+            m_tasks[task_id].elapsed_ms = elapsed;
+            if (result.success && !result.assets.empty())
+                emitAssetsReloaded({change, source_path, std::move(result.assets)});
+            it = m_running_imports.erase(it);
+        }
+    }
+
+    void EditorResourceSystem::updateTask(uint64_t id, ImportTaskState state, std::string stage, std::string message)
+    {
+        auto [it, inserted] = m_tasks.try_emplace(id);
+        if (inserted)
+        {
+            it->second.id = id;
+            m_task_order.push_back(id);
+        }
+        it->second.state = state;
+        it->second.stage = std::move(stage);
+        it->second.message = std::move(message);
+        while (m_task_order.size() > 256)
+        {
+            m_tasks.erase(m_task_order.front());
+            m_task_order.pop_front();
+        }
+    }
+
+    std::vector<ImportTaskSnapshot> EditorResourceSystem::snapshotTasks() const
+    {
+        std::vector<ImportTaskSnapshot> result;
+        result.reserve(m_task_order.size());
+        const auto now = std::chrono::steady_clock::now();
+        for (uint64_t id : m_task_order)
+        {
+            auto task_it = m_tasks.find(id);
+            if (task_it == m_tasks.end())
+                continue;
+            ImportTaskSnapshot snapshot = task_it->second;
+            for (const auto& [path, running] : m_running_imports)
+            {
+                if (running.task_id == id)
+                {
+                    snapshot.elapsed_ms = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                        now - running.started).count());
+                    break;
+                }
+            }
+            result.push_back(std::move(snapshot));
+        }
+        return result;
+    }
+
+    bool EditorResourceSystem::retryTask(uint64_t task_id)
+    {
+        const auto it = m_tasks.find(task_id);
+        if (!m_accepting || it == m_tasks.end() || it->second.state != ImportTaskState::Failed ||
+            it->second.source_path.empty())
+            return false;
+        enqueueManualReimport(it->second.source_path);
+        return true;
     }
     
     // One-shot startup check: enqueue only missing meta/cooked assets.
@@ -346,7 +549,7 @@ namespace Hybrid
                 need_enqueue = true;
             }
 
-            const AssetMetadata* existing = registry->findByPath(source_vpath);
+            const auto existing = registry->findByPath(source_vpath);
             const bool cooked_exists = existing && !existing->cooked_path.empty() && vfs->exists(existing->cooked_path);
             if (!cooked_exists)
             {
@@ -395,7 +598,7 @@ namespace Hybrid
         if (!registry || !vfs)
             return false;
 
-        const auto* old_meta = registry->findByPath(old_norm);
+        const auto old_meta = registry->findByPath(old_norm);
         if (!old_meta)
         {
             // No old metadata entry: fallback to normal add/remove flow.
@@ -566,7 +769,7 @@ namespace Hybrid
         }
 
         std::string old_source_path;
-        if (const auto* existing = registry->find(meta.id))
+        if (const auto existing = registry->find(meta.id))
         {
             if (!existing->source_path.empty() && existing->source_path != meta.source_path)
                 old_source_path = existing->source_path;
@@ -686,101 +889,17 @@ namespace Hybrid
 
     void EditorResourceSystem::emitAssetsReloaded(AssetsReloadedEvent event) const
     {
-        if (!m_assets_reloaded_callback || event.assets.empty())
+        if (event.assets.empty())
             return;
 
-        m_assets_reloaded_callback(event);
-    }
-
-    bool EditorResourceSystem::processOneEvent(const std::string& source_vpath,
-                                               AssetSourceChangeType change,
-                                               bool force_reimport)
-    {
-        std::vector<AssetMetadata> changed_assets;
-        bool handled = false;
-        switch (change)
+        if (m_runtime)
         {
-        case AssetSourceChangeType::Added:
-        case AssetSourceChangeType::Modified:
-            handled = handleUpsert(source_vpath, change, force_reimport, &changed_assets);
-            break;
-        case AssetSourceChangeType::Removed:
-            handled = handleRemove(source_vpath, &changed_assets);
-            break;
-        default:
-            return false;
+            for (const auto& meta : event.assets)
+                m_runtime->invalidateAsset(meta.id);
         }
 
-        if (handled && !changed_assets.empty())
-        {
-            emitAssetsReloaded(AssetsReloadedEvent{
-                change,
-                source_vpath,
-                std::move(changed_assets),
-            });
-        }
-        return handled;
-    }
-
-    bool EditorResourceSystem::handleUpsert(const std::string& source_vpath,
-                                            AssetSourceChangeType change,
-                                            bool force_reimport,
-                                            std::vector<AssetMetadata>* out_assets)
-    {
-        if (!m_runtime || !m_importManager)
-            return false;
-
-        auto registry = m_runtime->getRegistry();
-        auto vfs = m_runtime->getVFS();
-        if (!registry || !vfs)
-            return false;
-
-        if (!vfs->exists(source_vpath))
-        {
-            // File disappeared before import starts.
-            return handleRemove(source_vpath, out_assets);
-        }
-
-        auto source_physical = vfs->resolve(source_vpath);
-        if (!source_physical)
-            return false;
-
-        const std::string new_hash = makeSimpleHash(*source_physical);
-        const AssetMetadata* existing = registry->findByPath(source_vpath);
-        const bool cooked_exists =
-            existing && !existing->cooked_path.empty() && vfs->exists(existing->cooked_path);
-
-        if (!force_reimport && existing && existing->is_valid && existing->hash == new_hash && cooked_exists)
-        {
-            return true;
-        }
-
-        ImportRequest req{};
-        req.source_path = source_vpath;
-        req.hash = new_hash;
-        req.preferred_type = existing ? existing->type : AssetType::Unknown;
-
-        ImportResult result = m_importManager->importAsset(req);
-        if (!result.success)
-        {
-            HBD_CORE_ERROR("{} import_failed source_path={} change={} force_reimport={} reason={}",
-                           kEditorResourceLogTag,
-                           source_vpath,
-                           changeTypeName(change),
-                           force_reimport ? "true" : "false",
-                           result.message);
-            return false;
-        }
-        if (out_assets)
-            *out_assets = result.assets;
-
-        HBD_CORE_INFO("{} import_completed source_path={} change={} force_reimport={} assets={}",
-                      kEditorResourceLogTag,
-                      source_vpath,
-                      changeTypeName(change),
-                      force_reimport ? "true" : "false",
-                      result.assets.size());
-        return true;
+        if (m_assets_reloaded_callback)
+            m_assets_reloaded_callback(event);
     }
 
     bool EditorResourceSystem::handleRemove(const std::string& source_vpath, std::vector<AssetMetadata>* out_assets)
@@ -793,7 +912,7 @@ namespace Hybrid
         if (!registry || !vfs)
             return false;
 
-        const auto* existing = registry->findByPath(source_vpath);
+        const auto existing = registry->findByPath(source_vpath);
         const std::filesystem::path assets_root = registry->getRoot();
         if (existing && out_assets)
             out_assets->push_back(*existing);
@@ -828,7 +947,7 @@ namespace Hybrid
                           existing ? "true" : "false");
         }
 
-        return removed_meta || existing != nullptr;
+        return removed_meta || existing.has_value();
     }
 
     bool EditorResourceSystem::normalizeAssetLogicalPath(const std::string& input, std::string& out_path)

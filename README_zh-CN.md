@@ -29,7 +29,7 @@ Hybrid Engine 是一个以学习、研究和实践现代引擎架构为目标的
 
 | 平台 | 工具链 |
 | --- | --- |
-| Windows 10 / 11 | Visual Studio 2022 + MSVC + CMake 3.20+ |
+| Windows 10 / 11、Linux Runtime | Visual Studio 2022 / GCC / Clang + CMake 3.20+ |
 
 | 渲染接口 | 主入口 |
 | --- | --- |
@@ -67,6 +67,7 @@ git submodule update --init --recursive
 ```bash
 cmake -S . -B build
 cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 ```
 
 也可以直接使用 Windows 辅助脚本：
@@ -80,6 +81,15 @@ build_windows.bat
 ```bat
 bin\HybridEditor.exe
 ```
+
+使用独立 Player 运行项目：
+
+```bat
+bin\HybridPlayer.exe --project F:\Projects\MyGame\MyGame.hyproj --max-frames 120
+bin\HybridPlayer.exe --project F:\Projects\MyGame\MyGame.hyproj --headless --max-frames 10
+```
+
+CMake 开关为 `HYBRID_BUILD_EDITOR`（仅 Windows）、`HYBRID_BUILD_PLAYER` 与 `BUILD_TESTING`。
 
 运行说明：
 
@@ -98,6 +108,9 @@ bin\HybridEditor.exe
 - [Render ECS Asset Chain](docs/systems/render_ecs_asset_chain.md)：Mesh / Material / ECS / Editor 在渲染路径中的集成说明
 - [事件系统](docs/systems/event_system.md)：输入与事件分发路径
 - [日志系统](docs/systems/log_system.md)：日志封装与使用方式
+- [Runtime 架构](docs/systems/runtime_architecture.md)：目标边界、生命周期、多视图渲染与异步资产
+- [项目格式 v2](docs/project_format.md)：启动场景与 Player 契约
+- [编辑器可靠工作流](docs/systems/editor_workflow.md)：安全文档切换、项目设置、异步任务与稳定渲染视图
 
 ## 功能与当前状态
 
@@ -106,9 +119,9 @@ bin\HybridEditor.exe
 - 运行时基础框架：日志、事件、输入、窗口系统与主循环
 - 渲染基础链路：OpenGL 后端、Framebuffer、前向渲染、Scene / Game 双视口
 - 场景系统：基于 EnTT 的实体组件结构、场景序列化、层级数据与 `scene_document` 流程
-- 编辑器基础：Docking UI、Hierarchy、Inspector、Scene View、Game View、Project Panel、Gizmo 交互与对象 picking
+- 编辑器工作流：Docking UI、脏场景安全退出、Hierarchy、Inspector、Scene/Game View、Project Settings、Console、Tasks、Gizmo 交互与对象 picking
 - 资源管线：VFS 逻辑路径、资产注册表、`.meta` 文件、cooked 缓存输出，以及纹理 / 网格 / 材质 / 场景资源加载
-- 导入工作流：OBJ 导入、材质生成、纹理导入、拖拽放入场景，以及初步热重载支持
+- 导入工作流：复用引擎线程池的后台准备、主线程提交与缓存失效、任务合并/重试/可视化，以及 OBJ、材质、纹理导入和热重载
 - 光照支持：当前渲染路径下的方向光与点光源
 - 物理早期实现：AABB 碰撞、Collider 注册、刚体迭代与碰撞体 Gizmo 调试
 
@@ -117,7 +130,7 @@ bin\HybridEditor.exe
 - 渲染管线拆分仍在推进，更高层的 pass 调度结构还没有完全稳定。
 - 阴影、描边和后处理路径已经开始铺设，但尚未完成。
 - 物理系统还处在较早期的迭代阶段，整体行为仍不稳定。
-- 编辑器工作流已经能用于实验和功能验证，但在细节打磨、稳定性和工具完整度上还有明显空间。
+- 编辑器已具备日常场景工作的可靠流程；完整 Undo/Redo、打包和性能分析仍需后续完善。
 - 音频系统和脚本系统目前尚未实现。
 
 ## Roadmap
@@ -126,8 +139,8 @@ bin\HybridEditor.exe
 
 - 继续整理渲染管线结构，包括 pass 执行流程、shader 管理和数据上传链路
 - 改进物理行为、刚体流程以及编辑器侧的调试支持
-- 提升编辑态与运行态切换过程中的场景编辑稳定性
-- 继续完善资源热重载、缓存失效与导入流程的可靠性
+- 在新的项目与导入契约上实现 Windows/Linux 便携式 Cook/Package 流程
+- 在具备平台 UI 自动化能力的环境中扩大编辑器文档切换与渲染回归覆盖
 
 后续计划逐步推进的内容包括：
 

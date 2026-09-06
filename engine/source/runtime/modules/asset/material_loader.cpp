@@ -60,7 +60,7 @@ namespace Hybrid
                 return;
             }
 
-            const AssetMetadata* texture_meta = registry->findByPath(texture_path);
+            const auto texture_meta = registry->findByPath(texture_path);
             if (!texture_meta)
             {
                 HBD_CORE_WARN("{} texture_path_unresolved asset_id={} path={} field={} texture_path={} reason=not_registered",

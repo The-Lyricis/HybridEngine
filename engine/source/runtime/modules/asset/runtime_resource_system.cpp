@@ -5,7 +5,6 @@
 
 #include "builtin_assets.h"
 #include "runtime/core/base/macro.h"
-#include "runtime/modules/render/public/texture.h"
 #include "cubemap_image_loader.h"
 #include "texture_image_loader.h"
 #include "mesh_loader.h"
@@ -24,9 +23,12 @@ namespace Hybrid
         }
     } // namespace
 
-    void RuntimeResourceSystem::initialize(const ProjectContext& ctx,
-        std::shared_ptr<IVirtualFileSystem> vfs)
+    bool RuntimeResourceSystem::initialize(const ProjectContext& ctx,
+        std::shared_ptr<IVirtualFileSystem> vfs,
+        std::shared_ptr<JobSystem> job_system)
     {
+        if (m_initialized)
+            return true;
         m_project = ctx;
         AssetMetaLoadResult meta_load_result{};
 
@@ -59,15 +61,17 @@ namespace Hybrid
         const auto& cacheRoot = m_project.cache;
         const auto& projRoot = m_project.root;
         const auto& buildRoot = m_project.build;
-        const std::filesystem::path engineAssetsRoot =
-            std::filesystem::path(HYBRID_PROJECT_ROOT_DIR) / "engine/resources/assets";
+        std::filesystem::path engineAssetsRoot =
+            std::filesystem::path(HYBRID_BINARY_ROOT_DIR) / "resources/assets";
+        if (!std::filesystem::exists(engineAssetsRoot))
+            engineAssetsRoot = std::filesystem::path(HYBRID_PROJECT_ROOT_DIR) / "engine/resources/assets";
 
         if (assetsRoot.empty() || !std::filesystem::exists(assetsRoot))
         {
             HBD_CORE_ERROR("{} initialize_failed step=validate_assets_root path={} reason=invalid_assets_root",
                            kRuntimeResourceLogTag,
                            pathOrPlaceholder(assetsRoot));
-            return;
+            return false;
         }
 
         // 4) Mount the logical roots used by runtime asset resolution.
@@ -134,23 +138,40 @@ namespace Hybrid
         }
 
         // 7) AssetManager
-        m_manager = std::make_shared<AssetManager>(m_vfs, m_registry);
+        m_manager = std::make_shared<AssetManager>(m_vfs, m_registry, std::move(job_system));
 
         registerDefaultLoaders();
-        createDefaultTexture();
         createDefaultCubemap();
         createHybridDefaultMaterial();
         createBuiltinMesh(BuiltinMesh::Cube);
 
-        HBD_CORE_INFO("{} initialize_completed meta_total={} meta_loaded={} meta_failed={} default_texture={} default_material={} builtin_cube_id={} builtin_default_skybox_id={}",
+        m_initialized = true;
+        HBD_CORE_INFO("{} initialize_completed meta_total={} meta_loaded={} meta_failed={} default_material={} builtin_cube_id={} builtin_default_skybox_id={}",
                       kRuntimeResourceLogTag,
                       meta_load_result.total_files,
                       meta_load_result.loaded,
                       meta_load_result.failed,
-                      m_defaultTexture ? "true" : "false",
                       m_hybridDefaultMaterial ? "true" : "false",
                       m_builtinCubeMeshId.value,
                       m_builtinDefaultSkyboxCubemapId.value);
+        return true;
+    }
+
+    void RuntimeResourceSystem::shutdown()
+    {
+        if (!m_initialized && !m_manager && !m_vfs)
+            return;
+        if (m_manager)
+            m_manager->shutdown();
+        m_hybridDefaultMaterial.reset();
+        m_metaStore.reset();
+        m_manager.reset();
+        m_registry.reset();
+        m_vfs.reset();
+        m_builtinCubeMeshId = {};
+        m_builtinDefaultSkyboxCubemapId = {};
+        m_project = {};
+        m_initialized = false;
     }
 
     void RuntimeResourceSystem::registerDefaultLoaders()
@@ -166,36 +187,6 @@ namespace Hybrid
         m_manager->registerLoader<Scene>(std::make_shared<SceneLoader>());
         HBD_CORE_DEBUG("{} loaders_registered count=5 types=TextureImageData,CubemapImageData,Mesh,Material,Scene",
                        kRuntimeResourceLogTag);
-    }
-
-    void RuntimeResourceSystem::createDefaultTexture()
-    {
-        TextureDesc desc;
-        desc.type = TextureType::Tex2D;
-        desc.format = TextureFormat::RGBA8;
-        desc.width = 1;
-        desc.height = 1;
-        desc.layers = 1;
-        desc.mipLevels = 1;
-
-        const uint8_t white[4] = { 255, 255, 255, 255 };
-        m_defaultTexture = Texture::Create(desc, white, sizeof(white));
-
-        if (m_manager && m_defaultTexture)
-        {
-            m_manager->setDefault<Texture>(m_defaultTexture);
-            HBD_CORE_INFO("{} default_texture_registered width={} height={} format=RGBA8",
-                          kRuntimeResourceLogTag,
-                          desc.width,
-                          desc.height);
-        }
-        else
-        {
-            HBD_CORE_WARN("{} default_texture_register_skipped has_manager={} texture_created={}",
-                          kRuntimeResourceLogTag,
-                          m_manager ? "true" : "false",
-                          m_defaultTexture ? "true" : "false");
-        }
     }
 
     void RuntimeResourceSystem::createHybridDefaultMaterial()
@@ -284,7 +275,7 @@ namespace Hybrid
             return;
 
         AssetMetadata meta{};
-        if (const auto* existing = m_registry->findByPath(logical_path))
+        if (const auto existing = m_registry->findByPath(logical_path))
         {
             meta = *existing;
         }
@@ -335,7 +326,7 @@ namespace Hybrid
             return;
 
         AssetMetadata meta{};
-        if (const auto* existing = m_registry->findByPath(logical_path))
+        if (const auto existing = m_registry->findByPath(logical_path))
         {
             meta = *existing;
         }

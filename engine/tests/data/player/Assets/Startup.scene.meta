@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "id": "1001",
+  "type": "Scene",
+  "source_path": "asset:Startup.scene",
+  "cooked_path": "",
+  "hash": "test",
+  "is_valid": true,
+  "hard_deps": [],
+  "soft_deps": []
+}

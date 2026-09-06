@@ -1,0 +1,7 @@
+format_version=2
+name=NoScene
+startup_scene=
+assets=Assets
+cache=Cache
+build=Build
+settings=ProjectSettings

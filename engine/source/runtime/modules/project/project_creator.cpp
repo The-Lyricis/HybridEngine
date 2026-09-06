@@ -76,7 +76,9 @@ namespace Hybrid
             }
 
             ofs << "# Auto-generated project file\n";
+            ofs << "format_version=2\n";
             ofs << "name=" << desc.project_name << "\n";
+            ofs << "startup_scene=\n";
             ofs << "assets=" << desc.assets_dir.generic_string() << "\n";
             ofs << "cache=" << desc.cache_dir.generic_string() << "\n";
             ofs << "build=" << desc.build_dir.generic_string() << "\n";

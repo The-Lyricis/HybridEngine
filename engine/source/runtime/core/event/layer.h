@@ -3,6 +3,7 @@
 #include "event.h"
 
 #include <string>
+#include <memory>
 #include <vector>
 
 namespace Hybrid
@@ -32,8 +33,8 @@ namespace Hybrid
     public:
         ~LayerStack();
 
-        void pushLayer(Layer* layer);
-        void pushOverlay(Layer* overlay);
+        Layer& pushLayer(std::unique_ptr<Layer> layer);
+        Layer& pushOverlay(std::unique_ptr<Layer> overlay);
         void popLayer(Layer* layer);
         void popOverlay(Layer* overlay);
         void clear();
@@ -44,7 +45,7 @@ namespace Hybrid
         auto rend() { return m_Layers.rend(); }
 
     private:
-        std::vector<Layer*> m_Layers;
+        std::vector<std::unique_ptr<Layer>> m_Layers;
         size_t m_LayerInsertIndex = 0; // insertion point for non-overlay layers
     };
 

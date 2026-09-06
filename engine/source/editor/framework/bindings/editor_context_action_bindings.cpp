@@ -9,6 +9,7 @@ namespace Hybrid
         ctx.asset_actions = std::move(bindings.asset_actions);
         ctx.commands = std::move(bindings.commands);
         ctx.mode = std::move(bindings.mode);
+        ctx.project = std::move(bindings.project);
     }
 
     void ClearEditorContextActions(EditorContext& ctx)
@@ -18,5 +19,6 @@ namespace Hybrid
         ctx.asset_actions = {};
         ctx.commands = {};
         ctx.mode = {};
+        ctx.project = {};
     }
 } // namespace Hybrid

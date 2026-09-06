@@ -26,9 +26,10 @@
 #include "runtime/modules/asset/runtime_resource_system.h"
 #include "runtime/modules/input/input_layer.h"
 #include "runtime/modules/project/project_context.h"
+#include "runtime/modules/project/project_file.h"
 #include "runtime/modules/project/project_paths.h"
-#include "runtime/modules/render/runtime/editor_render_ext.h"
 #include "runtime/modules/render/runtime/frame_context.h"
+#include "runtime/modules/render/runtime/render_frame_request.h"
 #include "runtime/modules/render/runtime/render_flags.h"
 #include "runtime/modules/render/runtime/render_system.h"
 #include "runtime/modules/scene/components.h"
@@ -41,6 +42,8 @@ namespace Hybrid
     namespace
     {
         constexpr const char* kEditorLayerLogTag = "[EditorLayer]";
+        constexpr RenderViewId kEditorSceneViewId = 1;
+        constexpr RenderViewId kEditorGameViewId = 2;
 
         std::string displayNameForAssetMeta(const AssetMetadata* meta)
         {
@@ -71,7 +74,7 @@ namespace Hybrid
     void EditorLayer::onAttach()
     {
         if (!m_services.window || !m_services.render || !m_services.scene ||
-            !m_services.frame_context || !m_services.render_flags || !m_services.editor_ext)
+            !m_services.frame_context || !m_services.render_flags || !m_services.render_request)
         {
             HBD_CORE_ERROR("{} attach_failed reason=missing_required_engine_services", kEditorLayerLogTag);
             return;
@@ -102,19 +105,24 @@ namespace Hybrid
         if (m_active_scene_view_document)
             (void)m_scene_io.saveSceneViewState(*m_active_scene_view_document, m_editor_camera.dumpState());
 
+        // Drain editor imports while runtime, render, and UI callbacks are still alive.
+        if (m_services.editor_resources)
+            m_services.editor_resources->shutdown();
+
         auto& ctx = m_editor_ui.context();
         ClearEditorContextActions(ctx);
         ctx.selection.clear();
         ctx.clearActiveDocument();
         m_asset_hot_reload_controller.unbindContext(ctx);
 
-        if (m_services.editor_ext)
-            m_services.editor_ext->has_editor_camera = false;
+        if (m_services.render_request)
+            m_services.render_request->views.clear();
 
         m_asset_hot_reload_controller.shutdown();
         m_scene_io.shutdown();
         m_editor_ui.shutdown();
         m_active_scene_view_document.reset();
+        m_document_transition_pending = false;
         m_initialized = false;
         HBD_CORE_INFO("{} detach_completed", kEditorLayerLogTag);
     }
@@ -141,10 +149,13 @@ namespace Hybrid
         EditorDocumentActions actions{};
         actions.open_scene = [this](const std::string& scene_vpath)
         {
-            const bool opened = m_scene_io.open(scene_vpath);
-            if (opened)
-                m_editor_ui.context().selection.clear();
-            syncContextDocumentState();
+            (void)requestDocumentTransition("opening another scene", [this, scene_vpath]()
+            {
+                const bool opened = m_scene_io.open(scene_vpath);
+                if (opened)
+                    m_editor_ui.context().selection.clear();
+                return opened;
+            });
         };
         actions.request_open_project = [this]() -> bool
         {
@@ -166,19 +177,23 @@ namespace Hybrid
         };
         actions.request_open_scene = [this]() -> bool
         {
-            const bool opened = m_scene_io.requestOpen();
-            if (opened)
-                m_editor_ui.context().selection.clear();
-            syncContextDocumentState();
-            return opened;
+            return requestDocumentTransition("opening another scene", [this]()
+            {
+                const bool opened = m_scene_io.requestOpen();
+                if (opened)
+                    m_editor_ui.context().selection.clear();
+                return opened;
+            });
         };
         actions.request_new_scene = [this]() -> bool
         {
-            const bool created = m_scene_io.createUntitled();
-            if (created)
-                m_editor_ui.context().selection.clear();
-            syncContextDocumentState();
-            return created;
+            return requestDocumentTransition("creating a new scene", [this]()
+            {
+                const bool created = m_scene_io.createUntitled();
+                if (created)
+                    m_editor_ui.context().selection.clear();
+                return created;
+            });
         };
         actions.request_reset_layout = [this]()
         {
@@ -196,6 +211,7 @@ namespace Hybrid
             syncContextDocumentState();
             return saved;
         };
+        actions.request_exit = [this]() { requestExit(); };
         actions.request_confirm_dialog = [this](EditorConfirmDialog dialog)
         {
             m_editor_ui.queueConfirmDialog(std::move(dialog));
@@ -205,6 +221,68 @@ namespace Hybrid
             return m_services.platform ? m_services.platform->revealInFileBrowser(path) : false;
         };
         return actions;
+    }
+
+    void EditorLayer::requestExit()
+    {
+        (void)requestDocumentTransition("exiting", [this]()
+        {
+            if (m_services.request_exit)
+                m_services.request_exit();
+            return static_cast<bool>(m_services.request_exit);
+        });
+    }
+
+    bool EditorLayer::requestDocumentTransition(std::string action, std::function<bool()> transition)
+    {
+        if (m_document_transition_pending || !transition)
+            return false;
+
+        if (m_mode_callbacks.is_play_mode && m_mode_callbacks.is_play_mode() && m_mode_callbacks.exit_play_mode)
+        {
+            m_mode_callbacks.exit_play_mode();
+            syncContextDocumentState();
+        }
+
+        auto document = m_scene_io.getActiveDocument();
+        if (!document || !document->dirty)
+        {
+            const bool transitioned = transition();
+            syncContextDocumentState();
+            return transitioned;
+        }
+
+        auto perform_transition = [this, transition = std::move(transition)]() mutable
+        {
+            m_document_transition_pending = false;
+            (void)transition();
+            syncContextDocumentState();
+        };
+
+        m_document_transition_pending = true;
+        EditorConfirmDialog dialog{};
+        dialog.title = "Unsaved Changes";
+        dialog.message = "The current scene has unsaved changes. Save before " + action + "?";
+        dialog.confirm_label = "Save";
+        dialog.secondary_label = "Discard";
+        dialog.cancel_label = "Cancel";
+        dialog.on_confirm = [this, perform_transition]() mutable
+        {
+            if (m_scene_io.requestSave())
+            {
+                syncContextDocumentState();
+                perform_transition();
+            }
+            else
+            {
+                m_document_transition_pending = false;
+                syncContextDocumentState();
+            }
+        };
+        dialog.on_secondary = std::move(perform_transition);
+        dialog.on_cancel = [this]() { m_document_transition_pending = false; };
+        m_editor_ui.queueConfirmDialog(std::move(dialog));
+        return true;
     }
 
     EditorSceneActions EditorLayer::buildSceneActions()
@@ -277,8 +355,26 @@ namespace Hybrid
             if (asset_id.value == 0)
                 return "None";
             auto registry = m_services.resources ? m_services.resources->getRegistry() : nullptr;
-            const AssetMetadata* meta = registry ? registry->find(asset_id) : nullptr;
-            return displayNameForAssetMeta(meta);
+            const auto meta = registry ? registry->find(asset_id) : std::nullopt;
+            return displayNameForAssetMeta(meta ? &*meta : nullptr);
+        };
+        actions.list_import_tasks = [this]()
+        {
+            return m_services.editor_resources
+                ? m_services.editor_resources->snapshotTasks()
+                : std::vector<ImportTaskSnapshot>{};
+        };
+        actions.retry_import_task = [this](uint64_t task_id)
+        {
+            return m_services.editor_resources && m_services.editor_resources->retryTask(task_id);
+        };
+        actions.reveal_asset_source = [this](const std::string& source_path)
+        {
+            if (!m_services.resources || !m_services.platform)
+                return false;
+            const auto vfs = m_services.resources->getVFS();
+            const auto physical = vfs ? vfs->resolve(source_path) : std::nullopt;
+            return physical && m_services.platform->revealInFileBrowser(*physical);
         };
         return actions;
     }
@@ -391,6 +487,58 @@ namespace Hybrid
         return actions;
     }
 
+    EditorProjectActions EditorLayer::buildProjectActions()
+    {
+        EditorProjectActions actions{};
+        actions.list_scene_assets = [this]()
+        {
+            std::vector<AssetMetadata> scenes;
+            if (!m_services.resources || !m_services.resources->getRegistry())
+                return scenes;
+            for (const AssetMetadata& metadata : m_services.resources->getRegistry()->getAllAssets())
+            {
+                if (metadata.is_valid && metadata.type == AssetType::Scene && !metadata.source_path.empty())
+                    scenes.push_back(metadata);
+            }
+            std::sort(scenes.begin(), scenes.end(), [](const AssetMetadata& left, const AssetMetadata& right) {
+                return left.source_path < right.source_path;
+            });
+            return scenes;
+        };
+        actions.set_startup_scene = [this](const std::string& startup_scene, std::string& out_error)
+        {
+            if (!startup_scene.empty())
+            {
+                if (!m_services.resources || !m_services.resources->getRegistry())
+                {
+                    out_error = "Asset registry is unavailable.";
+                    return false;
+                }
+                const auto metadata = m_services.resources->getRegistry()->findByPath(startup_scene);
+                if (!metadata)
+                {
+                    out_error = "Startup scene is not registered: " + startup_scene;
+                    return false;
+                }
+                if (metadata->type != AssetType::Scene)
+                {
+                    out_error = "Startup path is not a Scene asset: " + startup_scene;
+                    return false;
+                }
+            }
+
+            ProjectContext project = ProjectService::Get();
+            if (!ProjectFile::updateValue(project.project_file, "startup_scene", startup_scene, out_error))
+                return false;
+            project.startup_scene = startup_scene;
+            ProjectService::Set(project);
+            HBD_CORE_INFO("{} startup_scene_updated path={}", kEditorLayerLogTag,
+                          startup_scene.empty() ? "<empty>" : startup_scene);
+            return true;
+        };
+        return actions;
+    }
+
     EditorContextActionBindings EditorLayer::buildContextActionBindings()
     {
         EditorContextActionBindings bindings{};
@@ -399,6 +547,7 @@ namespace Hybrid
         bindings.asset_actions = buildAssetActions();
         bindings.commands = buildCommandActions();
         bindings.mode = buildModeActions();
+        bindings.project = buildProjectActions();
         return bindings;
     }
 
@@ -598,73 +747,87 @@ namespace Hybrid
         ctx.gizmo.proj = m_services.render->getLastProj();
 
         m_editor_ui.drawPanels();
-        m_editor_ui.drawViewports(m_services.render->getSceneColorTexture(),
-                                  m_services.render->getGameColorTexture());
+        uint32_t scene_texture = 0;
+        uint32_t game_texture = 0;
+        if (m_services.render_result)
+        {
+            for (const RenderViewResult& result : m_services.render_result->views)
+            {
+                if (result.id == kEditorSceneViewId)
+                    scene_texture = result.color_texture;
+                else if (result.id == kEditorGameViewId)
+                    game_texture = result.color_texture;
+            }
+        }
+        m_editor_ui.drawViewports(scene_texture, game_texture);
     }
 
     void EditorLayer::updateFrameContext()
     {
         auto* frame_context = m_services.frame_context;
         auto* render_flags = m_services.render_flags;
-        auto* editor_ext = m_services.editor_ext;
-        if (!frame_context || !render_flags || !editor_ext)
+        auto* render_request = m_services.render_request;
+        if (!frame_context || !render_flags || !render_request)
             return;
 
         auto& ctx = m_editor_ui.context();
         frame_context->viewport_size = {ctx.scene_viewport.size.x, ctx.scene_viewport.size.y};
-        editor_ext->viewport_active = ctx.scene_viewport.image_hovered;
-        editor_ext->render_scene_view = ctx.scene_viewport.size.x > 1.0f && ctx.scene_viewport.size.y > 1.0f;
-        editor_ext->render_game_view = ctx.game_viewport.size.x > 1.0f && ctx.game_viewport.size.y > 1.0f;
-        editor_ext->scene_viewport_size = {ctx.scene_viewport.size.x, ctx.scene_viewport.size.y};
-        editor_ext->game_viewport_size = {ctx.game_viewport.size.x, ctx.game_viewport.size.y};
-        editor_ext->selection.selected_entities.clear();
-        editor_ext->selection.selected_entities.reserve(ctx.selection.items().size());
+        RenderViewRequest scene_view{};
+        scene_view.name = "Scene";
+        scene_view.id = kEditorSceneViewId;
+        scene_view.kind = RenderViewKind::Scene;
+        scene_view.size = {ctx.scene_viewport.size.x, ctx.scene_viewport.size.y};
+        scene_view.viewport_active = ctx.scene_viewport.image_hovered;
+        scene_view.camera_source = RenderCameraSource::ExplicitMatrices;
+        scene_view.selection.selected_entities.reserve(ctx.selection.items().size());
         for (entt::entity selected : ctx.selection.items())
         {
             if (selected == entt::null)
                 continue;
-            editor_ext->selection.selected_entities.push_back(static_cast<uint32_t>(entt::to_integral(selected)));
+            scene_view.selection.selected_entities.push_back(static_cast<uint32_t>(entt::to_integral(selected)));
         }
-        editor_ext->selection.active_entity =
+        scene_view.selection.active_entity =
             (ctx.activeEntity() == entt::null) ? kInvalidEntityID : static_cast<uint32_t>(entt::to_integral(ctx.activeEntity()));
-        editor_ext->selection.hovered_entity = kInvalidEntityID;
-        editor_ext->select_tool = ctx.gizmo.select_tool;
-        editor_ext->show_collider_debug = ctx.debug.show_collider_debug;
-        editor_ext->show_shadow_debug = ctx.debug.show_shadow_debug;
-        editor_ext->post_process.enabled = ctx.debug.enable_post_process;
-        editor_ext->post_process.enable_tone_mapping = ctx.debug.enable_tone_mapping;
-        editor_ext->post_process.enable_gamma_correction = ctx.debug.enable_gamma_correction;
-        editor_ext->post_process.exposure = ctx.debug.post_process_exposure;
-        editor_ext->post_process.gamma = ctx.debug.post_process_gamma;
-
-        if (editor_ext->render_scene_view)
-        {
-            editor_ext->has_editor_camera = true;
-            editor_ext->editor_view = m_editor_camera.getView();
-            editor_ext->editor_proj = m_editor_camera.getProjection();
-            editor_ext->editor_camera_pos = m_editor_camera.getPosition();
-        }
-        else
-        {
-            editor_ext->has_editor_camera = false;
-        }
+        scene_view.selection.hovered_entity = kInvalidEntityID;
+        scene_view.select_tool = ctx.gizmo.select_tool;
+        scene_view.show_collider_debug = ctx.debug.show_collider_debug;
+        scene_view.show_shadow_debug = ctx.debug.show_shadow_debug;
+        scene_view.post_process.enabled = ctx.debug.enable_post_process;
+        scene_view.post_process.enable_tone_mapping = ctx.debug.enable_tone_mapping;
+        scene_view.post_process.enable_gamma_correction = ctx.debug.enable_gamma_correction;
+        scene_view.post_process.exposure = ctx.debug.post_process_exposure;
+        scene_view.post_process.gamma = ctx.debug.post_process_gamma;
+        scene_view.view = m_editor_camera.getView();
+        scene_view.projection = m_editor_camera.getProjection();
+        scene_view.camera_position = m_editor_camera.getPosition();
 
         *render_flags = RenderFlags::Scene | RenderFlags::PickingID | RenderFlags::Grid | RenderFlags::Gizmo | RenderFlags::Shadow;
-        if (!editor_ext->selection.selected_entities.empty())
+        if (!scene_view.selection.selected_entities.empty())
             *render_flags |= RenderFlags::SelectionHighlight;
-        if (editor_ext->post_process.enabled)
+        if (scene_view.post_process.enabled)
             *render_flags |= RenderFlags::PostProcess;
+        scene_view.flags = *render_flags;
 
         if (ctx.picking.request)
         {
-            editor_ext->request_pick = true;
-            editor_ext->pick_x = ctx.picking.x;
-            editor_ext->pick_y = ctx.picking.y;
+            scene_view.picking = RenderPickingRequest{ctx.picking.x, ctx.picking.y};
             ctx.picking.request = false;
         }
-        else
+
+        render_request->views.clear();
+        if (scene_view.size.x > 1.0f && scene_view.size.y > 1.0f)
+            render_request->views.push_back(std::move(scene_view));
+
+        if (ctx.game_viewport.size.x > 1.0f && ctx.game_viewport.size.y > 1.0f)
         {
-            editor_ext->request_pick = false;
+            RenderViewRequest game_view{};
+            game_view.name = "Game";
+            game_view.id = kEditorGameViewId;
+            game_view.kind = RenderViewKind::Game;
+            game_view.size = {ctx.game_viewport.render_size.x, ctx.game_viewport.render_size.y};
+            game_view.flags = RenderFlags::Scene | RenderFlags::Shadow;
+            game_view.camera_source = RenderCameraSource::PrimarySceneCamera;
+            render_request->views.push_back(std::move(game_view));
         }
     }
 
@@ -677,7 +840,7 @@ namespace Hybrid
         if (!registry)
             return {};
 
-        if (const auto* meta = registry->findByPath(asset_vpath))
+        if (const auto meta = registry->findByPath(asset_vpath))
             return meta->id;
 
         return {};
@@ -709,8 +872,8 @@ namespace Hybrid
 
         if (mr.Material.value != 0)
         {
-            const AssetMetadata* meta = registry_ptr ? registry_ptr->find(mr.Material) : nullptr;
-            return displayNameForAssetMeta(meta);
+            const auto meta = registry_ptr ? registry_ptr->find(mr.Material) : std::nullopt;
+            return displayNameForAssetMeta(meta ? &*meta : nullptr);
         }
 
         if (mr.Mesh.value != 0 && manager)
@@ -742,8 +905,8 @@ namespace Hybrid
 
                 if (first_material.value != 0)
                 {
-                    const AssetMetadata* meta = registry_ptr ? registry_ptr->find(first_material) : nullptr;
-                    return displayNameForAssetMeta(meta) + " (Mesh)";
+                    const auto meta = registry_ptr ? registry_ptr->find(first_material) : std::nullopt;
+                    return displayNameForAssetMeta(meta ? &*meta : nullptr) + " (Mesh)";
                 }
             }
         }
@@ -1090,7 +1253,7 @@ namespace Hybrid
             return false;
         }
 
-        const auto* meta = registry->find(asset_id);
+        const auto meta = registry->find(asset_id);
         if (!meta || !meta->is_valid)
         {
             ctx.setStatusMessage("Dropped asset is invalid.");
@@ -1290,7 +1453,7 @@ namespace Hybrid
         auto& ctx = m_editor_ui.context();
         ctx.gizmo.suppress_tool_shortcuts = false;
 
-        if (!m_services.input || !m_services.editor_ext)
+        if (!m_services.input || !m_services.render_request)
             return;
 
         if (ctx.scene_viewport.size.x > 1.0f && ctx.scene_viewport.size.y > 1.0f)

@@ -23,16 +23,19 @@ namespace Hybrid
 
     void AssetRegistry::setRoot(const std::filesystem::path& root)
     {
+        std::scoped_lock lock(m_mutex);
         m_root = std::filesystem::absolute(root).lexically_normal();
     }
 
-    const std::filesystem::path& AssetRegistry::getRoot() const
+    std::filesystem::path AssetRegistry::getRoot() const
     {
+        std::scoped_lock lock(m_mutex);
         return m_root;
     }
 
     AssetID AssetRegistry::generateUniqueID()
     {
+        std::scoped_lock lock(m_mutex);
         std::uniform_int_distribution<uint64_t> dist(1, UINT64_MAX);
         for (;;)
         {
@@ -98,6 +101,7 @@ namespace Hybrid
 
     void AssetRegistry::registerAsset(const AssetMetadata& meta)
     {
+        std::scoped_lock lock(m_mutex);
         if (meta.id.value == 0)
             return;
 
@@ -150,6 +154,7 @@ namespace Hybrid
 
     void AssetRegistry::unregisterAsset(AssetID id)
     {
+        std::scoped_lock lock(m_mutex);
         auto it = m_by_id.find(id);
         if (it != m_by_id.end())
         {
@@ -159,45 +164,52 @@ namespace Hybrid
         }
     }
 
-    const AssetMetadata* AssetRegistry::find(AssetID id) const
+    std::optional<AssetMetadata> AssetRegistry::find(AssetID id) const
     {
+        std::scoped_lock lock(m_mutex);
         auto it = m_by_id.find(id);
-        return it == m_by_id.end() ? nullptr : &it->second;
+        return it == m_by_id.end() ? std::nullopt : std::optional<AssetMetadata>(it->second);
     }
 
-    const AssetMetadata* AssetRegistry::findByPath(const std::string& path) const
+    std::optional<AssetMetadata> AssetRegistry::findByPath(const std::string& path) const
     {
+        std::scoped_lock lock(m_mutex);
         const auto key = normalizeKey(path);
         if (key.empty())
-            return nullptr;
+            return std::nullopt;
 
         auto it = m_by_path.find(key);
         if (it == m_by_path.end())
-            return nullptr;
+            return std::nullopt;
 
-        return find(it->second);
+        auto meta = m_by_id.find(it->second);
+        return meta == m_by_id.end() ? std::nullopt : std::optional<AssetMetadata>(meta->second);
     }
 
-    const AssetMetadata* AssetRegistry::findBySubasset(AssetID parent_id, const std::string& subasset_key) const
+    std::optional<AssetMetadata> AssetRegistry::findBySubasset(AssetID parent_id, const std::string& subasset_key) const
     {
+        std::scoped_lock lock(m_mutex);
         const std::string lookup_key = makeSubassetLookupKey(parent_id, subasset_key);
         if (lookup_key.empty())
-            return nullptr;
+            return std::nullopt;
 
         auto it = m_by_subasset.find(lookup_key);
         if (it == m_by_subasset.end())
-            return nullptr;
+            return std::nullopt;
 
-        return find(it->second);
+        auto meta = m_by_id.find(it->second);
+        return meta == m_by_id.end() ? std::nullopt : std::optional<AssetMetadata>(meta->second);
     }
 
     bool AssetRegistry::exists(AssetID id) const
     {
+        std::scoped_lock lock(m_mutex);
         return m_by_id.find(id) != m_by_id.end();
     }
 
     std::vector<AssetMetadata> AssetRegistry::getAllAssets() const
     {
+        std::scoped_lock lock(m_mutex);
         std::vector<AssetMetadata> assets;
         assets.reserve(m_by_id.size());
         for (const auto& [id, meta] : m_by_id)

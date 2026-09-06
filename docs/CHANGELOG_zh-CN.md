@@ -2,6 +2,13 @@
 
 ### v0.0.6 Current
 
+- 加入 File/系统关闭统一的脏文档退出流程、原子更新启动场景的 Project Settings，以及版本化 Game View 分辨率设置。
+- 加入线程安全的有界日志缓冲与 Editor Console，并为合并执行的后台导入提供可观察、可重试的 Tasks 面板。
+- 用稳定 `RenderViewId` 目标池替代固定编辑器 Framebuffer，Editor 直接消费 `RenderFrameResult`。
+- 将单体 Runtime 拆为 Core、Runtime、Render、Engine 目标，加入仅 Windows 构建的 Editor 开关与跨平台 Player。
+- 加入显式幂等生命周期、Layer 独占所有权、单次输入处理、固定步长时钟，以及由 Editor 管理的 Play Session。
+- 加入可 drain 的固定线程池 JobSystem，以及基于 generation 的安全异步资产加载和返回值式 Registry 查询。
+- 以多视图帧请求/结果替代 Editor 专用渲染入口，引入 `.hyproj` v2 启动场景，并增加 headless CTest 覆盖。
 - 渲染系统继续朝着更清晰的 Pass / Pipeline 拆分推进，为后续的描边、阴影和后处理扩展做准备。
 - 添加了 `ShaderLibrary` 的初始实现，用于集中管理 Shader。
 - 编辑器新增了场景创建流程，并在层级面板中加入了点光源创建入口。

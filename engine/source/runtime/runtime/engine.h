@@ -3,14 +3,18 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <chrono>
+#include <functional>
 
 #include "runtime/core/event/application_event.h"
 #include "runtime/core/event/input_event.h"
 #include "runtime/core/event/layer.h"
+#include "runtime/core/job/job_system.h"
+#include "runtime/core/time/frame_clock.h"
 #include "runtime/modules/asset/runtime_resource_system.h"
 #include "runtime/modules/input/input_layer.h"
-#include "runtime/modules/render/runtime/editor_render_ext.h"
 #include "runtime/modules/render/runtime/frame_context.h"
+#include "runtime/modules/render/runtime/render_frame_request.h"
 #include "runtime/modules/render/public/graphics_context.h"
 #include "runtime/modules/render/runtime/render_flags.h"
 #include "runtime/modules/render/runtime/render_system.h"
@@ -22,23 +26,30 @@
 
 namespace Hybrid
 {
+    struct EngineConfig
+    {
+        std::filesystem::path project_path;
+        bool headless = false;
+        bool window_visible = true;
+        float fixed_update_hz = 60.0f;
+        std::size_t worker_count = 0;
+    };
+
     // Runtime application host. Editor extends behavior via layers/services.
     class HybridEngine
     {
-        enum class SceneRunState
-        {
-            Edit = 0,
-            Play
-        };
-
     public:
-        bool initialize(const std::filesystem::path& project_path = {}); // Create window, graphics context, scene and runtime systems.
-        void run();        // Main loop: poll -> begin-frame -> update -> render -> UI -> end-frame -> present.
-        void shutdown();   // Tear down layers and core systems.
+        ~HybridEngine() { shutdown(); }
+        bool initialize(const EngineConfig& config);
+        bool initialize(const std::filesystem::path& project_path = {});
+        void run(uint64_t max_frames = 0);
+        void shutdown() noexcept;
+        void requestExit() noexcept;
+        void setExitRequestHandler(std::function<void()> handler) { m_ExitRequestHandler = std::move(handler); }
 
         void onEvent(Event& e);          // Dispatch platform input/window events.
-        void pushLayer(Layer* layer);    // Insert gameplay/editor layer.
-        void pushOverlay(Layer* layer);  // Insert overlay layer (e.g. ImGui).
+        Layer& pushLayer(std::unique_ptr<Layer> layer);    // Insert gameplay/editor layer.
+        Layer& pushOverlay(std::unique_ptr<Layer> layer);  // Insert overlay layer (e.g. ImGui).
 
         WindowSystem& getWindowSystem() const { return *m_Window; }
         RenderSystem& getRenderSystem() { return m_RenderSystem; }
@@ -47,58 +58,51 @@ namespace Hybrid
         InputLayer& getInputLayer() const { return *m_InputLayer; }
         FrameContext& getFrameContext() { return m_FrameContext; }
         RenderFlags& getRenderFlags() { return m_RenderFlags; }
-        EditorRenderExt& getEditorRenderExt() { return m_EditorRenderExt; }
+        RenderFrameRequest& getRenderFrameRequest() { return m_RenderFrameRequest; }
+        const RenderFrameResult& getRenderFrameResult() const { return m_RenderFrameResult; }
         bool consumePickResult(uint32_t& out_entity_id); // Pop one pending picking result.
 
-        bool isEditMode() const { return m_SceneRunState == SceneRunState::Edit; }
-        bool isPlayMode() const { return m_SceneRunState == SceneRunState::Play; }
-
-        std::shared_ptr<Scene> getEditorScene() const { return m_EditorScene; }
-        std::shared_ptr<Scene> getRuntimeScene() const { return m_RuntimeScene; }
-        bool setEditorScene(std::shared_ptr<Scene> scene);
-        bool isPlayPaused() const { return m_PlayPaused; }
-
-        std::shared_ptr<Scene> getActiveGameScene() const
-        {
-            if (m_SceneRunState == SceneRunState::Play && m_RuntimeScene)
-                return m_RuntimeScene;
-            return m_EditorScene;
-        }
-        bool enterPlayModeFromScene(const std::shared_ptr<Scene>& source_scene);
-        void enterPlayMode();
-        void exitPlayMode();
-        void togglePlayPause();
+        std::shared_ptr<Scene> getActiveScene() const { return m_ActiveScene; }
+        bool setActiveScene(std::shared_ptr<Scene> scene);
+        void setFixedUpdateEnabled(bool enabled) { m_FixedUpdateEnabled = enabled; }
+        void setSceneUpdateEnabled(bool enabled) { m_SceneUpdateEnabled = enabled; }
+        bool isHeadless() const { return m_Headless; }
+        bool isInitialized() const { return m_Initialized; }
+        std::shared_ptr<JobSystem> getJobSystem() const { return m_JobSystem; }
 
     private:
         float calculateDeltaTime();
-        void updateEditMode(float dt);
-        void updatePlayMode(float dt);
+        void updateActiveScene(float dt);
 
     private:
         bool m_Running = true;    // Main loop running state.
         bool m_Minimized = false; // Window minimized gate.
 
-        SceneRunState m_SceneRunState = SceneRunState::Edit;
-        bool m_PlayPaused = false;
-
-        std::shared_ptr<Scene> m_EditorScene;
-        std::shared_ptr<Scene> m_RuntimeScene;
+        std::shared_ptr<Scene> m_ActiveScene;
 
         std::shared_ptr<WindowSystem> m_Window;        // Native window wrapper.
         std::unique_ptr<GraphicsContext> m_GraphicsContext; // Graphics backend context.
         LayerStack m_LayerStack;                       // Layer and overlay stack.
 
-        InputLayer* m_InputLayer = nullptr;                    // Input aggregation layer.
+        std::unique_ptr<InputLayer> m_InputLayer;               // Input aggregation service.
         std::shared_ptr<RuntimeResourceSystem> m_RuntimeResourceSystem; // Runtime asset stack.
+        std::shared_ptr<JobSystem> m_JobSystem;
         RenderSystem m_RenderSystem; // Rendering front-end.
         PhysicsSystem m_PhysicsSystem;
         SceneManager m_SceneManager;                           // Active scene manager.
         FrameContext m_FrameContext{};                         // Per-frame runtime render payload.
         RenderFlags m_RenderFlags = RenderFlags::Scene;        // Enabled render passes this frame.
-        EditorRenderExt m_EditorRenderExt{};                   // Optional editor-side render extension.
+        RenderFrameRequest m_RenderFrameRequest{};
+        RenderFrameResult m_RenderFrameResult{};
         bool m_HasPendingPickResult = false;                   // Whether a pick readback is ready.
         uint32_t m_LastPickResult = kInvalidEntityID;          // Last entity id read from ID buffer.
 
-        float m_LastTime = 0.0f; // Previous frame timestamp.
+        std::chrono::steady_clock::time_point m_LastFrameTime{};
+        FrameClock m_FrameClock;
+        bool m_Headless = false;
+        bool m_Initialized = false;
+        bool m_FixedUpdateEnabled = false;
+        bool m_SceneUpdateEnabled = true;
+        std::function<void()> m_ExitRequestHandler;
     };
 } // namespace Hybrid

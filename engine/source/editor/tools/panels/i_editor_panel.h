@@ -13,6 +13,10 @@ namespace Hybrid
         Project,
         SceneView,
         GameView,
+        Console,
+        ProjectSettings,
+        Tasks,
+        Count,
     };
 
     struct EditorPanelState

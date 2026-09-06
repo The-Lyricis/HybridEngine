@@ -244,7 +244,7 @@ namespace Hybrid
         document->dirty = false;
         if (registry)
         {
-            if (const auto* meta = registry->findByPath(scene_vpath))
+            if (const auto meta = registry->findByPath(scene_vpath))
                 document->scene_asset_id = meta->id;
         }
         document->vpath = scene_vpath;
@@ -489,7 +489,7 @@ namespace Hybrid
         m_active_document->dirty = false;
         if (m_services.resources && m_services.resources->getRegistry())
         {
-            if (const auto* meta = m_services.resources->getRegistry()->findByPath(normalized_vpath))
+            if (const auto meta = m_services.resources->getRegistry()->findByPath(normalized_vpath))
                 m_active_document->scene_asset_id = meta->id;
         }
         m_active_document->vpath = normalized_vpath;

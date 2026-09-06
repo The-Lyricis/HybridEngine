@@ -6,6 +6,8 @@ namespace Hybrid
     {
         LoaderKey key{typeid(T), type};
         std::scoped_lock lock(m_mutex);
+        if (m_shutdown)
+            return;
         m_loaders[key] = [fn](const AssetMetadata& meta, IVirtualFileSystem& vfs) {
             return std::static_pointer_cast<void>(fn(meta, vfs));
         };
@@ -22,30 +24,28 @@ namespace Hybrid
 
     template <typename T> std::shared_ptr<T> AssetManager::loadSync(AssetID id)
     {
-        const AssetMetadata* meta = m_registry ? m_registry->find(id) : nullptr;
+        auto meta = m_registry ? m_registry->find(id) : std::nullopt;
         if (!meta || !meta->is_valid)
             return nullptr;
-
-        auto ptr = loadInternal(typeid(T), meta->type, id);
-        return std::static_pointer_cast<T>(ptr);
+        return std::static_pointer_cast<T>(loadInternal(typeid(T), meta->type, id));
     }
 
     template <typename T> AssetFuture<T> AssetManager::loadAsync(AssetID id)
     {
-        const AssetMetadata* meta = m_registry ? m_registry->find(id) : nullptr;
+        auto meta = m_registry ? m_registry->find(id) : std::nullopt;
         if (!meta || !meta->is_valid)
             return AssetFuture<T>();
-
-        auto fut = loadInternalAsync(typeid(T), meta->type, id);
-        return AssetFuture<T>(std::move(fut));
+        return AssetFuture<T>(loadInternalAsync(typeid(T), meta->type, id));
     }
 
     template <typename T> void AssetManager::registerResident(AssetID id, const std::shared_ptr<T>& asset)
     {
         if (id.value == 0 || !asset)
             return;
-
         std::scoped_lock lock(m_mutex);
+        if (m_shutdown)
+            return;
+        ++m_generation[id];
         m_cache[id] = std::static_pointer_cast<void>(asset);
         m_state[id] = AssetState::Loaded;
         m_inFlight.erase(id);
@@ -54,15 +54,14 @@ namespace Hybrid
     template <typename T> void AssetManager::setDefault(const std::shared_ptr<T>& def)
     {
         std::scoped_lock lock(m_mutex);
-        m_default[typeid(T)] = def;
+        if (!m_shutdown)
+            m_default[typeid(T)] = def;
     }
 
     template <typename T> std::shared_ptr<T> AssetManager::getDefault() const
     {
         std::scoped_lock lock(m_mutex);
         auto it = m_default.find(typeid(T));
-        if (it != m_default.end())
-            return std::static_pointer_cast<T>(it->second);
-        return nullptr;
+        return it == m_default.end() ? nullptr : std::static_pointer_cast<T>(it->second);
     }
 } // namespace Hybrid

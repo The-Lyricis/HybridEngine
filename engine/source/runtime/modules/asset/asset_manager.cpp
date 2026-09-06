@@ -7,16 +7,48 @@ namespace Hybrid
     namespace
     {
         constexpr const char* kAssetManagerLogTag = "[AssetManager]";
-    } // namespace
+    }
 
-    AssetManager::AssetManager(std::shared_ptr<IVirtualFileSystem> vfs, std::shared_ptr<AssetRegistry> registry)
-        : m_vfs(std::move(vfs)), m_registry(std::move(registry))
+    AssetManager::AssetManager(std::shared_ptr<IVirtualFileSystem> vfs,
+                               std::shared_ptr<AssetRegistry> registry,
+                               std::shared_ptr<JobSystem> job_system)
+        : m_vfs(std::move(vfs)), m_registry(std::move(registry)), m_jobSystem(std::move(job_system))
     {
+    }
+
+    AssetManager::~AssetManager()
+    {
+        shutdown();
+    }
+
+    void AssetManager::shutdown()
+    {
+        {
+            std::scoped_lock lock(m_mutex);
+            if (m_shutdown)
+                return;
+            m_shutdown = true;
+            for (auto& [id, generation] : m_generation)
+                ++generation;
+        }
+
+        if (m_jobSystem)
+            m_jobSystem->waitIdle();
+
+        std::scoped_lock lock(m_mutex);
+        m_inFlight.clear();
+        m_cache.clear();
+        m_state.clear();
+        m_loaders.clear();
+        m_default.clear();
+        m_generation.clear();
     }
 
     AssetState AssetManager::getState(AssetID id) const
     {
         std::scoped_lock lock(m_mutex);
+        if (m_shutdown)
+            return AssetState::Unloaded;
         auto it = m_state.find(id);
         return it == m_state.end() ? AssetState::Unloaded : it->second;
     }
@@ -24,6 +56,7 @@ namespace Hybrid
     void AssetManager::unload(AssetID id)
     {
         std::scoped_lock lock(m_mutex);
+        ++m_generation[id];
         m_cache.erase(id);
         m_inFlight.erase(id);
         m_state[id] = AssetState::Unloaded;
@@ -32,75 +65,92 @@ namespace Hybrid
     std::shared_future<std::shared_ptr<void>>
     AssetManager::loadInternalAsync(std::type_index ti, AssetType type, AssetID id)
     {
-        // GPU 资源暂不支持异步创建，直接返回默认
-        if (type == AssetType::Texture2D || type == AssetType::TextureCube)
-        {
-            HBD_CORE_WARN("{} load_async_rejected asset_id={} asset_type={} reason=gpu_resource_unsupported",
-                          kAssetManagerLogTag,
-                          id.value,
-                          static_cast<uint32_t>(type));
-            std::promise<std::shared_ptr<void>> p;
-            p.set_value(getDefaultByTypeIndex(ti));
-            return p.get_future().share();
-        }
+        auto promise = std::make_shared<std::promise<std::shared_ptr<void>>>();
+        auto future = promise->get_future().share();
+        uint64_t generation = 0;
 
-        { // cache / inflight 快路径
+        {
             std::scoped_lock lock(m_mutex);
-            if (auto it = m_cache.find(id); it != m_cache.end())
+            if (m_shutdown)
             {
-                std::promise<std::shared_ptr<void>> ready;
-                ready.set_value(it->second);
-                return ready.get_future().share();
+                promise->set_value(nullptr);
+                return future;
             }
-            if (auto it = m_inFlight.find(id); it != m_inFlight.end())
-                return it->second;
+            if (auto cached = m_cache.find(id); cached != m_cache.end())
+            {
+                promise->set_value(cached->second);
+                return future;
+            }
+            if (auto running = m_inFlight.find(id); running != m_inFlight.end())
+                return running->second.future;
+
+            generation = m_generation[id];
+            m_inFlight[id] = InFlightEntry{generation, future};
+            m_state[id] = AssetState::Loading;
         }
 
-        auto promise_ptr = std::make_shared<std::promise<std::shared_ptr<void>>>();
-        auto fut         = promise_ptr->get_future().share();
+        auto self = shared_from_this();
+        auto task = [self, promise, ti, type, id, generation]() mutable
         {
-            std::scoped_lock lock(m_mutex);
-            m_inFlight[id] = fut;
-            m_state[id]    = AssetState::Loading;
+            std::shared_ptr<void> instance;
+            try
+            {
+                auto meta = self->m_registry ? self->m_registry->find(id) : std::nullopt;
+                if (meta && meta->is_valid)
+                    instance = self->performLoad(*meta, ti, type);
+            }
+            catch (const std::exception& error)
+            {
+                HBD_CORE_ERROR("{} async_load_exception asset_id={} reason={}",
+                               kAssetManagerLogTag, id.value, error.what());
+            }
+            catch (...)
+            {
+                HBD_CORE_ERROR("{} async_load_exception asset_id={} reason=unknown",
+                               kAssetManagerLogTag, id.value);
+            }
+
+            {
+                std::scoped_lock lock(self->m_mutex);
+                const auto generation_it = self->m_generation.find(id);
+                const bool current = !self->m_shutdown &&
+                                     generation_it != self->m_generation.end() &&
+                                     generation_it->second == generation;
+                if (current && instance)
+                {
+                    self->m_cache[id] = instance;
+                    self->m_state[id] = AssetState::Loaded;
+                }
+                else if (current)
+                {
+                    self->m_state[id] = AssetState::Failed;
+                }
+
+                auto running = self->m_inFlight.find(id);
+                if (running != self->m_inFlight.end() && running->second.generation == generation)
+                    self->m_inFlight.erase(running);
+                if (!current)
+                    instance.reset();
+            }
+            promise->set_value(instance);
+        };
+
+        if (m_jobSystem && m_jobSystem->isRunning())
+        {
+            try
+            {
+                (void)m_jobSystem->submit(task);
+            }
+            catch (...)
+            {
+                task();
+            }
         }
-
-        std::thread([this, promise_ptr, ti, type, id]()
-                    {
-                        std::shared_ptr<void> instance = nullptr;
-
-                        try
-                        {
-                            const AssetMetadata* meta = m_registry ? m_registry->find(id) : nullptr;
-                            if (meta && meta->is_valid)
-                            {
-                                AssetMetadata meta_copy = *meta; // 避免热重载期间指针失效
-                                instance = performLoad(meta_copy, ti, type);
-                            }
-                        }
-                        catch (...)
-                        {
-                            instance = nullptr;
-                        }
-
-                        { // 先更新状态/缓存，再 fulfill future
-                            std::scoped_lock lock(m_mutex);
-                            if (instance)
-                            {
-                                m_cache[id] = instance;
-                                m_state[id] = AssetState::Loaded;
-                            }
-                            else
-                            {
-                                m_state[id] = AssetState::Failed;
-                            }
-                            m_inFlight.erase(id);
-                        }
-
-                        promise_ptr->set_value(instance);
-                    })
-            .detach();
-
-        return fut;
+        else
+        {
+            task();
+        }
+        return future;
     }
 
     std::shared_ptr<void> AssetManager::performLoad(const AssetMetadata& meta, std::type_index ti, AssetType type)
@@ -122,85 +172,23 @@ namespace Hybrid
                 throw std::runtime_error("VFS is null");
             return loader(meta, *m_vfs);
         }
-        catch (const std::exception& e)
+        catch (const std::exception& error)
         {
             HBD_CORE_ERROR("{} load_exception asset_id={} asset_type={} reason={}",
-                           kAssetManagerLogTag,
-                           meta.id.value,
-                           static_cast<uint32_t>(type),
-                           e.what());
+                           kAssetManagerLogTag, meta.id.value, static_cast<uint32_t>(type), error.what());
             return nullptr;
         }
     }
 
     std::shared_ptr<void> AssetManager::loadInternal(std::type_index ti, AssetType type, AssetID id)
     {
-        std::shared_future<std::shared_ptr<void>> wait_future;
+        auto instance = loadInternalAsync(ti, type, id).get();
+        if (instance)
+            return instance;
 
-        // 1) 缓存 / in-flight 复用
-        {
-            std::scoped_lock lock(m_mutex);
-            if (auto it_cache = m_cache.find(id); it_cache != m_cache.end())
-                return it_cache->second;
-
-            if (auto it_f = m_inFlight.find(id); it_f != m_inFlight.end())
-                wait_future = it_f->second;
-
-            if (!wait_future.valid())
-                m_state[id] = AssetState::Loading;
-        }
-
-        if (wait_future.valid())
-            return wait_future.get();
-
-        // 2) 拷贝元数据
-        AssetMetadata meta_copy;
-        {
-            const AssetMetadata* meta = m_registry ? m_registry->find(id) : nullptr;
-            if (!meta)
-            {
-                {
-                    std::scoped_lock lock(m_mutex);
-                    m_state[id] = AssetState::Failed;
-                }
-                return getDefaultByTypeIndex(ti);
-            }
-            meta_copy = *meta;
-        }
-
-        // 3) 执行加载
-        auto instance = performLoad(meta_copy, ti, type);
-
-        // 4) 写回状态 / 缓存
-        {
-            std::scoped_lock lock(m_mutex);
-            if (instance)
-            {
-                m_cache[id] = instance;
-                m_state[id] = AssetState::Loaded;
-            }
-            else
-            {
-                m_state[id] = AssetState::Failed;
-            }
-            m_inFlight.erase(id);
-        }
-
-        // 默认资源回退
-        if (!instance)
-        {
-            auto def = getDefaultByTypeIndex(ti);
-            if (def)
-            {
-                HBD_CORE_WARN("{} load_fallback_selected asset_id={} reason=load_failed",
-                              kAssetManagerLogTag,
-                              id.value);
-                return def;
-            }
-        }
-
-        return instance;
+        auto fallback = getDefaultByTypeIndex(ti);
+        if (fallback)
+            HBD_CORE_WARN("{} load_fallback_selected asset_id={} reason=load_failed", kAssetManagerLogTag, id.value);
+        return fallback;
     }
-
 } // namespace Hybrid
-

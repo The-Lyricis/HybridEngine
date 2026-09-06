@@ -1,0 +1,10 @@
+{
+  "meta": { "version": 2 },
+  "environment": {
+    "skyboxCubemap": 0,
+    "skyboxCubemapPath": "",
+    "skyboxIntensity": 1.0,
+    "skyboxRotationDegrees": 0.0
+  },
+  "entities": []
+}

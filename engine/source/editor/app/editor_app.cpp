@@ -12,6 +12,7 @@
 #include "editor/services/asset/editor_resource_system.h"
 #include "editor/services/project/project_history.h"
 #include "editor/services/project/project_instance_lock.h"
+#include "editor/services/runtime/editor_session_controller.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/project/project_creator.h"
 #include "runtime/modules/project/project_paths.h"
@@ -228,13 +229,14 @@ namespace Hybrid
         HBD_CORE_INFO("{} run_started", kEditorAppLogTag);
 
         auto editor_resources = std::make_shared<EditorResourceSystem>();
-        if (!editor_resources->initialize(engine.getResourceSystem()))
+        if (!editor_resources->initialize(engine.getResourceSystem(), engine.getJobSystem()))
         {
             HBD_CORE_ERROR("{} editor_resources_initialize_failed", kEditorAppLogTag);
             engine.shutdown();
             return 1;
         }
 
+        EditorSessionController session(engine);
         EngineServices services{};
         services.window = &engine.getWindowSystem();
         services.render = &engine.getRenderSystem();
@@ -245,45 +247,51 @@ namespace Hybrid
         services.input = &engine.getInputLayer();
         services.frame_context = &engine.getFrameContext();
         services.render_flags = &engine.getRenderFlags();
-        services.editor_ext = &engine.getEditorRenderExt();
+        services.render_request = &engine.getRenderFrameRequest();
+        services.render_result = &engine.getRenderFrameResult();
+        services.jobs = engine.getJobSystem();
+        services.request_exit = [&engine]() { engine.requestExit(); };
         services.consume_pick_result = [&engine](uint32_t& id) { return engine.consumePickResult(id); };
-        services.set_editor_scene = [&engine](std::shared_ptr<Scene> scene) -> bool
+        services.set_editor_scene = [&session](std::shared_ptr<Scene> scene) -> bool
             {
-                return engine.setEditorScene(std::move(scene));
+                return session.setEditorScene(std::move(scene));
             };
 
-        engine.pushOverlay(new ImGuiLayer(engine.getWindowSystem().getNativeWindow()));
-        auto* editor_layer = new EditorLayer(std::move(services));
+        engine.pushOverlay(std::make_unique<ImGuiLayer>(engine.getWindowSystem().getNativeWindow()));
+        auto editor_layer = std::make_unique<EditorLayer>(std::move(services));
+        auto* editor_layer_ptr = editor_layer.get();
 
         EditorModeCallbacks mode_callbacks;
-        mode_callbacks.enter_play_mode_from_scene = [&engine](std::shared_ptr<Scene> scene) -> bool
+        mode_callbacks.enter_play_mode_from_scene = [&session](std::shared_ptr<Scene> scene) -> bool
             {
-                return engine.enterPlayModeFromScene(scene);
+                return session.enterPlayModeFromScene(scene);
             };
-        mode_callbacks.exit_play_mode = [&engine]()
+        mode_callbacks.exit_play_mode = [&session]()
             {
-                engine.exitPlayMode();
+                session.exitPlayMode();
             };
-        mode_callbacks.toggle_pause_mode = [&engine]()
+        mode_callbacks.toggle_pause_mode = [&session]()
             {
-                engine.togglePlayPause();
+                session.togglePause();
             };
-        mode_callbacks.is_play_mode = [&engine]() -> bool
+        mode_callbacks.is_play_mode = [&session]() -> bool
             {
-                return engine.isPlayMode();
+                return session.isPlayMode();
             };
-        mode_callbacks.is_pause_mode = [&engine]() -> bool
+        mode_callbacks.is_pause_mode = [&session]() -> bool
             {
-                return engine.isPlayPaused();
+                return session.isPaused();
             };
-        editor_layer->setModeCallbacks(std::move(mode_callbacks));
+        editor_layer_ptr->setModeCallbacks(std::move(mode_callbacks));
 
-        engine.pushLayer(editor_layer);
+        engine.pushLayer(std::move(editor_layer));
+        engine.setExitRequestHandler([editor_layer_ptr]() { editor_layer_ptr->requestExit(); });
         HBD_CORE_INFO("{} layers_attached", kEditorAppLogTag);
 
         engine.run();
         HBD_CORE_INFO("{} run_completed exit_code=0", kEditorAppLogTag);
         engine.shutdown();
+        editor_resources->shutdown();
         project_lock.release();
         return 0;
     }

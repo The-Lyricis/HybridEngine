@@ -8,6 +8,10 @@ namespace Hybrid {
         RenderCommand::initialize();
     }
 
+    void Renderer::shutdown() {
+        RenderCommand::shutdown();
+    }
+
     void Renderer::beginFrame(const glm::vec4& clearColor) {
         RenderCommand::setClearColor(clearColor);
         RenderCommand::clear();

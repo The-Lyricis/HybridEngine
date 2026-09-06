@@ -9,6 +9,7 @@ namespace Hybrid {
     class RenderCommand {
     public:
         static void initialize();
+        static void shutdown();
         static void setViewport(int x, int y, int width, int height);
         static void setClearColor(const glm::vec4& color);
         static void setClearDepth(float depth);

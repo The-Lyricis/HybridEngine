@@ -1,10 +1,13 @@
 #pragma once
 #include <filesystem>
+#include <string>
 
 namespace Hybrid {
 
     struct ProjectContext
     {
+        int format_version = 2;
+        std::string startup_scene;
         std::filesystem::path project_file;
         std::filesystem::path root;
         std::filesystem::path assets;

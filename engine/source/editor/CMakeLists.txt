@@ -60,7 +60,8 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 # MSVC 下关闭“警告当错误”
 target_compile_options(${TARGET_NAME} PRIVATE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/WX->")
 
-target_link_libraries(${TARGET_NAME} PRIVATE HybridRuntime tinyobjloader)
+target_link_libraries(${TARGET_NAME} PRIVATE
+    HybridEngine imgui glad stb tinyobjloader nlohmann_json::nlohmann_json)
 
 if(WIN32)
     target_link_libraries(${TARGET_NAME} PRIVATE Ole32 Shell32)

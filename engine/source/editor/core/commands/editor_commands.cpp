@@ -76,6 +76,8 @@ namespace Hybrid
             return playing && static_cast<bool>(editor->mode.toggle_pause_mode);
         case EditorCommandId::ResetLayout:
             return static_cast<bool>(editor->documents.request_reset_layout);
+        case EditorCommandId::Exit:
+            return static_cast<bool>(editor->documents.request_exit);
         }
 
         return false;
@@ -130,6 +132,9 @@ namespace Hybrid
             return true;
         case EditorCommandId::ResetLayout:
             editor->documents.request_reset_layout();
+            return true;
+        case EditorCommandId::Exit:
+            editor->documents.request_exit();
             return true;
         }
 

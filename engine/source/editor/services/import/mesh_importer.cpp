@@ -683,7 +683,7 @@ namespace Hybrid
         }
 
         AssetID mesh_asset_id{};
-        if (const auto* existing_mesh = registry.findByPath(request.source_path))
+        if (const auto existing_mesh = registry.findByPath(request.source_path))
             mesh_asset_id = existing_mesh->id;
         else
             mesh_asset_id = registry.generateUniqueID();
@@ -736,9 +736,9 @@ namespace Hybrid
 
             AssetMetadata material_meta{};
             std::string previous_material_source_path;
-            if (const auto* existing = registry.findBySubasset(mesh_asset_id, subasset_key))
+            if (const auto existing = registry.findBySubasset(mesh_asset_id, subasset_key))
                 material_meta = *existing;
-            else if (const auto* existing = registry.findByPath(material_source_path))
+            else if (const auto existing = registry.findByPath(material_source_path))
                 material_meta = *existing;
             else
                 material_meta.id = registry.generateUniqueID();
@@ -752,7 +752,7 @@ namespace Hybrid
                 if (auto imported = imported_texture_ids.find(texture_source_path); imported != imported_texture_ids.end())
                     return imported->second;
 
-                const auto* existing_texture = registry.findByPath(texture_source_path);
+                const auto existing_texture = registry.findByPath(texture_source_path);
                 if (existing_texture && existing_texture->type == AssetType::Texture2D)
                 {
                     imported_texture_ids[texture_source_path] = existing_texture->id;
@@ -961,7 +961,7 @@ namespace Hybrid
         }
 
         AssetMetadata mesh_meta{};
-        if (const auto* existing = registry.findByPath(request.source_path))
+        if (const auto existing = registry.findByPath(request.source_path))
             mesh_meta = *existing;
         else
             mesh_meta.id = mesh_asset_id;

@@ -15,6 +15,7 @@
 #include "editor/core/context/selection_service.h"
 #include "editor/core/editor_types.h"
 #include "editor/core/snapshot/transform_snapshot.h"
+#include "editor/services/import/import_types.h"
 #include "runtime/modules/asset/asset_type.h"
 #include "runtime/modules/asset/builtin_assets.h"
 
@@ -54,7 +55,24 @@ namespace Hybrid
         ImVec2 size = {1.0f, 1.0f};
         ImVec2 min = {0.0f, 0.0f};
         ImVec2 max = {0.0f, 0.0f};
+        ImVec2 render_size = {1.0f, 1.0f};
         bool image_hovered = false;
+    };
+
+    enum class GameViewResolutionMode : uint8_t
+    {
+        Free = 0,
+        Aspect16x9,
+        HD720,
+        FullHD,
+        Custom,
+    };
+
+    struct GameViewSettings
+    {
+        GameViewResolutionMode mode = GameViewResolutionMode::Free;
+        int custom_width = 1280;
+        int custom_height = 720;
     };
 
     struct EditorPickingState
@@ -99,6 +117,7 @@ namespace Hybrid
         std::function<void()> request_reset_layout;
         std::function<bool()> request_save_scene;
         std::function<bool()> request_save_scene_as;
+        std::function<void()> request_exit;
         std::function<void(EditorConfirmDialog)> request_confirm_dialog;
         std::function<bool(const std::filesystem::path&)> reveal_in_file_browser;
     };
@@ -122,6 +141,9 @@ namespace Hybrid
         std::function<AssetID(const std::string& asset_vpath)> find_asset_by_vpath;
         std::function<std::string(entt::entity)> describe_mesh_renderer_material;
         std::function<std::string(AssetID)> describe_asset;
+        std::function<std::vector<ImportTaskSnapshot>()> list_import_tasks;
+        std::function<bool(uint64_t)> retry_import_task;
+        std::function<bool(const std::string&)> reveal_asset_source;
     };
 
     struct EditorCommandActions
@@ -145,6 +167,12 @@ namespace Hybrid
         std::function<bool()> is_pause_mode;
     };
 
+    struct EditorProjectActions
+    {
+        std::function<std::vector<AssetMetadata>()> list_scene_assets;
+        std::function<bool(const std::string&, std::string&)> set_startup_scene;
+    };
+
     struct EditorContext
     {
         DocumentService document;
@@ -154,6 +182,7 @@ namespace Hybrid
 
         EditorViewportState scene_viewport;
         EditorViewportState game_viewport;
+        GameViewSettings game_view_settings;
         EditorPickingState picking;
         EditorGizmoState gizmo;
         EditorDebugState debug;
@@ -162,6 +191,7 @@ namespace Hybrid
         EditorAssetActions asset_actions;
         EditorCommandActions commands;
         EditorModeActions mode;
+        EditorProjectActions project;
 
         void setActiveDocument(std::shared_ptr<SceneDocument> document)
         {

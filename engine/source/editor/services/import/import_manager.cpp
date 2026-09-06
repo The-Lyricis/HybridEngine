@@ -38,21 +38,28 @@ namespace Hybrid
 
     ImportResult ImportManager::importAsset(const ImportRequest& request)
     {
-        ImportResult result{};
+        return commitImport(prepareImport(request));
+    }
+
+    ImportPreparedResult ImportManager::prepareImport(const ImportRequest& request)
+    {
+        ImportPreparedResult prepared{};
+        prepared.request = request;
+        ImportResult& result = prepared.result;
         if (!m_registry)
         {
             result.message = "ImportManager: registry is null";
-            return result;
+            return prepared;
         }
         if (request.source_path.empty())
         {
             result.message = "ImportManager: source_path is empty";
-            return result;
+            return prepared;
         }
         if (!m_vfs)
         {
             result.message = "ImportManager: vfs is null";
-            return result;
+            return prepared;
         }
 
         const std::string ext = extractExtension(request.source_path);
@@ -61,30 +68,28 @@ namespace Hybrid
         {
             result.message = "ImportManager: no importer for extension/type";
             HBD_CORE_WARN("{} import_rejected source_path={} extension={} preferred_type={} reason=no_importer",
-                          kImportManagerLogTag,
-                          request.source_path,
-                          ext.empty() ? "<none>" : ext,
+                          kImportManagerLogTag, request.source_path, ext.empty() ? "<none>" : ext,
                           static_cast<int>(request.preferred_type));
-            return result;
+            return prepared;
         }
 
-        HBD_CORE_DEBUG("{} import_started source_path={} extension={} preferred_type={} importer_type={}",
-                       kImportManagerLogTag,
-                       request.source_path,
-                       ext.empty() ? "<none>" : ext,
-                       static_cast<int>(request.preferred_type),
+        HBD_CORE_DEBUG("{} import_prepare_started source_path={} extension={} importer_type={}",
+                       kImportManagerLogTag, request.source_path, ext.empty() ? "<none>" : ext,
                        static_cast<int>(importer->primaryType()));
         result = importer->importAsset(request, *m_registry, *m_vfs);
         if (!result.success)
         {
-            HBD_CORE_ERROR("{} import_failed source_path={} extension={} importer_type={} reason={}",
-                           kImportManagerLogTag,
-                           request.source_path,
-                           ext.empty() ? "<none>" : ext,
-                           static_cast<int>(importer->primaryType()),
-                           result.message);
-            return result;
+            HBD_CORE_ERROR("{} import_prepare_failed source_path={} reason={}",
+                           kImportManagerLogTag, request.source_path, result.message);
         }
+        return prepared;
+    }
+
+    ImportResult ImportManager::commitImport(ImportPreparedResult prepared)
+    {
+        ImportResult result = std::move(prepared.result);
+        if (!result.success)
+            return result;
 
         if (m_save_meta_fn)
         {
@@ -94,31 +99,21 @@ namespace Hybrid
                 {
                     result.success = false;
                     result.message = "ImportManager: save meta failed";
-                    HBD_CORE_ERROR("{} import_failed source_path={} extension={} importer_type={} reason=save_meta_failed asset_id={} asset_source_path={}",
-                                   kImportManagerLogTag,
-                                   request.source_path,
-                                   ext.empty() ? "<none>" : ext,
-                                   static_cast<int>(importer->primaryType()),
-                                   meta.id.value,
-                                   meta.source_path);
+                    HBD_CORE_ERROR("{} import_commit_failed source_path={} asset_id={} reason=save_meta_failed",
+                                   kImportManagerLogTag, prepared.request.source_path, meta.id.value);
                     return result;
                 }
             }
         }
-        else
+        else if (m_registry)
         {
-            // Fallback: in-memory registration only.
             for (const auto& meta : result.assets)
                 m_registry->registerAsset(meta);
         }
 
-        HBD_CORE_INFO("{} import_completed source_path={} extension={} importer_type={} assets={} primary_id={}",
-                      kImportManagerLogTag,
-                      request.source_path,
-                      ext.empty() ? "<none>" : ext,
-                      static_cast<int>(importer->primaryType()),
-                      result.assets.size(),
-                      result.primary_id.value);
+        HBD_CORE_INFO("{} import_completed source_path={} assets={} primary_id={}",
+                      kImportManagerLogTag, prepared.request.source_path,
+                      result.assets.size(), result.primary_id.value);
         return result;
     }
 

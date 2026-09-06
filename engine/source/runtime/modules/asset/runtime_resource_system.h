@@ -9,7 +9,7 @@
 #include "asset_loader.h"
 #include "asset_meta_store.h"
 #include "runtime/core/base/vfs/virtual_file_system.h"
-#include "runtime/modules/render/public/texture.h"
+#include "runtime/core/job/job_system.h"
 #include "material.h"
 #include <runtime/modules/project/project_context.h>
 
@@ -19,8 +19,12 @@ namespace Hybrid
     class RuntimeResourceSystem
     {
     public:
-        void initialize(const ProjectContext& ctx,
-            std::shared_ptr<IVirtualFileSystem> vfs); // Mount asset root, load meta index, init manager/loaders/defaults.
+        ~RuntimeResourceSystem() { shutdown(); }
+        bool initialize(const ProjectContext& ctx,
+                        std::shared_ptr<IVirtualFileSystem> vfs,
+                        std::shared_ptr<JobSystem> job_system = nullptr);
+        void shutdown();
+        bool isInitialized() const { return m_initialized; }
 
         std::shared_ptr<IVirtualFileSystem> getVFS() const { return m_vfs; }
         std::shared_ptr<AssetRegistry> getRegistry() const { return m_registry; }
@@ -33,7 +37,6 @@ namespace Hybrid
         void registerDefaultLoaders(); // Register runtime loaders (texture/mesh/material).
         
         // Default runtime fallback assets.
-        void createDefaultTexture();
         void createDefaultCubemap();
         void createHybridDefaultMaterial();
         void createBuiltinMesh(BuiltinMesh mesh);
@@ -44,11 +47,11 @@ namespace Hybrid
         std::shared_ptr<AssetRegistry>      m_registry; // Asset metadata index.
         std::shared_ptr<AssetManager>       m_manager;  // Runtime load/cache/state machine.
         std::unique_ptr<AssetMetaStore>     m_metaStore; // Meta file read path at startup.
-        std::shared_ptr<Texture>            m_defaultTexture; // 1x1 white fallback texture.
         std::shared_ptr<Material>           m_hybridDefaultMaterial; // Fallback material.
         AssetID                             m_builtinCubeMeshId{}; // Built-in mesh ids, starting with cube.
         AssetID                             m_builtinDefaultSkyboxCubemapId{};
         ProjectContext m_project; // Project context for path resolution and info.
+        bool m_initialized = false;
     };
 } // namespace Hybrid
 

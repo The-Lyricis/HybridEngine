@@ -15,6 +15,7 @@ namespace Hybrid
         ExitPlayMode,
         TogglePauseMode,
         ResetLayout,
+        Exit,
     };
 
     struct EditorCommandContext

@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <string>
 
 #include <entt/entity/fwd.hpp>
 
@@ -40,6 +41,7 @@ namespace Hybrid
         void onImGuiRender() override;     // Draw panels and viewport.
 
         void setModeCallbacks(EditorModeCallbacks callbacks);
+        void requestExit();
 
     private:
         void syncContextDocumentState();
@@ -51,11 +53,13 @@ namespace Hybrid
         bool canExecuteCommand(EditorCommandId id) const;
         bool requestOpenProject();
         bool openProjectInNewInstance(const std::filesystem::path& requested_project_path);
+        bool requestDocumentTransition(std::string action, std::function<bool()> transition);
         EditorDocumentActions buildDocumentActions();
         EditorSceneActions buildSceneActions();
         EditorAssetActions buildAssetActions();
         EditorCommandActions buildCommandActions();
         EditorModeActions buildModeActions();
+        EditorProjectActions buildProjectActions();
         EditorContextActionBindings buildContextActionBindings();
         AssetID findAssetByVPath(const std::string& asset_vpath) const;
         std::string describeMeshRendererMaterial(entt::entity entity_handle) const;
@@ -77,6 +81,7 @@ namespace Hybrid
         CommandHistory m_command_history;
         std::shared_ptr<SceneDocument> m_active_scene_view_document;
         bool m_initialized = false;        // Guard against partial startup/shutdown.
+        bool m_document_transition_pending = false;
         EditorModeCallbacks m_mode_callbacks{};
     };
 } // namespace Hybrid

@@ -20,6 +20,8 @@ namespace Hybrid
         void registerImporter(const std::shared_ptr<IAssetImporter>& importer);
         bool canImport(const std::string& source_path, AssetType preferred_type = AssetType::Unknown) const;
         ImportResult importAsset(const ImportRequest& request);
+        ImportPreparedResult prepareImport(const ImportRequest& request);
+        ImportResult commitImport(ImportPreparedResult prepared);
 
     private:
         static std::string extractExtension(const std::string& logical_path);

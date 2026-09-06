@@ -3,6 +3,13 @@
 
 ### v0.0.6 Current
 
+- Added a unified dirty-document exit flow for File/OS close, atomic startup-scene Project Settings, and versioned Game View resolution preferences.
+- Added a thread-safe bounded log sink with an Editor Console, plus an observable Tasks panel for coalesced background imports and retry.
+- Replaced fixed editor framebuffers with stable `RenderViewId` target pooling and direct `RenderFrameResult` consumption.
+- Split the monolithic runtime into Core, Runtime, Render, and Engine targets; added Windows-only Editor options and a cross-platform Player.
+- Added explicit, idempotent lifecycle teardown, unique layer ownership, single-pass input handling, a fixed-step runtime clock, and editor-owned play sessions.
+- Added a drainable worker-pool JobSystem and generation-safe asynchronous asset loading with value-based registry queries.
+- Replaced the editor-specific render entry with multi-view frame requests/results, introduced `.hyproj` v2 startup scenes, and added headless CTest coverage.
 - Rendering work continued toward a clearer pass / pipeline split to support later outline, shadow, and post-process expansion.
 - Initial `ShaderLibrary` work was added to centralize shader management.
 - The editor gained a new scene creation flow and a hierarchy entry for point light creation.

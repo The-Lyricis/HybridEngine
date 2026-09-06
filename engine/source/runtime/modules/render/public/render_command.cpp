@@ -5,8 +5,14 @@ namespace Hybrid {
     std::unique_ptr<RendererAPI> RenderCommand::s_API;
 
     void RenderCommand::initialize() {
+        if (s_API)
+            return;
         s_API = RendererAPI::Create();
         s_API->init();
+    }
+
+    void RenderCommand::shutdown() {
+        s_API.reset();
     }
 
     void RenderCommand::setViewport(int x, int y, int width, int height) {

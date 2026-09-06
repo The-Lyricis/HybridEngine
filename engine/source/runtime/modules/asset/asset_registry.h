@@ -2,6 +2,8 @@
 
 #include <filesystem>
 #include <random>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -14,7 +16,7 @@ namespace Hybrid
     {
     public:
         void setRoot(const std::filesystem::path &root);
-        const std::filesystem::path &getRoot() const;
+        std::filesystem::path getRoot() const;
 
         // 生成唯一 AssetID：随机 64-bit，并与当前表去重
         AssetID generateUniqueID();
@@ -22,9 +24,9 @@ namespace Hybrid
         void registerAsset(const AssetMetadata &meta);
         void unregisterAsset(AssetID id);
 
-        const AssetMetadata *find(AssetID id) const;
-        const AssetMetadata *findByPath(const std::string &path) const;
-        const AssetMetadata *findBySubasset(AssetID parent_id, const std::string& subasset_key) const;
+        std::optional<AssetMetadata> find(AssetID id) const;
+        std::optional<AssetMetadata> findByPath(const std::string &path) const;
+        std::optional<AssetMetadata> findBySubasset(AssetID parent_id, const std::string& subasset_key) const;
         bool exists(AssetID id) const;
         std::vector<AssetMetadata> getAllAssets() const;
 
@@ -39,5 +41,6 @@ namespace Hybrid
 
         // 随机数发生器
         std::mt19937_64 m_rng{std::random_device{}()};
+        mutable std::mutex m_mutex;
     };
 } // namespace Hybrid

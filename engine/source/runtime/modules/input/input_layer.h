@@ -1,21 +1,19 @@
 #pragma once
-#include "runtime/core/event/layer.h"
+#include "runtime/core/event/event.h"
 #include "runtime/core/event/input_event.h"
 #include "runtime/modules/input/input_state.h"
 
 namespace Hybrid
 {
-    class InputLayer : public Layer
+    class InputLayer
     {
     public:
-        InputLayer() : Layer("InputLayer") {}
-
-        void onEndFrame() override
+        void onEndFrame()
         {
             m_state.newFrame();
         }
 
-        void onEvent(Event& e) override
+        void onEvent(Event& e)
         {
             EventDispatcher dispatcher(e);
             dispatcher.dispatch<KeyPressedEvent>([this](KeyPressedEvent& ev) {

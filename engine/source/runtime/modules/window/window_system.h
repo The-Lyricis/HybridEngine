@@ -11,9 +11,10 @@ namespace Hybrid {
         WindowSystem() = default;
         ~WindowSystem() { cleanup(); }
 
-        void initialize(int width, int height, const char* title);
+        void initialize(int width, int height, const char* title, bool visible = true);
         void pollEvents() { glfwPollEvents(); }
-        bool shouldClose() { return glfwWindowShouldClose(m_window); }
+        bool shouldClose() const { return m_window && glfwWindowShouldClose(m_window); }
+        void setShouldClose(bool close) { if (m_window) glfwSetWindowShouldClose(m_window, close ? GLFW_TRUE : GLFW_FALSE); }
         void cleanup();
 
         GLFWwindow* getNativeWindow() { return m_window; }
