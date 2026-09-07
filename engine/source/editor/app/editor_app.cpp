@@ -8,7 +8,11 @@
 #include "editor/core/engine_services.h"
 #include "editor/framework/layers/editor_layer.h"
 #include "editor/framework/layers/imgui_layer.h"
+#if defined(_WIN32)
 #include "editor/platform/windows/editor_platform_services_win32.h"
+#elif defined(__APPLE__)
+#include "editor/platform/macos/editor_platform_services_macos.h"
+#endif
 #include "editor/services/asset/editor_resource_system.h"
 #include "editor/services/project/project_history.h"
 #include "editor/services/project/project_instance_lock.h"
@@ -160,7 +164,8 @@ namespace Hybrid
             }
 
             out_decision.source = ProjectLaunchSource::FallbackProject;
-            const ProjectCreateDesc bootstrap_desc = MakeDebugBootstrapProjectDesc(fs::current_path());
+            const ProjectCreateDesc bootstrap_desc =
+                MakeDebugBootstrapProjectDesc(fs::path(HYBRID_ROOT_DIR));
             out_decision.requested_path = bootstrap_desc.project_root;
             if (!ProjectCreator::CreateProject(bootstrap_desc, out_decision.resolved_project_file, out_error))
                 return false;
@@ -172,7 +177,13 @@ namespace Hybrid
     int EditorApp::run(int argc, char** argv)
     {
         constexpr const char* kEditorAppLogTag = "[EditorApp]";
+#if defined(_WIN32)
         auto platform_services = std::make_unique<EditorPlatformServicesWin32>();
+#elif defined(__APPLE__)
+        auto platform_services = std::make_unique<EditorPlatformServicesMacOS>();
+#else
+#error HybridEditor has no platform services implementation for this platform
+#endif
         const EditorLaunchRequest launch_request = parseLaunchRequest(argc, argv);
         ProjectLaunchDecision launch_decision{};
         std::string project_error;
@@ -296,4 +307,3 @@ namespace Hybrid
         return 0;
     }
 } // namespace Hybrid
-

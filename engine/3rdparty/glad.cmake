@@ -13,4 +13,7 @@ target_include_directories(glad PUBLIC
 
 if(WIN32)
     target_link_libraries(glad PUBLIC opengl32)
+elseif(APPLE)
+    find_library(HYBRID_OPENGL_FRAMEWORK OpenGL REQUIRED)
+    target_link_libraries(glad PUBLIC "${HYBRID_OPENGL_FRAMEWORK}")
 endif()

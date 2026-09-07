@@ -9,6 +9,11 @@
 
 namespace Hybrid
 {
+	void LogSystem::initialize()
+	{
+		initialize(Config{});
+	}
+
 	namespace
 	{
 		class BufferedLogSink final : public spdlog::sinks::base_sink<std::mutex>

@@ -130,7 +130,7 @@ namespace Hybrid
         {
             auto* value = static_cast<std::string*>(value_ptr);
             char buffer[256]{};
-            strncpy_s(buffer, value->c_str(), sizeof(buffer) - 1);
+            std::strncpy(buffer, value->c_str(), sizeof(buffer) - 1);
             if (ImGui::InputText(property.label(), buffer, sizeof(buffer)))
             {
                 *value = buffer;

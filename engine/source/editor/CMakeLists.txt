@@ -20,6 +20,23 @@ file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx"
 )
 
+if(APPLE)
+    file(GLOB_RECURSE EDITOR_OBJCXX_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/*.mm"
+    )
+    list(APPEND EDITOR_SOURCES ${EDITOR_OBJCXX_SOURCES})
+endif()
+
+# Platform implementations are mutually exclusive. Keeping them out of the
+# source list also makes accidental platform-header regressions fail early.
+if(WIN32)
+    list(FILTER EDITOR_HEADERS EXCLUDE REGEX "/platform/macos/")
+    list(FILTER EDITOR_SOURCES EXCLUDE REGEX "/platform/macos/")
+elseif(APPLE)
+    list(FILTER EDITOR_HEADERS EXCLUDE REGEX "/platform/windows/")
+    list(FILTER EDITOR_SOURCES EXCLUDE REGEX "/platform/windows/")
+endif()
+
 # ------------------------------------------------------------
 # Piccolo 风格：显式把 .rc 资源编进可执行文件，给 exe 设定图标
 # ------------------------------------------------------------
@@ -65,6 +82,17 @@ target_link_libraries(${TARGET_NAME} PRIVATE
 
 if(WIN32)
     target_link_libraries(${TARGET_NAME} PRIVATE Ole32 Shell32)
+elseif(APPLE)
+    find_library(HYBRID_COCOA_FRAMEWORK Cocoa REQUIRED)
+    target_link_libraries(${TARGET_NAME} PRIVATE "${HYBRID_COCOA_FRAMEWORK}")
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        MACOSX_BUNDLE TRUE
+        RUNTIME_OUTPUT_DIRECTORY "${BINARY_ROOT_DIR}"
+        MACOSX_BUNDLE_BUNDLE_NAME "Hybrid Editor"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.hybridengine.editor"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+    )
 endif()
 
 # 关键更新：include 根目录改为 editor 目录本身（包含 panels 子目录）
@@ -78,12 +106,14 @@ target_include_directories(${TARGET_NAME} PRIVATE
 # -------------------------
 
 # 1) bin 目录 + 拷贝输出
-add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
-            "${BINARY_ROOT_DIR}"
-)
+if(NOT APPLE)
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${BINARY_ROOT_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+                "${BINARY_ROOT_DIR}"
+    )
+endif()
 
 # 2) 拷贝 editor resources
 if(EXISTS "${EDITOR_RESOURCES_SOURCE_DIR}")

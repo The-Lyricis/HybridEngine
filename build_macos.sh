@@ -1,13 +1,12 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 if ! command -v cmake >/dev/null 2>&1; then
     echo "Error: cmake not found. Please install CMake first."
     exit 1
 fi
 
-if test \( $# -ne 1 \);
-then
+if [[ $# -ne 1 ]]; then
     echo "Usage: ./build_macos.sh config"
     echo ""
     echo "config:"
@@ -18,9 +17,9 @@ then
 fi
 
 
-if test \( \( -n "$1" \) -a \( "$1" = "debug" \) \);then
+if [[ "$1" == "debug" ]]; then
     CONFIG="Debug"
-elif test \( \( -n "$1" \) -a \( "$1" = "release" \) \);then
+elif [[ "$1" == "release" ]]; then
     CONFIG="Release"
 else
     echo "The config \"$1\" is not supported!"
@@ -32,6 +31,13 @@ else
     exit 1
 fi
 
-cmake -S . -B build -G "Xcode"
+BUILD_DIR="build/macos-$1"
 
-cmake --build build --config "${CONFIG}"
+cmake -S . -B "${BUILD_DIR}" \
+    -DCMAKE_BUILD_TYPE="${CONFIG}" \
+    -DHYBRID_BUILD_EDITOR=ON \
+    -DHYBRID_BUILD_PLAYER=ON \
+    -DBUILD_TESTING=ON
+
+cmake --build "${BUILD_DIR}" --config "${CONFIG}" --parallel
+ctest --test-dir "${BUILD_DIR}" --build-config "${CONFIG}" --output-on-failure

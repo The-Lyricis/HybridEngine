@@ -18,6 +18,14 @@ namespace Hybrid
         }
 
         glfwWindowHint(GLFW_VISIBLE, visible ? GLFW_TRUE : GLFW_FALSE);
+#ifdef __APPLE__
+        // macOS exposes at most an OpenGL 4.1 core profile. Forward
+        // compatibility is required by Apple's context implementation.
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+#endif
         m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
         glfwDefaultWindowHints();
         if (!m_window)

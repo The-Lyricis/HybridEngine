@@ -2,7 +2,16 @@ cmake_minimum_required(VERSION 3.20)
 
 project(Hybrid VERSION 0.1.0)
 
-option(HYBRID_BUILD_EDITOR "Build the Windows editor" ${WIN32})
+if(APPLE)
+  enable_language(OBJCXX)
+endif()
+
+if(WIN32 OR APPLE)
+  set(HYBRID_BUILD_EDITOR_DEFAULT ON)
+else()
+  set(HYBRID_BUILD_EDITOR_DEFAULT OFF)
+endif()
+option(HYBRID_BUILD_EDITOR "Build the desktop editor" ${HYBRID_BUILD_EDITOR_DEFAULT})
 option(HYBRID_BUILD_PLAYER "Build the standalone player" ON)
 include(CTest)
 

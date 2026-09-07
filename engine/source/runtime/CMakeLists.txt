@@ -51,3 +51,5 @@ target_compile_definitions(HybridRuntime PRIVATE
 target_compile_definitions(HybridRender PRIVATE
     HYBRID_PROJECT_ROOT_DIR="${HYBRID_PROJECT_ROOT_DIR_CMAKE}"
     HYBRID_BINARY_ROOT_DIR="${HYBRID_BINARY_ROOT_DIR_CMAKE}")
+target_compile_definitions(HybridEngine PRIVATE
+    HYBRID_BINARY_ROOT_DIR="${HYBRID_BINARY_ROOT_DIR_CMAKE}")

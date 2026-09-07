@@ -50,7 +50,12 @@ namespace Hybrid
     {
         if (m_Initialized)
             return true;
-        LogSystem::initialize();
+
+        namespace fs = std::filesystem;
+        const std::string log_path = (fs::path(HYBRID_BINARY_ROOT_DIR) / "hybrid_engine.log").string();
+        LogSystem::Config log_config{};
+        log_config.logfile = log_path.c_str();
+        LogSystem::initialize(log_config);
         m_Running = true;
         m_Minimized = false;
         m_Headless = config.headless;
@@ -58,7 +63,6 @@ namespace Hybrid
         m_FixedUpdateEnabled = false;
         m_SceneUpdateEnabled = true;
 
-        namespace fs = std::filesystem;
         const fs::path cwd = fs::current_path();
         fs::path hyproj_path;
         if (config.project_path.empty())

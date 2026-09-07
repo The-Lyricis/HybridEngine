@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <cstdint>
 #include <string>
 
 namespace Hybrid
@@ -22,7 +23,7 @@ namespace Hybrid
         const std::filesystem::path& projectFile() const;
 
     private:
-        void* m_native_handle = nullptr;
+        std::intptr_t m_native_handle = -1;
         std::filesystem::path m_project_file;
     };
 } // namespace Hybrid

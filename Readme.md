@@ -13,7 +13,7 @@
 
 ## Overview
 
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6)](#requirements)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078D6)](#requirements)
 [![Renderer](https://img.shields.io/badge/Renderer-OpenGL%204.5-5586A4)](#features--current-status)
 [![Editor](https://img.shields.io/badge/Editor-ImGui%20Docking-FF6F61)](#features--current-status)
 [![Assets](https://img.shields.io/badge/Assets-OBJ%20%2F%20Meta%20%2F%20Cooked-6A9C89)](#features--current-status)
@@ -32,11 +32,11 @@ Current development is mainly focused on:
 
 | Platform | Toolchain |
 | --- | --- |
-| Windows 10 / 11, Linux runtime | Visual Studio 2022 / GCC / Clang + CMake 3.20+ |
+| Windows 10 / 11, macOS 12+, Linux runtime | Visual Studio 2022 / Apple Clang / GCC / Clang + CMake 3.20+ |
 
 | Rendering | Main Entry |
 | --- | --- |
-| OpenGL 4.5 | `bin\HybridEditor.exe` |
+| OpenGL 4.5 on Windows / 4.1 on macOS | `bin\HybridEditor.exe` / `bin/HybridEditor.app` |
 
 | Current Focus | Dev Log |
 | --- | --- |
@@ -46,11 +46,11 @@ Current development is mainly focused on:
 
 Current primary development environment:
 
-- Windows 10 or Windows 11
+- Windows 10 / 11, or macOS 12 and later
 - CMake 3.20 or later
 - A compiler with C++17 support
-- Visual Studio 2022 / MSVC is the recommended toolchain
-- A GPU and driver environment capable of running OpenGL 4.5
+- Visual Studio 2022 / MSVC on Windows; Apple Clang on macOS
+- OpenGL 4.5 support on Windows; macOS uses the system OpenGL 4.1 Core Profile
 
 ## Build and Run
 
@@ -74,10 +74,23 @@ Or use the Windows helper script:
 build_windows.bat
 ```
 
+On macOS (with Xcode Command Line Tools and CMake installed):
+
+```bash
+./build_macos.sh debug
+# or: ./build_macos.sh release
+```
+
 Run the editor:
 
 ```bat
 bin\HybridEditor.exe
+```
+
+On macOS:
+
+```bash
+open bin/HybridEditor.app
 ```
 
 Run a project with the standalone player:
@@ -87,7 +100,7 @@ bin\HybridPlayer.exe --project F:\Projects\MyGame\MyGame.hyproj --max-frames 120
 bin\HybridPlayer.exe --project F:\Projects\MyGame\MyGame.hyproj --headless --max-frames 10
 ```
 
-CMake options are `HYBRID_BUILD_EDITOR` (Windows-only), `HYBRID_BUILD_PLAYER`, and `BUILD_TESTING`.
+CMake options are `HYBRID_BUILD_EDITOR` (Windows/macOS), `HYBRID_BUILD_PLAYER`, and `BUILD_TESTING`.
 
 Runtime notes:
 

@@ -278,11 +278,14 @@ namespace Hybrid {
         if (src_index >= m_ColorAttachments.size() || dst_index >= dst_gl->m_ColorAttachments.size())
             return;
 
-        glCopyImageSubData(m_ColorAttachments[src_index], GL_TEXTURE_2D, 0, 0, 0, 0,
-                           dst_gl->m_ColorAttachments[dst_index], GL_TEXTURE_2D, 0, 0, 0, 0,
-                           static_cast<GLsizei>(std::min(m_Spec.width, dst_gl->m_Spec.width)),
-                           static_cast<GLsizei>(std::min(m_Spec.height, dst_gl->m_Spec.height)),
-                           1);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_FBO);
+        glReadBuffer(GL_COLOR_ATTACHMENT0 + src_index);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst_gl->m_FBO);
+        glDrawBuffer(GL_COLOR_ATTACHMENT0 + dst_index);
+        const GLsizei width = static_cast<GLsizei>(std::min(m_Spec.width, dst_gl->m_Spec.width));
+        const GLsizei height = static_cast<GLsizei>(std::min(m_Spec.height, dst_gl->m_Spec.height));
+        glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
     void GLFramebuffer::copyDepthAttachmentTo(const Framebuffer& dst) const
@@ -293,11 +296,12 @@ namespace Hybrid {
         if (!m_DepthAttachment || !dst_gl->m_DepthAttachment)
             return;
 
-        glCopyImageSubData(m_DepthAttachment, GL_TEXTURE_2D, 0, 0, 0, 0,
-                           dst_gl->m_DepthAttachment, GL_TEXTURE_2D, 0, 0, 0, 0,
-                           static_cast<GLsizei>(std::min(m_Spec.width, dst_gl->m_Spec.width)),
-                           static_cast<GLsizei>(std::min(m_Spec.height, dst_gl->m_Spec.height)),
-                           1);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_FBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst_gl->m_FBO);
+        const GLsizei width = static_cast<GLsizei>(std::min(m_Spec.width, dst_gl->m_Spec.width));
+        const GLsizei height = static_cast<GLsizei>(std::min(m_Spec.height, dst_gl->m_Spec.height));
+        glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
     void GLFramebuffer::bindColorAttachmentTexture(uint32_t index, uint32_t slot) const

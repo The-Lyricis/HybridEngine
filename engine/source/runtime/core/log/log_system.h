@@ -45,7 +45,8 @@ namespace Hybrid
 			const char* file_pattern = "[%Y-%m-%d %T.%e] [%l] [tid=%t] %n: %v";
 		};
 
-		static void initialize(const Config& cfg = {});
+		static void initialize();
+		static void initialize(const Config& cfg);
 		static void shutdown();
 
 		static std::shared_ptr<spdlog::logger>& core();
@@ -59,5 +60,4 @@ namespace Hybrid
 
 	};
 }
-
 

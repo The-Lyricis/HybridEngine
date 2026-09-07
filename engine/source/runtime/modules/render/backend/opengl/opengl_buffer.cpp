@@ -29,13 +29,12 @@ namespace Hybrid {
     GLIndexBuffer::GLIndexBuffer(const uint32_t* indices, uint32_t count)
         : m_Count(count)
     {
-        glCreateBuffers(1, &m_RendererID);
-        glNamedBufferData(
-            m_RendererID,
-            static_cast<GLsizeiptr>(count * sizeof(uint32_t)),
-            indices,
-            GL_STATIC_DRAW
-        );
+        glGenBuffers(1, &m_RendererID);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                     static_cast<GLsizeiptr>(count * sizeof(uint32_t)),
+                     indices,
+                     GL_STATIC_DRAW);
     }
 
     GLIndexBuffer::~GLIndexBuffer() {
@@ -53,8 +52,10 @@ namespace Hybrid {
     GLUniformBuffer::GLUniformBuffer(uint32_t size)
         : m_Size(size)
     {
-        glCreateBuffers(1, &m_RendererID);
-        glNamedBufferData(m_RendererID, static_cast<GLsizeiptr>(size), nullptr, GL_DYNAMIC_DRAW);
+        glGenBuffers(1, &m_RendererID);
+        glBindBuffer(GL_UNIFORM_BUFFER, m_RendererID);
+        glBufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(size), nullptr, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
     }
 
     GLUniformBuffer::~GLUniformBuffer() {
@@ -62,10 +63,12 @@ namespace Hybrid {
     }
 
     void GLUniformBuffer::setData(const void* data, uint32_t size, uint32_t offset) {
-        glNamedBufferSubData(m_RendererID,
-                             static_cast<GLintptr>(offset),
-                             static_cast<GLsizeiptr>(size),
-                             data);
+        glBindBuffer(GL_UNIFORM_BUFFER, m_RendererID);
+        glBufferSubData(GL_UNIFORM_BUFFER,
+                        static_cast<GLintptr>(offset),
+                        static_cast<GLsizeiptr>(size),
+                        data);
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
     }
 
     void GLUniformBuffer::bindBase(uint32_t binding) const {

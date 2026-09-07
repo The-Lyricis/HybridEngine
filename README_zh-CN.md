@@ -13,7 +13,7 @@
 
 ## 项目概览
 
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6)](#环境要求)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078D6)](#环境要求)
 [![Renderer](https://img.shields.io/badge/Renderer-OpenGL%204.5-5586A4)](#功能与当前状态)
 [![Editor](https://img.shields.io/badge/Editor-ImGui%20Docking-FF6F61)](#功能与当前状态)
 [![Assets](https://img.shields.io/badge/Assets-OBJ%20%2F%20Meta%20%2F%20Cooked-6A9C89)](#功能与当前状态)
@@ -29,11 +29,11 @@ Hybrid Engine 是一个以学习、研究和实践现代引擎架构为目标的
 
 | 平台 | 工具链 |
 | --- | --- |
-| Windows 10 / 11、Linux Runtime | Visual Studio 2022 / GCC / Clang + CMake 3.20+ |
+| Windows 10 / 11、macOS 12+、Linux Runtime | Visual Studio 2022 / Apple Clang / GCC / Clang + CMake 3.20+ |
 
 | 渲染接口 | 主入口 |
 | --- | --- |
-| OpenGL 4.5 | `bin\HybridEditor.exe` |
+| Windows OpenGL 4.5 / macOS OpenGL 4.1 | `bin\HybridEditor.exe` / `bin/HybridEditor.app` |
 
 | 当前重点 | 开发记录 |
 | --- | --- |
@@ -43,15 +43,15 @@ Hybrid Engine 是一个以学习、研究和实践现代引擎架构为目标的
 
 当前主目标环境如下：
 
-- Windows 10 或 Windows 11
+- Windows 10 / 11，或 macOS 12 及以上版本
 - CMake 3.20 及以上
 - C++17 环境
-- 编译器推荐使用 Visual Studio 2022 / MSVC
-- 能运行 OpenGL 4.5 的显卡与驱动环境
+- Windows 推荐 Visual Studio 2022 / MSVC；macOS 使用 Apple Clang
+- Windows 需要支持 OpenGL 4.5；macOS 使用系统提供的 OpenGL 4.1 Core Profile
 
 补充说明：
 
-- 仓库中已经包含部分跨平台痕迹，例如 macOS 构建脚本和 CI 工作流，但当前编辑器整体仍以 Windows 为主。
+- 编辑器现支持 Windows 与 macOS；Linux 当前仅构建 Runtime / Player。
 - 依赖库位于 `engine/3rdparty`，首次配置工程前需要先初始化 submodule。
 
 ## 构建与运行
@@ -76,10 +76,23 @@ ctest --test-dir build -C Release --output-on-failure
 build_windows.bat
 ```
 
+macOS 可使用辅助脚本（需先安装 Xcode Command Line Tools 与 CMake）：
+
+```bash
+./build_macos.sh debug
+# 或：./build_macos.sh release
+```
+
 运行编辑器：
 
 ```bat
 bin\HybridEditor.exe
+```
+
+macOS：
+
+```bash
+open bin/HybridEditor.app
 ```
 
 使用独立 Player 运行项目：
@@ -89,7 +102,7 @@ bin\HybridPlayer.exe --project F:\Projects\MyGame\MyGame.hyproj --max-frames 120
 bin\HybridPlayer.exe --project F:\Projects\MyGame\MyGame.hyproj --headless --max-frames 10
 ```
 
-CMake 开关为 `HYBRID_BUILD_EDITOR`（仅 Windows）、`HYBRID_BUILD_PLAYER` 与 `BUILD_TESTING`。
+CMake 开关为 `HYBRID_BUILD_EDITOR`（Windows/macOS）、`HYBRID_BUILD_PLAYER` 与 `BUILD_TESTING`。
 
 运行说明：
 
