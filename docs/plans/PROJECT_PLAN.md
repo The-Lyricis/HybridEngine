@@ -1,5 +1,7 @@
 ﻿# Hybrid Engine 开发计划
 
+> 注意：本文保留早期项目规划。当前跨平台平台层、RHI、RenderGraph、Metal/Vulkan 与 Shader 路线以 [Hybrid 跨平台渲染开发主计划](CROSS_PLATFORM_RENDERING_PLAN_zh-CN.md) 为准；编辑器产品与 GUI 演进以 [Hybrid Editor 演进计划](EDITOR_EVOLUTION_PLAN_zh-CN.md) 为准。
+
 ## 技术选择
 
 | 组件     | 选择                   | 说明              |
