@@ -1,19 +1,22 @@
 #pragma once
 
-#include <memory>
-
 #include "runtime/modules/render/runtime/pipeline/render_context.h"
+#include "runtime/modules/render/rhi/rhi_handles.h"
 
 namespace Hybrid
 {
-    class Framebuffer;
-    class VertexArray;
-    class VertexBuffer;
-    class IndexBuffer;
+    class IRenderDevice;
+    class ShaderLibrary;
 
     class PostProcessPass
     {
     public:
+        ~PostProcessPass();
+
+        PostProcessPass() = default;
+        PostProcessPass(const PostProcessPass&) = delete;
+        PostProcessPass& operator=(const PostProcessPass&) = delete;
+
         struct Settings
         {
             bool enable_tone_mapping = false;
@@ -23,25 +26,25 @@ namespace Hybrid
         };
 
         void execute(RenderContext& context);
+        void shutdown();
         void setSettings(const Settings& settings) { m_Settings = settings; }
         const Settings& getSettings() const { return m_Settings; }
 
     private:
-        struct FullscreenQuadGPU
-        {
-            std::shared_ptr<VertexArray> vao;
-            std::shared_ptr<VertexBuffer> vb;
-            std::shared_ptr<IndexBuffer> ib;
-            uint32_t index_count = 0;
-        };
-
-        void ensureInputFramebuffer(uint32_t width, uint32_t height);
-        FullscreenQuadGPU* getOrCreateFullscreenQuad();
+        bool ensurePipeline(IRenderDevice& device, ShaderLibrary& shaders);
+        bool ensureStaticResources(IRenderDevice& device);
+        void releasePipeline();
 
     private:
-        std::shared_ptr<Framebuffer> m_InputFramebuffer;
-        FullscreenQuadGPU m_FullscreenQuad;
+        IRenderDevice* m_Device = nullptr;
+        BufferHandle m_VertexBuffer;
+        BufferHandle m_IndexBuffer;
+        BufferHandle m_SettingsBuffer;
+        SamplerHandle m_Sampler;
+        ShaderHandle m_VertexShader;
+        ShaderHandle m_FragmentShader;
+        PipelineHandle m_Pipeline;
         Settings m_Settings{};
-        bool m_HasFullscreenQuad = false;
+        uint64_t m_ShaderRevision = 0;
     };
 } // namespace Hybrid

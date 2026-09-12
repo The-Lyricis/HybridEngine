@@ -2,6 +2,7 @@
 
 #include "editor/core/context/editor_context.h"
 #include "editor/core/editor_drag_drop.h"
+#include "editor/core/editor_input.h"
 
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/scene/components.h"
@@ -113,7 +114,7 @@ namespace Hybrid
         }
 
         const ImGuiIO& io = ImGui::GetIO();
-        const bool ctrl = io.KeyCtrl;
+        const bool ctrl = EditorInput::selectionToggleModifier(io);
         const bool shift = io.KeyShift;
 
         if (shift && ctx.selection.rangeAnchor() != entt::null && !m_visibleOrder.empty())
@@ -203,7 +204,8 @@ namespace Hybrid
 
     void HierarchyPanel::drawEntityContextMenu(EditorContext& ctx, entt::registry& registry, entt::entity entity)
     {
-        if (!ImGui::BeginPopupContextItem())
+        const std::string popup_id = "##HierarchyEntityContext_" + std::to_string(entityHandleValue(entity));
+        if (!EditorInput::beginItemContextPopup(popup_id.c_str()))
             return;
 
         drawCommonContextMenu(ctx, registry, entity);
@@ -582,5 +584,4 @@ namespace Hybrid
         ImGui::End();
     }
 } // namespace Hybrid
-
 

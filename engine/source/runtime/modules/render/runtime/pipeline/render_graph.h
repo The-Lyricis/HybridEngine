@@ -48,7 +48,9 @@ namespace Hybrid
 
     struct RenderGraphResourceDesc
     {
-        const char* name = "";
+        // Built-in resources retain their semantic id. Custom resources use
+        // RenderResourceId::Count and are addressed solely by name.
+        std::string name;
         RenderResourceId id = RenderResourceId::SceneColor;
         RenderGraphResourceKind kind = RenderGraphResourceKind::Texture2D;
         RenderGraphResourceFormat format = RenderGraphResourceFormat::RGBA8;
@@ -57,13 +59,14 @@ namespace Hybrid
 
     struct RenderResourceUsage
     {
-        RenderResourceId resource;
-        RenderResourceAccess access;
+        RenderResourceId resource = RenderResourceId::Count;
+        RenderResourceAccess access = RenderResourceAccess::Read;
+        std::string resource_name;
     };
 
     struct RenderGraphPassDesc
     {
-        const char* name = "";
+        std::string name;
         RenderPassType type = RenderPassType::Scene;
         RenderFlags required_flags = RenderFlags::None;
         bool editor_only = false;
@@ -80,7 +83,7 @@ namespace Hybrid
     {
         RenderGraphIssueSeverity severity = RenderGraphIssueSeverity::Warning;
         std::size_t pass_index = 0;
-        const char* pass_name = "";
+        std::string pass_name;
         std::string message;
     };
 
@@ -120,6 +123,9 @@ namespace Hybrid
         RenderGraphPassBuilder& read(RenderResourceId resource);
         RenderGraphPassBuilder& write(RenderResourceId resource);
         RenderGraphPassBuilder& readWrite(RenderResourceId resource);
+        RenderGraphPassBuilder& read(const std::string& resource_name);
+        RenderGraphPassBuilder& write(const std::string& resource_name);
+        RenderGraphPassBuilder& readWrite(const std::string& resource_name);
 
     private:
         RenderGraphPassDesc& m_pass;
@@ -129,6 +135,10 @@ namespace Hybrid
     {
     public:
         RenderGraphBuilder& addResource(const RenderGraphResourceDesc& resource);
+        RenderGraphBuilder& addTextureResource(const std::string& name,
+                                               RenderGraphResourceFormat format,
+                                               RenderGraphResourceLifetime lifetime,
+                                               RenderGraphResourceKind kind = RenderGraphResourceKind::Texture2D);
         RenderGraphPassBuilder addPass(const char* name,
                                        RenderPassType type,
                                        RenderFlags required_flags,

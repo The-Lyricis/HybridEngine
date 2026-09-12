@@ -1,11 +1,12 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
-struct GLFWwindow;
+#include "runtime/core/platform/window.h"
 
 namespace Hybrid
 {
@@ -48,15 +49,21 @@ namespace Hybrid
         virtual bool launchEditorProcess(const std::filesystem::path& editor_executable,
                                          const std::vector<std::string>& args) const = 0;
 
+        // Gives each platform a narrow hook for application-level integration
+        // that must happen after the native window host is available.
+        virtual void configureApplicationAppearance() {}
+
         virtual std::optional<std::filesystem::path>
-        showSaveFileDialog(GLFWwindow* parent, const SaveFileDialogDesc& desc) = 0;
+        showSaveFileDialog(NativeWindowHandle parent, const SaveFileDialogDesc& desc) = 0;
 
         virtual std::vector<std::filesystem::path>
-        showOpenFileDialog(GLFWwindow* parent, const OpenFileDialogDesc& desc) = 0;
+        showOpenFileDialog(NativeWindowHandle parent, const OpenFileDialogDesc& desc) = 0;
 
         virtual std::optional<std::filesystem::path>
-        showSelectFolderDialog(GLFWwindow* parent, const SelectFolderDialogDesc& desc) = 0;
+        showSelectFolderDialog(NativeWindowHandle parent, const SelectFolderDialogDesc& desc) = 0;
 
         virtual bool revealInFileBrowser(const std::filesystem::path& path) = 0;
     };
+
+    std::unique_ptr<IEditorPlatformServices> CreateEditorPlatformServices();
 } // namespace Hybrid

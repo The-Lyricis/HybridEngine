@@ -9,6 +9,17 @@ namespace Hybrid {
         return s_CurrentAPI;
     }
 
+    bool RendererAPI::setAPI(API api) {
+        if (!isSupported(api))
+            return false;
+        s_CurrentAPI = api;
+        return true;
+    }
+
+    bool RendererAPI::isSupported(API api) {
+        return api == API::OpenGL;
+    }
+
     std::unique_ptr<RendererAPI> RendererAPI::Create() {
         switch (s_CurrentAPI) {
         case API::OpenGL: return std::make_unique<GLRendererAPI>();
@@ -17,5 +28,4 @@ namespace Hybrid {
     }
 
 } // namespace Hybrid
-
 

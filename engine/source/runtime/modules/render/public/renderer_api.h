@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <memory>
 #include <glm/vec4.hpp>
+
+#include "runtime/core/platform/graphics_backend.h"
 /**
  * RendererAPI: abstract rendering backend interface.
  * Concrete implementations live in platform-specific files
@@ -18,7 +20,7 @@ namespace Hybrid {
 
     class RendererAPI {
     public:
-        enum class API { None = 0, OpenGL = 1, Vulkan = 2, DirectX12 = 3 , Metal = 4 };
+        using API = GraphicsBackend;
 
         virtual ~RendererAPI() = default;
 
@@ -37,6 +39,8 @@ namespace Hybrid {
         virtual void drawLinesIndexed(uint32_t indexCount, uint32_t indexOffset = 0) = 0;
 
         static API getAPI();
+        static bool setAPI(API api);
+        static bool isSupported(API api);
         static std::unique_ptr<RendererAPI> Create();
     };
 

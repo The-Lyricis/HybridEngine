@@ -8,6 +8,7 @@
 
 #include "editor/tools/panels/scene/scene_view_gizmo.h"
 #include "editor/tools/panels/scene/scene_view_viewport.h"
+#include "editor/services/render/editor_image_handle.h"
 
 namespace Hybrid
 {
@@ -18,12 +19,12 @@ namespace Hybrid
     public:
         SceneViewPanel() : IEditorPanel(EditorPanelId::SceneView, "Scene") {}
 
-        void setTexture(uint32_t colorTex) { m_colorTextureID = colorTex; }
+        void setTexture(EditorImageHandle image) { m_image = image; }
         void updateViewportState(EditorContext& ctx);
         void onImGuiRender(EditorContext& ctx) override;
 
     private:
-        uint32_t m_colorTextureID = 0;
+        EditorImageHandle m_image;
         SceneViewGizmoDragState m_gizmo_drag_state{};
         SceneViewViewportState m_viewport_state{};
     };

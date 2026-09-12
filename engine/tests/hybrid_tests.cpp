@@ -18,7 +18,10 @@
 #include "runtime/modules/asset/asset_registry.h"
 #include "runtime/modules/input/input_layer.h"
 #include "runtime/modules/project/project_file.h"
+#include "runtime/modules/render/rhi/render_device.h"
 #include "runtime/modules/render/runtime/pipeline/render_graph.h"
+#include "runtime/modules/render/runtime/pipeline/render_graph_resources.h"
+#include "runtime/modules/render/runtime/pipeline/render_pipeline.h"
 #include "runtime/modules/scene/scene.h"
 #include "runtime/modules/scene/scene_serializer.h"
 #include "runtime/runtime/engine.h"
@@ -297,6 +300,17 @@ namespace
         EXPECT(input.getState().getTextInput() == U"A");
         EXPECT(input.getState().getMouseDeltaX() == 3.0f);
         EXPECT(input.getState().getMouseDeltaY() == 4.0f);
+
+        Hybrid::MouseButtonPressedEvent mouse_button(1);
+        input.onEvent(mouse_button);
+        Hybrid::WindowLostFocusEvent focus_lost;
+        input.onEvent(focus_lost);
+        EXPECT(!input.getState().isKeyDown(12));
+        EXPECT(input.getState().wasKeyReleased(12));
+        EXPECT(!input.getState().isMouseDown(1));
+        EXPECT(input.getState().wasMouseReleased(1));
+        EXPECT(input.getState().getMouseDeltaX() == 0.0f);
+        EXPECT(input.getState().getMouseDeltaY() == 0.0f);
         input.onEndFrame();
         EXPECT(input.getState().getTextInput().empty());
         EXPECT(input.getState().getScrollDeltaY() == 0.0f);
@@ -345,6 +359,232 @@ namespace
         duplicate_write.addPass("SecondWrite", Hybrid::RenderPassType::Skybox, Hybrid::RenderFlags::Scene)
             .write(Hybrid::RenderResourceId::SceneColor);
         EXPECT(Hybrid::CompileRenderGraph(duplicate_write.build()).validation.hasErrors());
+
+        Hybrid::RenderGraphBuilder dynamic_graph;
+        dynamic_graph.addTextureResource("FeatureMask", Hybrid::RenderGraphResourceFormat::R8,
+                                         Hybrid::RenderGraphResourceLifetime::Transient);
+        dynamic_graph.addPass("FeatureMaskProducer", Hybrid::RenderPassType::Custom, Hybrid::RenderFlags::Scene)
+            .write("FeatureMask");
+        dynamic_graph.addPass("FeatureMaskConsumer", Hybrid::RenderPassType::Custom, Hybrid::RenderFlags::Scene)
+            .read("FeatureMask");
+        EXPECT(Hybrid::CompileRenderGraph(dynamic_graph.build()).isValid());
+    }
+
+    class ProbeRenderFeature final : public Hybrid::IRenderFeature
+    {
+    public:
+        explicit ProbeRenderFeature(std::vector<std::string>& execution) : m_execution(execution) {}
+
+        Hybrid::RenderFeatureDesc describe() const override
+        {
+            return {"ProbeFeature", Hybrid::RenderFeatureInjectionPoint::AfterScene,
+                    Hybrid::RenderFlags::Scene, false};
+        }
+
+        bool declareResources(Hybrid::RenderGraphBuilder& builder,
+                              Hybrid::RenderGraphBlackboard& blackboard) const override
+        {
+            builder.addTextureResource("ProbeMask", Hybrid::RenderGraphResourceFormat::R8,
+                                       Hybrid::RenderGraphResourceLifetime::Transient);
+            return blackboard.publish("ProbeMask", "ProbeMask");
+        }
+
+        void declarePass(Hybrid::RenderGraphPassBuilder& pass,
+                         const Hybrid::RenderGraphBlackboard& blackboard) const override
+        {
+            const auto scene_color = blackboard.find("SceneColor");
+            const auto probe_mask = blackboard.find("ProbeMask");
+            if (scene_color)
+                pass.read(*scene_color);
+            if (probe_mask)
+                pass.write(*probe_mask);
+        }
+
+        void execute(Hybrid::RenderContext&) override { m_execution.push_back("feature"); }
+
+    private:
+        std::vector<std::string>& m_execution;
+    };
+
+    void testRenderFeatureInjection()
+    {
+        std::vector<std::string> execution;
+        Hybrid::RenderPipeline pipeline;
+        EXPECT(pipeline.registerFeature(std::make_shared<ProbeRenderFeature>(execution)));
+        EXPECT(!pipeline.registerFeature(std::make_shared<ProbeRenderFeature>(execution)));
+        EXPECT(pipeline.getCompiledGraph().isValid());
+
+        bool found_feature_pass = false;
+        bool found_feature_resource = false;
+        for (const auto& resource : pipeline.getCompiledGraph().resources)
+            found_feature_resource = found_feature_resource || resource.name == "ProbeMask";
+        for (const auto& pass : pipeline.getCompiledGraph().passes)
+            found_feature_pass = found_feature_pass || pass.desc.name == "ProbeFeature";
+        EXPECT(found_feature_resource);
+        EXPECT(found_feature_pass);
+
+        Hybrid::RenderContext context{};
+        context.flags = Hybrid::RenderFlags::Scene;
+        Hybrid::RenderPipelineCallbacks callbacks{};
+        callbacks.scene = [&execution](Hybrid::RenderContext&) { execution.push_back("scene"); };
+        callbacks.skybox = [&execution](Hybrid::RenderContext&) { execution.push_back("skybox"); };
+        pipeline.execute(context, callbacks);
+        EXPECT(execution.size() == 3);
+        EXPECT(execution[0] == "scene");
+        EXPECT(execution[1] == "feature");
+        EXPECT(execution[2] == "skybox");
+        EXPECT(pipeline.unregisterFeature("ProbeFeature"));
+        EXPECT(!pipeline.unregisterFeature("ProbeFeature"));
+    }
+
+    void testRenderGraphResourceMaterialization()
+    {
+        auto device = Hybrid::CreateNullRenderDevice();
+        Hybrid::RenderGraphBuilder builder;
+        builder.addTextureResource("FeatureHistory", Hybrid::RenderGraphResourceFormat::RGBA8,
+                                   Hybrid::RenderGraphResourceLifetime::Transient);
+        builder.addPass("FeatureWrite", Hybrid::RenderPassType::Custom, Hybrid::RenderFlags::Scene)
+            .write("FeatureHistory");
+        builder.addPass("FeatureRead", Hybrid::RenderPassType::Custom, Hybrid::RenderFlags::Scene)
+            .read("FeatureHistory");
+        const auto graph = Hybrid::CompileRenderGraph(builder.build());
+        EXPECT(graph.isValid());
+
+        Hybrid::RenderGraphResourceRegistry resources;
+        EXPECT(resources.prepare(*device, graph, 64, 32));
+        const auto first = resources.texture("FeatureHistory");
+        EXPECT(first);
+        const auto first_desc = device->textureDesc(first.value);
+        EXPECT(first_desc);
+        EXPECT(first_desc.value.width == 64 && first_desc.value.height == 32);
+        EXPECT(first_desc.value.format == Hybrid::RhiFormat::RGBA8Unorm);
+
+        EXPECT(resources.prepare(*device, graph, 128, 32));
+        const auto second = resources.texture("FeatureHistory");
+        EXPECT(second);
+        EXPECT(second.value != first.value);
+        EXPECT(!device->textureDesc(first.value));
+        const auto second_desc = device->textureDesc(second.value);
+        EXPECT(second_desc && second_desc.value.width == 128);
+        resources.shutdown();
+        EXPECT(!device->textureDesc(second.value));
+    }
+
+    void testNullRenderDevice()
+    {
+        auto device = Hybrid::CreateNullRenderDevice();
+        EXPECT(device != nullptr);
+        EXPECT(device->backend() == Hybrid::GraphicsBackend::Null);
+        EXPECT(device->capabilities().max_texture_dimension_2d >= 1);
+
+        Hybrid::BufferDesc buffer_desc{};
+        buffer_desc.size = sizeof(uint32_t) * 3;
+        buffer_desc.usage = Hybrid::RhiBufferUsage::Vertex;
+        const uint32_t vertices[] = {1, 2, 3};
+        const auto vertex_buffer = device->createBuffer(buffer_desc, vertices, sizeof(vertices));
+        EXPECT(vertex_buffer);
+
+        const uint32_t replacement = 4;
+        EXPECT(device->updateBuffer(vertex_buffer.value, sizeof(uint32_t),
+                                    &replacement, sizeof(replacement)));
+        const auto out_of_bounds = device->updateBuffer(vertex_buffer.value, buffer_desc.size,
+                                                        &replacement, sizeof(replacement));
+        EXPECT(!out_of_bounds);
+        EXPECT(out_of_bounds.error.code == Hybrid::RhiErrorCode::OutOfBounds);
+
+        EXPECT(device->destroyBuffer(vertex_buffer.value));
+        const auto stale_update = device->updateBuffer(vertex_buffer.value, 0,
+                                                       &replacement, sizeof(replacement));
+        EXPECT(!stale_update);
+        EXPECT(stale_update.error.code == Hybrid::RhiErrorCode::InvalidHandle);
+        const auto replacement_buffer = device->createBuffer(buffer_desc);
+        EXPECT(replacement_buffer);
+        EXPECT(replacement_buffer.value.index == vertex_buffer.value.index);
+        EXPECT(replacement_buffer.value.generation != vertex_buffer.value.generation);
+
+        Hybrid::RhiTextureDesc texture_desc{};
+        texture_desc.width = 16;
+        texture_desc.height = 16;
+        texture_desc.render_target = true;
+        const auto texture = device->createTexture(texture_desc);
+        EXPECT(texture);
+        const auto color_view = device->createTextureView(texture.value);
+        EXPECT(color_view);
+        const auto queried_texture_desc = device->textureDesc(color_view.value);
+        EXPECT(queried_texture_desc);
+        EXPECT(queried_texture_desc.value.width == texture_desc.width);
+        EXPECT(queried_texture_desc.value.height == texture_desc.height);
+
+        Hybrid::ShaderModuleDesc vertex_shader_desc{};
+        vertex_shader_desc.stage = Hybrid::RhiShaderStage::Vertex;
+        vertex_shader_desc.code = {1};
+        const auto vertex_shader = device->createShaderModule(vertex_shader_desc);
+        EXPECT(vertex_shader);
+        Hybrid::ShaderModuleDesc fragment_shader_desc{};
+        fragment_shader_desc.stage = Hybrid::RhiShaderStage::Fragment;
+        fragment_shader_desc.code = {2};
+        const auto fragment_shader = device->createShaderModule(fragment_shader_desc);
+        EXPECT(fragment_shader);
+
+        Hybrid::GraphicsPipelineDesc pipeline_desc{};
+        pipeline_desc.vertex_shader = vertex_shader.value;
+        pipeline_desc.fragment_shader = fragment_shader.value;
+        pipeline_desc.texture_bindings.push_back({{2, 0}, "TestTexture"});
+        pipeline_desc.uniform_buffer_bindings.push_back({{3, 0}, "TestUniforms"});
+        const auto pipeline = device->createGraphicsPipeline(pipeline_desc);
+        EXPECT(pipeline);
+
+        Hybrid::SamplerDesc sampler_desc{};
+        const auto sampler = device->createSampler(sampler_desc);
+        EXPECT(sampler);
+        Hybrid::BufferDesc uniform_desc{};
+        uniform_desc.size = 16;
+        uniform_desc.usage = Hybrid::RhiBufferUsage::Uniform;
+        const auto uniform_buffer = device->createBuffer(uniform_desc);
+        EXPECT(uniform_buffer);
+        const auto copy_texture = device->createTexture(texture_desc);
+        EXPECT(copy_texture);
+        const auto copy_view = device->createTextureView(copy_texture.value);
+        EXPECT(copy_view);
+
+        auto commands = device->createCommandList();
+        EXPECT(commands != nullptr);
+        EXPECT(!commands->draw(3));
+        EXPECT(commands->begin());
+        EXPECT(!commands->beginRenderPass({}));
+        Hybrid::RenderPassDesc pass_desc{};
+        pass_desc.colors.push_back({color_view.value});
+        EXPECT(commands->beginRenderPass(pass_desc));
+        EXPECT(commands->setViewport({0.0f, 0.0f, 16.0f, 16.0f}));
+        EXPECT(commands->bindPipeline(pipeline.value));
+        EXPECT(commands->bindTexture(color_view.value, sampler.value, {2, 0}));
+        EXPECT(commands->bindUniformBuffer(uniform_buffer.value, {3, 0}));
+        EXPECT(commands->bindVertexBuffer(replacement_buffer.value));
+        EXPECT(commands->draw(3));
+        EXPECT(commands->endRenderPass());
+        EXPECT(commands->copyTexture(color_view.value, copy_view.value));
+        EXPECT(commands->end());
+        EXPECT(device->submit(*commands));
+
+        EXPECT(device->destroyTexture(texture.value));
+        const auto stale_texture_desc = device->textureDesc(color_view.value);
+        EXPECT(!stale_texture_desc);
+        EXPECT(stale_texture_desc.error.code == Hybrid::RhiErrorCode::InvalidHandle);
+        auto stale_view_commands = device->createCommandList();
+        EXPECT(stale_view_commands->begin());
+        const auto stale_view_pass = stale_view_commands->beginRenderPass(pass_desc);
+        EXPECT(!stale_view_pass);
+        EXPECT(stale_view_pass.error.code == Hybrid::RhiErrorCode::InvalidHandle);
+
+        EXPECT(device->destroyTextureView(color_view.value));
+        EXPECT(device->destroyTextureView(copy_view.value));
+        EXPECT(device->destroyTexture(copy_texture.value));
+        EXPECT(device->destroySampler(sampler.value));
+        EXPECT(device->destroyBuffer(uniform_buffer.value));
+        EXPECT(device->destroyPipeline(pipeline.value));
+        EXPECT(device->destroyShaderModule(vertex_shader.value));
+        EXPECT(device->destroyShaderModule(fragment_shader.value));
+        EXPECT(device->destroyBuffer(replacement_buffer.value));
     }
 } // namespace
 
@@ -359,6 +599,9 @@ int main()
     testInputState();
     testSceneRoundTrip();
     testRenderGraph();
+    testRenderFeatureInjection();
+    testRenderGraphResourceMaterialization();
+    testNullRenderDevice();
     if (failures != 0)
     {
         std::cerr << failures << " test assertion(s) failed\n";

@@ -21,6 +21,28 @@ namespace Hybrid
             m_text_input.clear();
         }
 
+        void onFocusLost()
+        {
+            for (auto& key : m_keys)
+            {
+                key.released = key.down;
+                key.down = false;
+                key.pressed = false;
+            }
+            for (auto& button : m_mouse)
+            {
+                button.released = button.down;
+                button.down = false;
+                button.pressed = false;
+            }
+            m_mouse_inited = false;
+            m_mouse_delta_x = 0.0f;
+            m_mouse_delta_y = 0.0f;
+            m_scroll_delta_x = 0.0f;
+            m_scroll_delta_y = 0.0f;
+            m_text_input.clear();
+        }
+
         void onKey(int key, bool isDown)
         {
             if (key < 0 || key > kMaxKeys) return;

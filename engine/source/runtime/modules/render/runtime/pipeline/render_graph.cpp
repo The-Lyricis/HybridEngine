@@ -1,14 +1,12 @@
 #include "render_graph.h"
 
-#include <array>
 #include <sstream>
+#include <unordered_map>
 
 namespace Hybrid
 {
     namespace
     {
-        constexpr std::size_t RenderResourceCount = static_cast<std::size_t>(RenderResourceId::Count);
-
         bool IsReadAccess(RenderResourceAccess access)
         {
             return access == RenderResourceAccess::Read || access == RenderResourceAccess::ReadWrite;
@@ -97,12 +95,22 @@ namespace Hybrid
             }
         }
 
+        std::string ResourceName(RenderResourceId resource)
+        {
+            return ToString(resource);
+        }
+
+        std::string ResourceName(const RenderResourceUsage& usage)
+        {
+            return usage.resource_name.empty() ? ResourceName(usage.resource) : usage.resource_name;
+        }
+
         const RenderGraphResourceDesc* FindResourceDesc(const std::vector<RenderGraphResourceDesc>& resources,
-                                                        RenderResourceId id)
+                                                        const std::string& name)
         {
             for (const RenderGraphResourceDesc& resource : resources)
             {
-                if (resource.id == id)
+                if (resource.name == name)
                     return &resource;
             }
             return nullptr;
@@ -117,7 +125,7 @@ namespace Hybrid
         void AddIssue(RenderGraphValidationResult& result,
                       RenderGraphIssueSeverity severity,
                       std::size_t pass_index,
-                      const char* pass_name,
+                      const std::string& pass_name,
                       const std::string& message)
         {
             result.issues.push_back({ severity, pass_index, pass_name, message });
@@ -131,25 +139,52 @@ namespace Hybrid
 
     RenderGraphPassBuilder& RenderGraphPassBuilder::read(RenderResourceId resource)
     {
-        m_pass.resources.push_back({ resource, RenderResourceAccess::Read });
+        m_pass.resources.push_back({ resource, RenderResourceAccess::Read, ResourceName(resource) });
         return *this;
     }
 
     RenderGraphPassBuilder& RenderGraphPassBuilder::write(RenderResourceId resource)
     {
-        m_pass.resources.push_back({ resource, RenderResourceAccess::Write });
+        m_pass.resources.push_back({ resource, RenderResourceAccess::Write, ResourceName(resource) });
         return *this;
     }
 
     RenderGraphPassBuilder& RenderGraphPassBuilder::readWrite(RenderResourceId resource)
     {
-        m_pass.resources.push_back({ resource, RenderResourceAccess::ReadWrite });
+        m_pass.resources.push_back({ resource, RenderResourceAccess::ReadWrite, ResourceName(resource) });
+        return *this;
+    }
+
+    RenderGraphPassBuilder& RenderGraphPassBuilder::read(const std::string& resource_name)
+    {
+        m_pass.resources.push_back({ RenderResourceId::Count, RenderResourceAccess::Read, resource_name });
+        return *this;
+    }
+
+    RenderGraphPassBuilder& RenderGraphPassBuilder::write(const std::string& resource_name)
+    {
+        m_pass.resources.push_back({ RenderResourceId::Count, RenderResourceAccess::Write, resource_name });
+        return *this;
+    }
+
+    RenderGraphPassBuilder& RenderGraphPassBuilder::readWrite(const std::string& resource_name)
+    {
+        m_pass.resources.push_back({ RenderResourceId::Count, RenderResourceAccess::ReadWrite, resource_name });
         return *this;
     }
 
     RenderGraphBuilder& RenderGraphBuilder::addResource(const RenderGraphResourceDesc& resource)
     {
         m_resources.push_back(resource);
+        return *this;
+    }
+
+    RenderGraphBuilder& RenderGraphBuilder::addTextureResource(const std::string& name,
+                                                                 RenderGraphResourceFormat format,
+                                                                 RenderGraphResourceLifetime lifetime,
+                                                                 RenderGraphResourceKind kind)
+    {
+        m_resources.push_back({ name, RenderResourceId::Count, kind, format, lifetime });
         return *this;
     }
 
@@ -176,6 +211,10 @@ namespace Hybrid
         builder.addResource({ "SelectionMask", RenderResourceId::SelectionMask, RenderGraphResourceKind::Texture2D, RenderGraphResourceFormat::R8, RenderGraphResourceLifetime::External });
         builder.addResource({ "SelectionDepth", RenderResourceId::SelectionDepth, RenderGraphResourceKind::DepthTexture, RenderGraphResourceFormat::Depth32F, RenderGraphResourceLifetime::External });
         builder.addResource({ "ShadowDepth", RenderResourceId::ShadowDepth, RenderGraphResourceKind::DepthTexture, RenderGraphResourceFormat::Depth32F, RenderGraphResourceLifetime::External });
+        builder.addTextureResource("PostProcessInput", RenderGraphResourceFormat::RGBA8,
+                                   RenderGraphResourceLifetime::Transient);
+        builder.addTextureResource("SelectionOverlayInput", RenderGraphResourceFormat::RGBA8,
+                                   RenderGraphResourceLifetime::Transient);
 
         builder.addPass("Shadow", RenderPassType::Shadow, RenderFlags::Shadow)
             .write(RenderResourceId::ShadowDepth);
@@ -199,10 +238,12 @@ namespace Hybrid
             .write(RenderResourceId::SelectionDepth);
 
         builder.addPass("SelectionOverlay", RenderPassType::SelectionOverlay, RenderFlags::SelectionHighlight, true)
-            .readWrite(RenderResourceId::SceneColor)
+            .read(RenderResourceId::SceneColor)
+            .write("SelectionOverlayInput")
             .read(RenderResourceId::SceneDepth)
             .read(RenderResourceId::SelectionMask)
-            .read(RenderResourceId::SelectionDepth);
+            .read(RenderResourceId::SelectionDepth)
+            .write(RenderResourceId::SceneColor);
 
         builder.addPass("Grid", RenderPassType::Grid, RenderFlags::Grid, true)
             .readWrite(RenderResourceId::SceneColor);
@@ -215,6 +256,7 @@ namespace Hybrid
             .readWrite(RenderResourceId::SceneColor);
 
         builder.addPass("PostProcess", RenderPassType::PostProcess, RenderFlags::PostProcess)
+            .write("PostProcessInput")
             .readWrite(RenderResourceId::SceneColor);
 
         return builder.build();
@@ -264,65 +306,66 @@ namespace Hybrid
                                                     const std::vector<RenderGraphResourceDesc>& resources)
     {
         RenderGraphValidationResult result;
-        std::array<bool, RenderResourceCount> has_write {};
-        std::array<bool, RenderResourceCount> last_access_was_write_only {};
-        std::array<const char*, RenderResourceCount> last_writer {};
-        std::array<bool, RenderResourceCount> registered_resources {};
+        struct ResourceState
+        {
+            bool has_write = false;
+            bool last_access_was_write_only = false;
+            std::string last_writer;
+        };
+        std::unordered_map<std::string, ResourceState> resource_states;
 
         for (const RenderGraphResourceDesc& resource : resources)
         {
-            const std::size_t resource_index = static_cast<std::size_t>(resource.id);
-            if (resource_index >= RenderResourceCount)
-                continue;
-
-            if (registered_resources[resource_index])
+            if (resource.name.empty())
             {
                 RenderGraphIssue issue;
                 issue.severity = RenderGraphIssueSeverity::Error;
-                issue.message = std::string("Render resource is registered more than once: ") + ToString(resource.id);
+                issue.message = "Render resource has no name.";
+                result.issues.push_back(issue);
+                continue;
+            }
+            if (resource_states.find(resource.name) != resource_states.end())
+            {
+                RenderGraphIssue issue;
+                issue.severity = RenderGraphIssueSeverity::Error;
+                issue.message = std::string("Render resource is registered more than once: ") + resource.name;
                 result.issues.push_back(issue);
             }
-
-            registered_resources[resource_index] = true;
+            resource_states.emplace(resource.name, ResourceState{});
         }
 
         for (std::size_t pass_index = 0; pass_index < graph.size(); ++pass_index)
         {
             const RenderGraphPassDesc& pass = graph[pass_index];
-            const char* pass_name = pass.name != nullptr ? pass.name : "";
-            if (pass_name[0] == '\0')
+            const std::string& pass_name = pass.name;
+            if (pass_name.empty())
             {
                 AddIssue(result, RenderGraphIssueSeverity::Warning, pass_index, pass_name, "Render pass has no debug name.");
             }
 
             for (const RenderResourceUsage& usage : pass.resources)
             {
-                const std::size_t resource_index = static_cast<std::size_t>(usage.resource);
-                if (resource_index >= RenderResourceCount)
-                {
-                    AddIssue(result, RenderGraphIssueSeverity::Error, pass_index, pass_name, "Render pass references an unknown resource.");
-                    continue;
-                }
-
-                const RenderGraphResourceDesc* resource_desc = FindResourceDesc(resources, usage.resource);
+                const std::string resource_name = ResourceName(usage);
+                const RenderGraphResourceDesc* resource_desc = FindResourceDesc(resources, resource_name);
                 if (resource_desc == nullptr)
                 {
                     std::ostringstream message;
-                    message << "Uses unregistered resource " << ToString(usage.resource) << '.';
+                    message << "Uses unregistered resource " << resource_name << '.';
                     AddIssue(result, RenderGraphIssueSeverity::Error, pass_index, pass_name, message.str());
                     continue;
                 }
+                ResourceState& state = resource_states[resource_name];
 
                 if (resource_desc->lifetime == RenderGraphResourceLifetime::Transient &&
                     IsReadAccess(usage.access) &&
-                    !has_write[resource_index])
+                    !state.has_write)
                 {
                     std::ostringstream message;
-                    message << "Reads transient resource " << ToString(usage.resource) << " before it has a producer.";
+                    message << "Reads transient resource " << resource_name << " before it has a producer.";
                     AddIssue(result, RenderGraphIssueSeverity::Error, pass_index, pass_name, message.str());
                 }
 
-                if (IsDepthResource(*resource_desc) && usage.resource != RenderResourceId::SceneDepth &&
+                if (usage.resource != RenderResourceId::Count && IsDepthResource(*resource_desc) && usage.resource != RenderResourceId::SceneDepth &&
                     usage.resource != RenderResourceId::SelectionDepth && usage.resource != RenderResourceId::ShadowDepth)
                 {
                     std::ostringstream message;
@@ -330,30 +373,30 @@ namespace Hybrid
                     AddIssue(result, RenderGraphIssueSeverity::Warning, pass_index, pass_name, message.str());
                 }
 
-                if (IsReadAccess(usage.access) && !has_write[resource_index])
+                if (IsReadAccess(usage.access) && !state.has_write)
                 {
                     std::ostringstream message;
-                    message << "Reads " << ToString(usage.resource) << " before any previous pass writes it.";
+                    message << "Reads " << resource_name << " before any previous pass writes it.";
                     AddIssue(result, RenderGraphIssueSeverity::Error, pass_index, pass_name, message.str());
                 }
 
-                if (usage.access == RenderResourceAccess::Write && last_access_was_write_only[resource_index])
+                if (usage.access == RenderResourceAccess::Write && state.last_access_was_write_only)
                 {
                     std::ostringstream message;
-                    message << "Writes " << ToString(usage.resource) << " after pass '" << last_writer[resource_index]
+                    message << "Writes " << resource_name << " after pass '" << state.last_writer
                             << "' also wrote it without an explicit read/write dependency.";
                     AddIssue(result, RenderGraphIssueSeverity::Error, pass_index, pass_name, message.str());
                 }
 
                 if (IsWriteAccess(usage.access))
                 {
-                    has_write[resource_index] = true;
-                    last_writer[resource_index] = pass_name;
-                    last_access_was_write_only[resource_index] = usage.access == RenderResourceAccess::Write;
+                    state.has_write = true;
+                    state.last_writer = pass_name;
+                    state.last_access_was_write_only = usage.access == RenderResourceAccess::Write;
                 }
                 else
                 {
-                    last_access_was_write_only[resource_index] = false;
+                    state.last_access_was_write_only = false;
                 }
             }
         }
@@ -386,7 +429,7 @@ namespace Hybrid
         for (std::size_t pass_index = 0; pass_index < graph.size(); ++pass_index)
         {
             const RenderGraphPassDesc& pass = graph[pass_index];
-            stream << pass_index << ": " << (pass.name != nullptr ? pass.name : "")
+            stream << pass_index << ": " << pass.name
                    << " flags=" << ToString(pass.required_flags)
                    << " editor_only=" << (pass.editor_only ? "true" : "false");
 
@@ -398,7 +441,7 @@ namespace Hybrid
                     const RenderResourceUsage& usage = pass.resources[resource_index];
                     if (resource_index != 0)
                         stream << ", ";
-                    stream << ToString(usage.resource) << ':' << ToString(usage.access);
+                    stream << ResourceName(usage) << ':' << ToString(usage.access);
                 }
                 stream << ']';
             }

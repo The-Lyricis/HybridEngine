@@ -1,11 +1,11 @@
 #include "game_view_panel.h"
 
 #include "editor/core/context/editor_context.h"
+#include "editor/services/render/editor_texture_service.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/project/project_context.h"
 #include "runtime/modules/render/runtime/render_system.h"
 
-#include <glad/gl.h>
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 
@@ -129,9 +129,10 @@ namespace Hybrid
             settings_changed = true;
         }
 
-        GLint gl_limit = 8192;
-        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &gl_limit);
-        const int dimension_limit = std::max(16, std::min(8192, gl_limit));
+        const uint32_t backend_limit = ctx.textures
+            ? ctx.textures->maxTextureDimension2D()
+            : 8192u;
+        const int dimension_limit = std::max(16, std::min(8192, static_cast<int>(backend_limit)));
         if (ctx.game_view_settings.mode == GameViewResolutionMode::Custom)
         {
             ImGui::SameLine(); ImGui::SetNextItemWidth(90.0f);
@@ -144,14 +145,16 @@ namespace Hybrid
         if (settings_changed)
             saveSettings(ctx);
 
-        if (m_colorTextureID == 0 && !m_missingTextureLogged)
+        const ImTextureID image_id = ctx.textures ? ctx.textures->imageId(m_image) : ImTextureID{};
+        if (!image_id && !m_missingTextureLogged)
         {
             HBD_CORE_WARN("{} viewport_texture_missing", kGameViewPanelLogTag);
             m_missingTextureLogged = true;
         }
-        else if (m_colorTextureID != 0 && m_missingTextureLogged)
+        else if (image_id && m_missingTextureLogged)
         {
-            HBD_CORE_INFO("{} viewport_texture_ready texture_id={}", kGameViewPanelLogTag, m_colorTextureID);
+            HBD_CORE_INFO("{} viewport_texture_ready image_index={} generation={}",
+                          kGameViewPanelLogTag, m_image.index, m_image.generation);
             m_missingTextureLogged = false;
         }
 
@@ -190,7 +193,7 @@ namespace Hybrid
         ImGui::GetWindowDrawList()->AddRectFilled(canvas_min,
             ImVec2(canvas_min.x + canvas_size.x, canvas_min.y + canvas_size.y), IM_COL32(0, 0, 0, 255));
         ImGui::SetCursorScreenPos(image_min);
-        ImGui::Image(static_cast<ImTextureID>(m_colorTextureID),
+        ImGui::Image(image_id,
                      image_size, ImVec2(0, 1), ImVec2(1, 0));
 
         const ImVec2 viewport_min = ImGui::GetItemRectMin();

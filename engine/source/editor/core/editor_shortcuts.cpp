@@ -4,6 +4,7 @@
 
 #include "editor/core/commands/editor_commands.h"
 #include "editor/core/context/editor_context.h"
+#include "editor/core/editor_input.h"
 
 namespace Hybrid
 {
@@ -15,7 +16,7 @@ namespace Hybrid
         if (io.WantTextInput || keyboard_item_active || any_popup_open)
             return;
 
-        const bool shortcut_modifier = io.KeyCtrl || io.KeySuper;
+        const bool shortcut_modifier = EditorInput::selectionToggleModifier(io);
         if (shortcut_modifier)
         {
             if (ImGui::IsKeyPressed(ImGuiKey_Z, false))

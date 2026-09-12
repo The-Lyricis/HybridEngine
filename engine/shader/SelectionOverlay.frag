@@ -8,12 +8,18 @@ uniform sampler2D u_SceneColorTex;
 uniform sampler2D u_SceneDepthTex;
 uniform sampler2D u_SelectedMaskTex;
 uniform sampler2D u_SelectedDepthTex;
-uniform float u_TexelWidth;
-uniform float u_TexelHeight;
-uniform vec4 u_VisibleOutlineColor;
-uniform vec4 u_OccludedOutlineColor;
-uniform vec4 u_FillColor;
-uniform float u_DepthEpsilon;
+
+layout(std140) uniform SelectionOverlaySettings
+{
+    vec4 u_VisibleOutlineColor;
+    vec4 u_OccludedOutlineColor;
+    vec4 u_FillColor;
+    vec4 u_OverlayMetrics;
+};
+
+#define u_TexelWidth u_OverlayMetrics.x
+#define u_TexelHeight u_OverlayMetrics.y
+#define u_DepthEpsilon u_OverlayMetrics.z
 
 float sampleSelectedMask(vec2 uv)
 {

@@ -4,16 +4,13 @@
 #include <utility>
 #include <vector>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
-
 #include "editor/core/context/editor_context.h"
+#include "runtime/core/platform/window.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/asset/asset_registry.h"
 #include "runtime/modules/asset/asset_type.h"
 #include "runtime/modules/asset/runtime_resource_system.h"
 #include "runtime/modules/render/runtime/render_system.h"
-#include "runtime/modules/window/window_system.h"
 
 namespace Hybrid
 {
@@ -88,10 +85,7 @@ namespace Hybrid
         }
 
         if (m_services.window)
-        {
-            if (GLFWwindow* window = m_services.window->getNativeWindow())
-                m_file_watcher_last_window_focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0;
-        }
+            m_file_watcher_last_window_focused = m_services.window->isFocused();
 
         m_initialized = true;
         HBD_CORE_INFO("{} initialize_completed assets_root={} watcher_initialized={}",
@@ -243,11 +237,7 @@ namespace Hybrid
             if (!m_services.window)
                 return true;
 
-            GLFWwindow* window = m_services.window->getNativeWindow();
-            if (!window)
-                return true;
-
-            return glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0;
+            return m_services.window->isFocused();
         }();
 
         if (window_focused && !m_file_watcher_last_window_focused)

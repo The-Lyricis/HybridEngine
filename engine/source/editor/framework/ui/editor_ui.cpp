@@ -1,16 +1,17 @@
 #include "editor_ui.h"
 
+#include <filesystem>
 #include <string>
 
 #include <ImGuizmo.h>
 #include <imgui_internal.h>
-#include <glad/gl.h>
-#include <stb_image.h>
 
 #include "editor/core/commands/editor_commands.h"
 #include "editor/core/context/editor_dialogs.h"
 #include "editor/core/context/editor_context.h"
 #include "editor/core/editor_shortcuts.h"
+#include "editor/core/editor_input.h"
+#include "editor/services/render/editor_texture_service.h"
 #include "editor/tools/panels/game_view_panel.h"
 #include "editor/tools/panels/console_panel.h"
 #include "editor/tools/panels/project_settings_panel.h"
@@ -70,58 +71,12 @@ namespace Hybrid
             {EditorLayoutNode::LeftArea, EditorLayoutSplitDirection::Down, 0.30f, EditorLayoutNode::LeftBottom, EditorLayoutNode::LeftTop},
             {EditorLayoutNode::LeftTop, EditorLayoutSplitDirection::Left, 0.22f, EditorLayoutNode::LeftTopLeft, EditorLayoutNode::Main},
         };
-        static GLuint LoadTextureRGBA8(const std::string& path)
-        {
-            int w = 0, h = 0, comp = 0;
-            stbi_set_flip_vertically_on_load(0);
-            unsigned char* data = stbi_load(path.c_str(), &w, &h, &comp, 4);
-            if (!data || w <= 0 || h <= 0)
-            {
-                if (data)
-                    stbi_image_free(data);
-                return 0;
-            }
-
-            GLuint tex = 0;
-            glGenTextures(1, &tex);
-            glBindTexture(GL_TEXTURE_2D, tex);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-            glBindTexture(GL_TEXTURE_2D, 0);
-
-            stbi_image_free(data);
-            return tex;
-        }
-
         struct TopToolbarIcons
         {
-            GLuint play = 0;
-            GLuint pause = 0;
-            GLuint stop = 0;
-            bool loaded = false;
-
-            void destroy()
-            {
-                auto del = [](GLuint& tex)
-                {
-                    if (tex)
-                    {
-                        glDeleteTextures(1, &tex);
-                        tex = 0;
-                    }
-                };
-
-                del(play);
-                del(pause);
-                del(stop);
-                loaded = false;
-            }
+            EditorImageHandle play;
+            EditorImageHandle pause;
+            EditorImageHandle stop;
         };
-
-        static TopToolbarIcons g_TopToolbarIcons;
 
         static void PushActiveToolStyle(bool active, bool alert = false)
         {
@@ -167,12 +122,8 @@ namespace Hybrid
         shutdown();
     }
 
-    void EditorUI::initialize(GLFWwindow* window)
+    void EditorUI::initialize(EditorTextureService& textures)
     {
-        m_window = window;
-        if (!m_window)
-            return;
-
         if (ImGui::GetCurrentContext() == nullptr)
         {
             HBD_CORE_ERROR("{} initialize_failed reason=imgui_context_is_null", kEditorUILogTag);
@@ -180,6 +131,8 @@ namespace Hybrid
         }
 
         m_ctx = std::make_unique<EditorContext>();
+        m_ctx->textures = &textures;
+        m_textures = &textures;
         m_HierarchyPanel = std::make_unique<HierarchyPanel>();
         m_InspectorPanel = std::make_unique<InspectorPanel>();
         m_ProjectPanel = std::make_unique<ProjectPanel>();
@@ -209,10 +162,9 @@ namespace Hybrid
         m_HierarchyPanel.reset();
         m_panels.fill(nullptr);
         m_ctx.reset();
-        g_TopToolbarIcons.destroy();
+        m_textures = nullptr;
 
         m_initialized = false;
-        m_window = nullptr;
         m_DockSpaceID = 0;
         m_DefaultLayoutBuilt = false;
         m_RequestResetLayout = false;
@@ -264,7 +216,7 @@ namespace Hybrid
         drawConfirmDialogs();
     }
 
-    void EditorUI::drawViewports(uint32_t sceneColorTexID, uint32_t gameColorTexID)
+    void EditorUI::drawViewports(EditorImageHandle scene_image, EditorImageHandle game_image)
     {
         if (!m_initialized || !m_ctx)
             return;
@@ -277,10 +229,10 @@ namespace Hybrid
             switch (descriptor.id)
             {
             case EditorPanelId::SceneView:
-                renderViewportPanel(descriptor.id, sceneColorTexID);
+                renderViewportPanel(descriptor.id, scene_image);
                 break;
             case EditorPanelId::GameView:
-                renderViewportPanel(descriptor.id, gameColorTexID);
+                renderViewportPanel(descriptor.id, game_image);
                 break;
             default:
                 break;
@@ -389,7 +341,7 @@ namespace Hybrid
         {
             const bool can_open_project = m_ctx && m_ctx->commands.can_execute_command &&
                 m_ctx->commands.can_execute_command(EditorCommandId::OpenProject);
-            if (ImGui::MenuItem("Open Project...", "Ctrl+Shift+O", false, can_open_project))
+            if (ImGui::MenuItem("Open Project...", EditorInput::kOpenProjectShortcut, false, can_open_project))
                 m_ctx->commands.execute_command(EditorCommandId::OpenProject);
 
             if (ImGui::BeginMenu("Open Recent Project"))
@@ -433,24 +385,24 @@ namespace Hybrid
             {
                 const bool can_new_scene = m_ctx && m_ctx->commands.can_execute_command &&
                     m_ctx->commands.can_execute_command(EditorCommandId::NewScene);
-                if (ImGui::MenuItem("New Scene", "Ctrl+N", false, can_new_scene))
+                if (ImGui::MenuItem("New Scene", EditorInput::kNewSceneShortcut, false, can_new_scene))
                     m_ctx->commands.execute_command(EditorCommandId::NewScene);
 
                 const bool can_open_scene = m_ctx && m_ctx->commands.can_execute_command &&
                     m_ctx->commands.can_execute_command(EditorCommandId::OpenScene);
-                if (ImGui::MenuItem("Open Scene...", "Ctrl+O", false, can_open_scene))
+                if (ImGui::MenuItem("Open Scene...", EditorInput::kOpenSceneShortcut, false, can_open_scene))
                     m_ctx->commands.execute_command(EditorCommandId::OpenScene);
 
                 ImGui::Separator();
 
                 const bool can_save = m_ctx && m_ctx->commands.can_execute_command &&
                     m_ctx->commands.can_execute_command(EditorCommandId::SaveScene);
-                if (ImGui::MenuItem("Save", "Ctrl+S", false, can_save))
+                if (ImGui::MenuItem("Save", EditorInput::kSaveShortcut, false, can_save))
                     m_ctx->commands.execute_command(EditorCommandId::SaveScene);
 
                 const bool can_save_as = m_ctx && m_ctx->commands.can_execute_command &&
                     m_ctx->commands.can_execute_command(EditorCommandId::SaveSceneAs);
-                if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, can_save_as))
+                if (ImGui::MenuItem("Save As...", EditorInput::kSaveAsShortcut, false, can_save_as))
                     m_ctx->commands.execute_command(EditorCommandId::SaveSceneAs);
 
                 ImGui::Separator();
@@ -486,10 +438,10 @@ namespace Hybrid
             const bool can_undo = m_ctx && m_ctx->commands.can_undo && m_ctx->commands.can_undo();
             const bool can_redo = m_ctx && m_ctx->commands.can_redo && m_ctx->commands.can_redo();
 
-            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, can_undo) && m_ctx && m_ctx->commands.undo)
+            if (ImGui::MenuItem("Undo", EditorInput::kUndoShortcut, false, can_undo) && m_ctx && m_ctx->commands.undo)
                 m_ctx->commands.undo();
 
-            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, can_redo) && m_ctx && m_ctx->commands.redo)
+            if (ImGui::MenuItem("Redo", EditorInput::kRedoShortcut, false, can_redo) && m_ctx && m_ctx->commands.redo)
                 m_ctx->commands.redo();
 
             ImGui::Separator();
@@ -511,19 +463,16 @@ namespace Hybrid
         const bool is_paused = m_ctx->mode.is_pause_mode ? m_ctx->mode.is_pause_mode() : false;
         const float toolbar_height = 22.0f;
 
-        if (!g_TopToolbarIcons.loaded)
+        const std::filesystem::path icon_base =
+            std::filesystem::path(HYBRID_EDITOR_RESOURCES_DIR) / "icons";
+        const TopToolbarIcons icons{
+            m_textures->loadRgba8(icon_base / "icon_topTool_play.png"),
+            m_textures->loadRgba8(icon_base / "icon_topTool_pause.png"),
+            m_textures->loadRgba8(icon_base / "icon_topTool_stop.png")};
+        if ((!icons.play || !icons.pause || !icons.stop) && !g_TopToolbarIconLoadFailedLogged)
         {
-            const std::string base = std::string(HYBRID_EDITOR_RESOURCES_DIR) + "/icons/";
-            g_TopToolbarIcons.play = LoadTextureRGBA8(base + "icon_topTool_play.png");
-            g_TopToolbarIcons.pause = LoadTextureRGBA8(base + "icon_topTool_pause.png");
-            g_TopToolbarIcons.stop = LoadTextureRGBA8(base + "icon_topTool_stop.png");
-            g_TopToolbarIcons.loaded =
-                (g_TopToolbarIcons.play != 0 && g_TopToolbarIcons.pause != 0 && g_TopToolbarIcons.stop != 0);
-            if (!g_TopToolbarIcons.loaded && !g_TopToolbarIconLoadFailedLogged)
-            {
-                HBD_CORE_WARN("{} top_toolbar_icon_load_failed", kEditorUILogTag);
-                g_TopToolbarIconLoadFailedLogged = true;
-            }
+            HBD_CORE_WARN("{} top_toolbar_icon_load_failed", kEditorUILogTag);
+            g_TopToolbarIconLoadFailedLogged = true;
         }
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 4.0f));
@@ -577,12 +526,12 @@ namespace Hybrid
         ImGui::SetCursorPosX(start_x);
         ImGui::SetCursorPosY(button_y);
 
-        auto drawTopToolbarButton = [&](const char* id, GLuint icon, const char* fallback, const char* tooltip, bool active, bool alert) -> bool
+        auto drawTopToolbarButton = [&](const char* id, EditorImageHandle icon, const char* fallback, const char* tooltip, bool active, bool alert) -> bool
         {
             PushActiveToolStyle(active, alert);
             bool pressed = false;
 
-            if (icon != 0)
+            if (icon)
             {
                 const ImVec2 cursor = ImGui::GetCursorScreenPos();
                 if (ImGui::Button(id, button_size))
@@ -592,7 +541,7 @@ namespace Hybrid
                     cursor.x + (button_size.x - icon_size.x) * 0.5f,
                     cursor.y + (button_size.y - icon_size.y) * 0.5f);
                 const ImVec2 icon_max(icon_min.x + icon_size.x, icon_min.y + icon_size.y);
-                ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)icon, icon_min, icon_max);
+                ImGui::GetWindowDrawList()->AddImage(m_textures->imageId(icon), icon_min, icon_max);
             }
             else
             {
@@ -607,7 +556,7 @@ namespace Hybrid
         };
 
         const bool play_active = is_playing;
-        const GLuint play_icon = is_playing ? g_TopToolbarIcons.stop : g_TopToolbarIcons.play;
+        const EditorImageHandle play_icon = is_playing ? icons.stop : icons.play;
         if (drawTopToolbarButton("##TopToolbarPlay", play_icon, is_playing ? "Stop" : "Play", is_playing ? "Stop" : "Play", play_active, is_playing))
         {
             if (!is_playing)
@@ -634,7 +583,7 @@ namespace Hybrid
             m_ctx->commands.can_execute_command(EditorCommandId::TogglePauseMode);
         if (!pause_enabled)
             ImGui::BeginDisabled();
-        if (drawTopToolbarButton("##TopToolbarPause", g_TopToolbarIcons.pause, is_paused ? "Resume" : "Pause", is_paused ? "Resume" : "Pause", is_paused, false) &&
+        if (drawTopToolbarButton("##TopToolbarPause", icons.pause, is_paused ? "Resume" : "Pause", is_paused ? "Resume" : "Pause", is_paused, false) &&
             m_ctx->commands.execute_command)
         {
             HBD_CORE_INFO("{} play_mode_pause_toggle_requested paused={}", kEditorUILogTag, !is_paused);
@@ -726,7 +675,7 @@ namespace Hybrid
         return panel ? panel->getName() : "";
     }
 
-    void EditorUI::renderViewportPanel(EditorPanelId id, uint32_t colorTexID)
+    void EditorUI::renderViewportPanel(EditorPanelId id, EditorImageHandle image)
     {
         if (!m_ctx)
             return;
@@ -736,14 +685,14 @@ namespace Hybrid
         case EditorPanelId::SceneView:
             if (m_SceneViewportPanel && m_SceneViewportPanel->isOpen())
             {
-                m_SceneViewportPanel->setTexture(colorTexID);
+                m_SceneViewportPanel->setTexture(image);
                 m_SceneViewportPanel->onImGuiRender(*m_ctx);
             }
             break;
         case EditorPanelId::GameView:
             if (m_GameViewportPanel && m_GameViewportPanel->isOpen())
             {
-                m_GameViewportPanel->setTexture(colorTexID);
+                m_GameViewportPanel->setTexture(image);
                 m_GameViewportPanel->onImGuiRender(*m_ctx);
             }
             break;

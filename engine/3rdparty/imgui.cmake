@@ -11,4 +11,4 @@ set(imgui_backend
 
 add_library(imgui STATIC ${imgui_sources} ${imgui_backend})
 target_include_directories(imgui PUBLIC $<BUILD_INTERFACE:${imgui_SOURCE_DIR_}>)
-target_link_libraries(imgui PUBLIC glfw)
+target_link_libraries(imgui PRIVATE glfw)

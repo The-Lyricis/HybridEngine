@@ -91,19 +91,19 @@ namespace Hybrid
     }
 
     std::optional<std::filesystem::path>
-    EditorPlatformServicesWin32::showSaveFileDialog(GLFWwindow* parent, const SaveFileDialogDesc& desc)
+    EditorPlatformServicesWin32::showSaveFileDialog(NativeWindowHandle parent, const SaveFileDialogDesc& desc)
     {
         return ShowSaveFileDialogWin32(parent, desc);
     }
 
     std::vector<std::filesystem::path>
-    EditorPlatformServicesWin32::showOpenFileDialog(GLFWwindow* parent, const OpenFileDialogDesc& desc)
+    EditorPlatformServicesWin32::showOpenFileDialog(NativeWindowHandle parent, const OpenFileDialogDesc& desc)
     {
         return ShowOpenFileDialogWin32(parent, desc);
     }
 
     std::optional<std::filesystem::path>
-    EditorPlatformServicesWin32::showSelectFolderDialog(GLFWwindow* parent, const SelectFolderDialogDesc& desc)
+    EditorPlatformServicesWin32::showSelectFolderDialog(NativeWindowHandle parent, const SelectFolderDialogDesc& desc)
     {
         return ShowSelectFolderDialogWin32(parent, desc);
     }
@@ -111,5 +111,10 @@ namespace Hybrid
     bool EditorPlatformServicesWin32::revealInFileBrowser(const std::filesystem::path& path)
     {
         return RevealInFileBrowserWin32(path);
+    }
+
+    std::unique_ptr<IEditorPlatformServices> CreateEditorPlatformServices()
+    {
+        return std::make_unique<EditorPlatformServicesWin32>();
     }
 } // namespace Hybrid

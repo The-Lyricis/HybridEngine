@@ -5,10 +5,13 @@ in vec2 v_UV;
 layout(location = 0) out vec4 o_Color;
 
 uniform sampler2D u_SceneColorTex;
-uniform int u_EnableToneMapping;
-uniform int u_EnableGammaCorrection;
-uniform float u_Exposure;
-uniform float u_Gamma;
+layout(std140) uniform PostProcessSettings
+{
+    int u_EnableToneMapping;
+    int u_EnableGammaCorrection;
+    float u_Exposure;
+    float u_Gamma;
+};
 
 vec3 applyToneMapping(vec3 color)
 {

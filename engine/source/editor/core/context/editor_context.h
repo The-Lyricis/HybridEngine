@@ -23,6 +23,7 @@ namespace Hybrid
 {
     class Scene;
     class IEditorCommand;
+    class EditorTextureService;
     struct RenderStats;
 
     enum class GizmoSpace
@@ -175,6 +176,7 @@ namespace Hybrid
 
     struct EditorContext
     {
+        EditorTextureService* textures = nullptr;
         DocumentService document;
 
         SelectionService selection;

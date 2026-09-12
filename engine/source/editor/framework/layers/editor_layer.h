@@ -38,6 +38,7 @@ namespace Hybrid
         void onAttach() override;          // Initialize editor UI and bind scene.
         void onDetach() override;          // Release editor UI resources.
         void onUpdate(float dt) override;  // Sync viewport state, camera input and render ext.
+        void onEvent(Event& event) override;
         void onImGuiRender() override;     // Draw panels and viewport.
 
         void setModeCallbacks(EditorModeCallbacks callbacks);
@@ -82,7 +83,7 @@ namespace Hybrid
         std::shared_ptr<SceneDocument> m_active_scene_view_document;
         bool m_initialized = false;        // Guard against partial startup/shutdown.
         bool m_document_transition_pending = false;
+        bool m_camera_capture_active = false;
         EditorModeCallbacks m_mode_callbacks{};
     };
 } // namespace Hybrid
-

@@ -17,13 +17,13 @@
 #include "editor/services/state/editor_camera_state_serde.h"
 #include "runtime/core/base/math_util.h"
 #include "runtime/core/base/macro.h"
+#include "runtime/core/platform/window.h"
 #include "runtime/modules/asset/runtime_resource_system.h"
 #include "runtime/modules/asset/scene_loader.h"
 #include "runtime/modules/project/project_context.h"
 #include "runtime/modules/render/runtime/render_system.h"
 #include "runtime/modules/scene/scene_manager.h"
 #include "runtime/modules/scene/scene_serializer.h"
-#include "runtime/modules/window/window_system.h"
 
 namespace Hybrid
 {
@@ -344,7 +344,7 @@ namespace Hybrid
         };
 
         auto selected_path = m_services.platform->showSaveFileDialog(
-            m_services.window ? m_services.window->getNativeWindow() : nullptr,
+            m_services.window ? m_services.window->nativeHandle() : NativeWindowHandle{},
             dialog_desc);
         if (!selected_path)
         {
@@ -387,7 +387,7 @@ namespace Hybrid
         dialog_desc.allow_multi_select = false;
 
         const auto selected_paths = m_services.platform->showOpenFileDialog(
-            m_services.window ? m_services.window->getNativeWindow() : nullptr,
+            m_services.window ? m_services.window->nativeHandle() : NativeWindowHandle{},
             dialog_desc);
         if (selected_paths.empty())
         {

@@ -1,9 +1,6 @@
 #include "imgui_layer.h"
 
-#include <imgui.h>
-#include <backends/imgui_impl_glfw.h>
-#include <backends/imgui_impl_opengl3.h>
-
+#include "editor/services/render/imgui_render_backend.h"
 #include "runtime/core/base/macro.h"
 
 namespace Hybrid
@@ -13,7 +10,9 @@ namespace Hybrid
         constexpr const char* kImGuiLayerLogTag = "[ImGuiLayer]";
     } // namespace
 
-    ImGuiLayer::ImGuiLayer(GLFWwindow* window) : Layer("ImGuiLayer"), m_window(window) {}
+    ImGuiLayer::ImGuiLayer(IWindow& window, std::shared_ptr<IImGuiRenderBackend> backend)
+        : Layer("ImGuiLayer"), m_window(&window), m_backend(std::move(backend)) {}
+    ImGuiLayer::~ImGuiLayer() = default;
 
     void ImGuiLayer::onAttach()
     {
@@ -23,18 +22,21 @@ namespace Hybrid
             return;
         }
 
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-
-        ImGuiIO& io = ImGui::GetIO();
-        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-        io.ConfigWindowsMoveFromTitleBarOnly = true;
-        ImGui::StyleColorsDark();
-
-        ImGui_ImplGlfw_InitForOpenGL(m_window, true);
-        ImGui_ImplOpenGL3_Init("#version 330");
+        if (!m_backend)
+        {
+            HBD_CORE_ERROR("{} attach_failed reason=unsupported_backend backend={}",
+                           kImGuiLayerLogTag, ToString(m_window->graphicsBackend()));
+            return;
+        }
+        std::string error;
+        if (!m_backend->initialize(*m_window, error))
+        {
+            HBD_CORE_ERROR("{} attach_failed reason={}", kImGuiLayerLogTag, error);
+            return;
+        }
         m_initialized = true;
-        HBD_CORE_INFO("{} attach_completed", kImGuiLayerLogTag);
+        HBD_CORE_INFO("{} attach_completed backend={}",
+                      kImGuiLayerLogTag, ToString(m_window->graphicsBackend()));
     }
 
     void ImGuiLayer::onDetach()
@@ -42,9 +44,7 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
-        ImGui_ImplOpenGL3_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-        ImGui::DestroyContext();
+        m_backend->shutdown();
         m_initialized = false;
         HBD_CORE_INFO("{} detach_completed", kImGuiLayerLogTag);
     }
@@ -54,9 +54,7 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
+        m_backend->newFrame();
     }
 
     void ImGuiLayer::onUpdate(float /*dt*/)
@@ -72,7 +70,6 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        m_backend->render();
     }
 } // namespace Hybrid

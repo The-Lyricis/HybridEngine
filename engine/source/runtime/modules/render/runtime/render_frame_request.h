@@ -12,6 +12,7 @@
 #include <glm/vec3.hpp>
 
 #include "runtime/modules/render/runtime/render_flags.h"
+#include "runtime/modules/render/rhi/rhi_handles.h"
 
 namespace Hybrid
 {
@@ -80,7 +81,6 @@ namespace Hybrid
     {
         std::shared_ptr<Scene> scene;
         float dt = 0.0f;
-        void* window_handle = nullptr;
         const InputState* input = nullptr;
         std::vector<RenderViewRequest> views;
     };
@@ -88,7 +88,7 @@ namespace Hybrid
     struct RenderViewResult
     {
         std::string name;
-        uint32_t color_texture = 0;
+        TextureViewHandle color_texture;
         std::optional<uint32_t> picked_entity;
         RenderViewId id = kInvalidRenderViewId;
     };

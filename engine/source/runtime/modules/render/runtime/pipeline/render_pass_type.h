@@ -14,6 +14,7 @@ namespace Hybrid
         Grid,
         Shadow,
         PostProcess,
+        Custom,
         //DebugNormals
     };
 } // namespace Hybrid

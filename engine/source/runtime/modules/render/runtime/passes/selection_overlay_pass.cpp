@@ -1,172 +1,162 @@
 #include "selection_overlay_pass.h"
 
 #include <array>
+#include <cstdint>
+#include <string>
+#include <vector>
 
-#include <glad/gl.h>
-
-#include "runtime/modules/render/public/buffer.h"
+#include "runtime/core/base/macro.h"
 #include "runtime/modules/render/public/framebuffer.h"
-#include "runtime/modules/render/public/render_command.h"
-#include "runtime/modules/render/public/shader.h"
-#include "runtime/modules/render/public/vertex_array.h"
-#include "runtime/modules/render/runtime/pipeline/pipeline_state.h"
-#include "runtime/modules/render/runtime/render_binding_layout.h"
+#include "runtime/modules/render/rhi/render_device.h"
+#include "runtime/modules/render/runtime/pipeline/render_graph_resources.h"
 #include "runtime/modules/render/runtime/render_bindings.h"
+#include "runtime/modules/render/runtime/render_shaders.h"
 #include "runtime/modules/render/runtime/render_targets.h"
+#include "runtime/modules/render/runtime/shader_library.h"
 
 namespace Hybrid
 {
-    void SelectionOverlayPass::execute(RenderContext& context)
+    namespace
     {
-        const std::shared_ptr<Framebuffer>& scene_framebuffer = context.scene_framebuffer;
-        const std::shared_ptr<Framebuffer>& selection_framebuffer = context.selection_framebuffer;
-        const RenderSelectionState* selection = context.editor_selection;
-        const SelectionOverlayStyle* style = context.selection_overlay_style;
-
-        if (!scene_framebuffer || !selection_framebuffer || !selection || selection->selected_entities.empty() ||
-            context.shader_library == nullptr || style == nullptr)
+        constexpr const char* kLogTag = "[SelectionOverlayPass]";
+        struct FullscreenVertex { float position[2]; float uv[2]; };
+        struct alignas(16) SettingsGPU
         {
-            return;
-        }
-
-        auto shader = context.shader_library->get("SelectionOverlay");
-        if (!shader)
-            return;
-
-        ensureInputFramebuffer(scene_framebuffer->getWidth(), scene_framebuffer->getHeight());
-        if (!m_InputFramebuffer)
-            return;
-
-        const uint32_t width = scene_framebuffer->getWidth();
-        const uint32_t height = scene_framebuffer->getHeight();
-
-        // Snapshot the scene inputs first to avoid sampling from the same target
-        // that this pass writes back into.
-        scene_framebuffer->copyColorAttachmentTo(*m_InputFramebuffer, 0, 0);
-        scene_framebuffer->copyDepthAttachmentTo(*m_InputFramebuffer);
-
-        auto* quad = getOrCreateFullscreenQuad();
-        if (!quad)
-            return;
-
-        scene_framebuffer->bind();
-        scene_framebuffer->setDrawColorAttachments({RenderTargets::kSceneColorAttachment});
-        RenderCommand::setViewport(0, 0, width, height);
-
-        ScopedPipelineState pipeline_state(PipelineStates::FullscreenNoDepth());
-
-        const RenderBindingLayoutDesc& binding_layout = GetSelectionOverlayBindingLayout();
-        const RenderBindingDesc* scene_color_binding =
-            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlaySceneColorUniform);
-        const RenderBindingDesc* scene_depth_binding =
-            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlaySceneDepthUniform);
-        const RenderBindingDesc* mask_binding =
-            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayMaskUniform);
-        const RenderBindingDesc* selected_depth_binding =
-            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlaySelectedDepthUniform);
-        const RenderBindingDesc* texel_width_binding =
-            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayTexelWidthUniform);
-        const RenderBindingDesc* texel_height_binding =
-            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayTexelHeightUniform);
-        const RenderBindingDesc* visible_color_binding =
-            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayVisibleColorUniform);
-        const RenderBindingDesc* occluded_color_binding =
-            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayOccludedColorUniform);
-        const RenderBindingDesc* fill_color_binding =
-            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayFillColorUniform);
-        const RenderBindingDesc* depth_epsilon_binding =
-            FindRenderBinding(binding_layout, RenderBindings::kSelectionOverlayDepthEpsilonUniform);
-        if (!scene_color_binding || !scene_depth_binding || !mask_binding || !selected_depth_binding ||
-            !texel_width_binding || !texel_height_binding || !visible_color_binding || !occluded_color_binding ||
-            !fill_color_binding || !depth_epsilon_binding)
-        {
-            return;
-        }
-
-        shader->bind();
-        shader->setFloat(std::string(texel_width_binding->name), width > 0 ? 1.0f / static_cast<float>(width) : 0.0f);
-        shader->setFloat(std::string(texel_height_binding->name), height > 0 ? 1.0f / static_cast<float>(height) : 0.0f);
-        shader->setFloat(std::string(depth_epsilon_binding->name), style->depth_epsilon);
-        shader->setVec4(std::string(visible_color_binding->name), style->visible_outline_color);
-        shader->setVec4(std::string(occluded_color_binding->name), style->occluded_outline_color);
-        shader->setVec4(std::string(fill_color_binding->name), style->fill_color);
-
-        m_InputFramebuffer->bindColorAttachmentTexture(RenderTargets::kSceneColorAttachment,
-                                                       scene_color_binding->slot);
-        m_InputFramebuffer->bindDepthAttachmentTexture(scene_depth_binding->slot);
-        selection_framebuffer->bindColorAttachmentTexture(RenderTargets::kSelectionMaskAttachment,
-                                                         mask_binding->slot);
-        selection_framebuffer->bindDepthAttachmentTexture(selected_depth_binding->slot);
-
-        quad->vao->bind();
-        RenderCommand::drawIndexed(quad->index_count);
-
-        scene_framebuffer->setDrawColorAttachments({
-            RenderTargets::kSceneColorAttachment,
-            RenderTargets::kSceneEntityIDAttachment
-        });
-        scene_framebuffer->unbind();
-    }
-
-    void SelectionOverlayPass::ensureInputFramebuffer(uint32_t width, uint32_t height)
-    {
-        width = std::max(1u, width);
-        height = std::max(1u, height);
-
-        FramebufferSpec spec{};
-        spec.width = width;
-        spec.height = height;
-        spec.attachment_spec = {
-            FramebufferTextureFormat::RGBA8,
-            FramebufferTextureFormat::Depth32F
+            float visible[4];
+            float occluded[4];
+            float fill[4];
+            float metrics[4]; // texel width, texel height, depth epsilon, padding
         };
-
-        if (!m_InputFramebuffer)
-        {
-            m_InputFramebuffer = Framebuffer::Create(spec);
-            return;
-        }
-
-        if (m_InputFramebuffer->getWidth() != width || m_InputFramebuffer->getHeight() != height)
-            m_InputFramebuffer->resize(width, height);
-    }
-
-    SelectionOverlayPass::FullscreenQuadGPU* SelectionOverlayPass::getOrCreateFullscreenQuad()
-    {
-        if (m_HasFullscreenQuad)
-            return &m_FullscreenQuad;
-
-        struct FullscreenVertex
-        {
-            float position[2];
-            float uv[2];
-        };
-
-        static constexpr std::array<FullscreenVertex, 4> kVertices = {
+        static_assert(sizeof(SettingsGPU) == 64);
+        constexpr std::array<FullscreenVertex, 4> kVertices = {
             FullscreenVertex{{-1.0f, -1.0f}, {0.0f, 0.0f}},
             FullscreenVertex{{ 1.0f, -1.0f}, {1.0f, 0.0f}},
             FullscreenVertex{{ 1.0f,  1.0f}, {1.0f, 1.0f}},
             FullscreenVertex{{-1.0f,  1.0f}, {0.0f, 1.0f}},
         };
+        constexpr std::array<uint32_t, 6> kIndices = {0, 1, 2, 2, 3, 0};
+        std::vector<uint8_t> shaderCode(const std::string& source) { return {source.begin(), source.end()}; }
+        void copyColor(float (&out)[4], const glm::vec4& in)
+        { out[0] = in.x; out[1] = in.y; out[2] = in.z; out[3] = in.w; }
+    }
 
-        static constexpr std::array<uint32_t, 6> kIndices = {0, 1, 2, 2, 3, 0};
+    SelectionOverlayPass::~SelectionOverlayPass() { shutdown(); }
 
-        m_FullscreenQuad.vb =
-            VertexBuffer::Create(kVertices.data(), static_cast<uint32_t>(kVertices.size() * sizeof(FullscreenVertex)));
-        m_FullscreenQuad.ib = IndexBuffer::Create(kIndices.data(), static_cast<uint32_t>(kIndices.size()));
-        m_FullscreenQuad.vao = VertexArray::Create();
+    void SelectionOverlayPass::releasePipeline()
+    {
+        if (!m_Device) return;
+        if (m_Pipeline) (void)m_Device->destroyPipeline(m_Pipeline);
+        if (m_VertexShader) (void)m_Device->destroyShaderModule(m_VertexShader);
+        if (m_FragmentShader) (void)m_Device->destroyShaderModule(m_FragmentShader);
+        m_Pipeline = {}; m_VertexShader = {}; m_FragmentShader = {}; m_ShaderRevision = 0;
+    }
 
-        VertexLayout layout;
-        layout.stride = sizeof(FullscreenVertex);
-        layout.attributes = {
-            {0, 2, 0, false},
-            {1, 2, sizeof(float) * 2, false},
+    void SelectionOverlayPass::shutdown()
+    {
+        if (!m_Device) return;
+        releasePipeline();
+        if (m_Sampler) (void)m_Device->destroySampler(m_Sampler);
+        if (m_SettingsBuffer) (void)m_Device->destroyBuffer(m_SettingsBuffer);
+        if (m_IndexBuffer) (void)m_Device->destroyBuffer(m_IndexBuffer);
+        if (m_VertexBuffer) (void)m_Device->destroyBuffer(m_VertexBuffer);
+        m_Sampler = {}; m_SettingsBuffer = {}; m_IndexBuffer = {}; m_VertexBuffer = {}; m_Device = nullptr;
+    }
+
+    bool SelectionOverlayPass::ensureStaticResources(IRenderDevice& device)
+    {
+        if (m_Device && m_Device != &device) shutdown();
+        m_Device = &device;
+        const auto create = [&device](BufferHandle& handle, const void* data, size_t size,
+                                      RhiBufferUsage usage, const char* name)
+        {
+            if (handle) return true;
+            BufferDesc desc{}; desc.size = size; desc.usage = usage; desc.memory = RhiMemoryUsage::CPUToGPU; desc.debug_name = name;
+            const auto result = device.createBuffer(desc, data, data ? size : 0);
+            if (!result) { HBD_CORE_ERROR("{} buffer_create_failed name={} reason={}", kLogTag, name, result.error.message); return false; }
+            handle = result.value;
+            return true;
         };
+        if (!create(m_VertexBuffer, kVertices.data(), sizeof(kVertices), RhiBufferUsage::Vertex, "SelectionOverlay.Vertices") ||
+            !create(m_IndexBuffer, kIndices.data(), sizeof(kIndices), RhiBufferUsage::Index, "SelectionOverlay.Indices") ||
+            !create(m_SettingsBuffer, nullptr, sizeof(SettingsGPU), RhiBufferUsage::Uniform, "SelectionOverlay.Settings")) return false;
+        if (!m_Sampler)
+        {
+            SamplerDesc desc{}; desc.linear_filter = true; desc.clamp_to_edge = true; desc.debug_name = "SelectionOverlay.LinearClamp";
+            const auto result = device.createSampler(desc);
+            if (!result) { HBD_CORE_ERROR("{} sampler_create_failed reason={}", kLogTag, result.error.message); return false; }
+            m_Sampler = result.value;
+        }
+        return true;
+    }
 
-        m_FullscreenQuad.vao->setVertexBuffer(m_FullscreenQuad.vb, layout);
-        m_FullscreenQuad.vao->setIndexBuffer(m_FullscreenQuad.ib);
-        m_FullscreenQuad.index_count = static_cast<uint32_t>(kIndices.size());
-        m_HasFullscreenQuad = true;
-        return &m_FullscreenQuad;
+    bool SelectionOverlayPass::ensurePipeline(IRenderDevice& device, ShaderLibrary& shaders)
+    {
+        ShaderLibrary::ShaderSourceBundle sources{};
+        if (!shaders.getSources(std::string(RenderShaders::kSelectionOverlay.name), sources))
+        { HBD_CORE_ERROR("{} shader_sources_unavailable", kLogTag); return false; }
+        if (m_Pipeline && m_ShaderRevision == sources.revision) return true;
+        ShaderModuleDesc vertex{}; vertex.stage = RhiShaderStage::Vertex; vertex.code = shaderCode(sources.vertex); vertex.debug_name = "SelectionOverlay.Vertex";
+        const auto vertex_result = device.createShaderModule(vertex);
+        if (!vertex_result) { HBD_CORE_ERROR("{} vertex_shader_create_failed reason={}", kLogTag, vertex_result.error.message); return false; }
+        ShaderModuleDesc fragment{}; fragment.stage = RhiShaderStage::Fragment; fragment.code = shaderCode(sources.fragment); fragment.debug_name = "SelectionOverlay.Fragment";
+        const auto fragment_result = device.createShaderModule(fragment);
+        if (!fragment_result) { (void)device.destroyShaderModule(vertex_result.value); HBD_CORE_ERROR("{} fragment_shader_create_failed reason={}", kLogTag, fragment_result.error.message); return false; }
+        GraphicsPipelineDesc desc{};
+        desc.vertex_shader = vertex_result.value; desc.fragment_shader = fragment_result.value;
+        desc.vertex_stride = sizeof(FullscreenVertex); desc.vertex_attributes = {{0, 0, 2}, {1, sizeof(float) * 2u, 2}};
+        desc.texture_bindings = {
+            {{RenderBindings::kSelectionOverlayTextureSet, RenderBindings::kSelectionOverlaySceneColorSlot}, RenderBindings::kSelectionOverlaySceneColorUniform},
+            {{RenderBindings::kSelectionOverlayTextureSet, RenderBindings::kSelectionOverlaySceneDepthSlot}, RenderBindings::kSelectionOverlaySceneDepthUniform},
+            {{RenderBindings::kSelectionOverlayTextureSet, RenderBindings::kSelectionOverlayMaskSlot}, RenderBindings::kSelectionOverlayMaskUniform},
+            {{RenderBindings::kSelectionOverlayTextureSet, RenderBindings::kSelectionOverlaySelectedDepthSlot}, RenderBindings::kSelectionOverlaySelectedDepthUniform},
+        };
+        desc.uniform_buffer_bindings = {
+            {{RenderBindings::kSelectionOverlaySettingsSet, RenderBindings::kSelectionOverlaySettingsBinding}, RenderBindings::kSelectionOverlaySettingsBlockName},
+        };
+        desc.topology = RhiPrimitiveTopology::Triangles; desc.cull_mode = RhiCullMode::None;
+        desc.depth_test = false; desc.depth_write = false; desc.blend_enabled = false;
+        desc.color_format = RhiFormat::RGBA8Unorm; desc.depth_format = RhiFormat::Unknown; desc.debug_name = "SelectionOverlay.Pipeline";
+        const auto pipeline = device.createGraphicsPipeline(desc);
+        if (!pipeline) { (void)device.destroyShaderModule(vertex_result.value); (void)device.destroyShaderModule(fragment_result.value); HBD_CORE_ERROR("{} pipeline_create_failed reason={}", kLogTag, pipeline.error.message); return false; }
+        releasePipeline(); m_VertexShader = vertex_result.value; m_FragmentShader = fragment_result.value; m_Pipeline = pipeline.value; m_ShaderRevision = sources.revision;
+        HBD_CORE_INFO("{} pipeline_ready shader_revision={}", kLogTag, m_ShaderRevision);
+        return true;
+    }
+
+    void SelectionOverlayPass::execute(RenderContext& context)
+    {
+        const auto& scene = context.scene_framebuffer;
+        const RenderSelectionState* selection = context.editor_selection;
+        if (!scene || !selection || selection->selected_entities.empty() || !context.selection_overlay_style || !context.shader_library || !context.device || !context.graph_resources) return;
+        const auto input = context.graph_resources->texture("SelectionOverlayInput");
+        const auto scene_depth = context.graph_resources->texture("SceneDepth");
+        const auto mask = context.graph_resources->texture("SelectionMask");
+        const auto selected_depth = context.graph_resources->texture("SelectionDepth");
+        const TextureViewHandle output = scene->getColorAttachmentView(RenderTargets::kSceneColorAttachment);
+        if (!input || !scene_depth || !mask || !selected_depth || !output) { HBD_CORE_ERROR("{} graph_resource_unavailable", kLogTag); return; }
+        IRenderDevice& device = *context.device;
+        if (!ensureStaticResources(device) || !ensurePipeline(device, *context.shader_library)) return;
+        const uint32_t width = scene->getWidth(), height = scene->getHeight();
+        SettingsGPU settings{};
+        copyColor(settings.visible, context.selection_overlay_style->visible_outline_color);
+        copyColor(settings.occluded, context.selection_overlay_style->occluded_outline_color);
+        copyColor(settings.fill, context.selection_overlay_style->fill_color);
+        settings.metrics[0] = width ? 1.0f / static_cast<float>(width) : 0.0f;
+        settings.metrics[1] = height ? 1.0f / static_cast<float>(height) : 0.0f;
+        settings.metrics[2] = context.selection_overlay_style->depth_epsilon;
+        if (const RhiStatus status = device.updateBuffer(m_SettingsBuffer, 0, &settings, sizeof(settings)); !status) { HBD_CORE_ERROR("{} settings_upload_failed reason={}", kLogTag, status.error.message); return; }
+        auto commands = device.createCommandList();
+        const auto check = [](const RhiStatus& status, const char* stage) { if (status) return true; HBD_CORE_ERROR("{} command_failed stage={} reason={}", kLogTag, stage, status.error.message); return false; };
+        if (!commands || !check(commands->begin(), "begin") || !check(commands->copyTexture(output, input.value), "copy_input")) return;
+        RenderPassDesc pass{}; pass.colors.push_back({output, {}, false, true}); pass.debug_name = "SelectionOverlay";
+        if (!check(commands->beginRenderPass(pass), "begin_render_pass") || !check(commands->setViewport({0, 0, static_cast<float>(width), static_cast<float>(height)}), "viewport") ||
+            !check(commands->bindPipeline(m_Pipeline), "pipeline") ||
+            !check(commands->bindTexture(input.value, m_Sampler, {RenderBindings::kSelectionOverlayTextureSet, RenderBindings::kSelectionOverlaySceneColorSlot}), "scene_color") ||
+            !check(commands->bindTexture(scene_depth.value, m_Sampler, {RenderBindings::kSelectionOverlayTextureSet, RenderBindings::kSelectionOverlaySceneDepthSlot}), "scene_depth") ||
+            !check(commands->bindTexture(mask.value, m_Sampler, {RenderBindings::kSelectionOverlayTextureSet, RenderBindings::kSelectionOverlayMaskSlot}), "mask") ||
+            !check(commands->bindTexture(selected_depth.value, m_Sampler, {RenderBindings::kSelectionOverlayTextureSet, RenderBindings::kSelectionOverlaySelectedDepthSlot}), "selected_depth") ||
+            !check(commands->bindUniformBuffer(m_SettingsBuffer, {RenderBindings::kSelectionOverlaySettingsSet, RenderBindings::kSelectionOverlaySettingsBinding}), "settings") ||
+            !check(commands->bindVertexBuffer(m_VertexBuffer), "vertices") || !check(commands->bindIndexBuffer(m_IndexBuffer), "indices") ||
+            !check(commands->drawIndexed(static_cast<uint32_t>(kIndices.size())), "draw") || !check(commands->endRenderPass(), "end_render_pass") || !check(commands->end(), "end") || !check(device.submit(*commands), "submit")) return;
     }
 } // namespace Hybrid

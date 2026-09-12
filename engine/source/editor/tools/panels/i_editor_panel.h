@@ -2,6 +2,8 @@
 
 #include <imgui.h>
 
+#include "editor/core/editor_input.h"
+
 namespace Hybrid
 {
     struct EditorContext;
@@ -70,7 +72,9 @@ namespace Hybrid
             const char* popup_id = nullptr,
             ImGuiPopupFlags flags = ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)
         {
-            if (!ImGui::BeginPopupContextWindow(popup_id, flags))
+            const char* resolved_id = popup_id ? popup_id : "##EditorWindowContext";
+            const bool no_open_over_items = (flags & ImGuiPopupFlags_NoOpenOverItems) != 0;
+            if (!EditorInput::beginWindowContextPopup(resolved_id, no_open_over_items))
                 return;
 
             drawWindowContextMenu(ctx);

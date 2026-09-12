@@ -1,7 +1,5 @@
 #include <iostream>
 
-#include <glad/gl.h>
-
 #include "runtime/runtime/engine.h"
 
 int main()
@@ -24,29 +22,31 @@ int main()
     scene_view.name = "LifecycleScene";
     scene_view.size = {96.0f, 64.0f};
     scene_view.camera_source = Hybrid::RenderCameraSource::ExplicitMatrices;
+    scene_view.flags = Hybrid::RenderFlags::Scene | Hybrid::RenderFlags::PostProcess;
+    scene_view.post_process.enabled = true;
+    scene_view.post_process.enable_tone_mapping = true;
+    scene_view.post_process.enable_gamma_correction = true;
     Hybrid::RenderViewRequest game_view{};
     game_view.id = 42;
     game_view.name = "LifecycleGame";
     game_view.size = {160.0f, 90.0f};
     game_view.camera_source = Hybrid::RenderCameraSource::ExplicitMatrices;
+    game_view.flags = Hybrid::RenderFlags::Scene | Hybrid::RenderFlags::PostProcess;
+    game_view.post_process.enabled = true;
     request.views = {scene_view, game_view};
     engine.run(2);
     const auto& result = engine.getRenderFrameResult();
     if (result.views.size() != 2 || result.views[0].id != 41 || result.views[1].id != 42 ||
-        result.views[0].color_texture == 0 || result.views[1].color_texture == 0)
+        !result.views[0].color_texture || !result.views[1].color_texture)
     {
         std::cerr << "stable multi-view target allocation failed\n";
         return 1;
     }
-    GLint scene_width = 0;
-    GLint scene_height = 0;
-    GLint game_width = 0;
-    GLint game_height = 0;
-    glGetTextureLevelParameteriv(result.views[0].color_texture, 0, GL_TEXTURE_WIDTH, &scene_width);
-    glGetTextureLevelParameteriv(result.views[0].color_texture, 0, GL_TEXTURE_HEIGHT, &scene_height);
-    glGetTextureLevelParameteriv(result.views[1].color_texture, 0, GL_TEXTURE_WIDTH, &game_width);
-    glGetTextureLevelParameteriv(result.views[1].color_texture, 0, GL_TEXTURE_HEIGHT, &game_height);
-    if (scene_width != 96 || scene_height != 64 || game_width != 160 || game_height != 90)
+    const auto scene_desc = engine.getRenderSystem().device().textureDesc(result.views[0].color_texture);
+    const auto game_desc = engine.getRenderSystem().device().textureDesc(result.views[1].color_texture);
+    if (!scene_desc || !game_desc ||
+        scene_desc.value.width != 96 || scene_desc.value.height != 64 ||
+        game_desc.value.width != 160 || game_desc.value.height != 90)
     {
         std::cerr << "multi-view target dimensions are incorrect\n";
         return 1;

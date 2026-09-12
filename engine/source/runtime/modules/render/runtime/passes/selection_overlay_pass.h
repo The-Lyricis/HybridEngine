@@ -1,36 +1,39 @@
 #pragma once
 
-#include <memory>
-
 #include "runtime/modules/render/runtime/pipeline/render_context.h"
+#include "runtime/modules/render/rhi/rhi_handles.h"
 
 namespace Hybrid
 {
-    class Framebuffer;
-    class VertexArray;
-    class VertexBuffer;
-    class IndexBuffer;
+    class IRenderDevice;
+    class ShaderLibrary;
 
+    // Fullscreen selection compositing. Its intermediate image is a graph
+    // resource; this class owns only immutable pipeline state and buffers.
     class SelectionOverlayPass
     {
     public:
+        ~SelectionOverlayPass();
+        SelectionOverlayPass() = default;
+        SelectionOverlayPass(const SelectionOverlayPass&) = delete;
+        SelectionOverlayPass& operator=(const SelectionOverlayPass&) = delete;
+
         void execute(RenderContext& context);
+        void shutdown();
 
     private:
-        struct FullscreenQuadGPU
-        {
-            std::shared_ptr<VertexArray> vao;
-            std::shared_ptr<VertexBuffer> vb;
-            std::shared_ptr<IndexBuffer> ib;
-            uint32_t index_count = 0;
-        };
+        bool ensureStaticResources(IRenderDevice& device);
+        bool ensurePipeline(IRenderDevice& device, ShaderLibrary& shaders);
+        void releasePipeline();
 
-        void ensureInputFramebuffer(uint32_t width, uint32_t height);
-        FullscreenQuadGPU* getOrCreateFullscreenQuad();
-
-    private:
-        std::shared_ptr<Framebuffer> m_InputFramebuffer;
-        FullscreenQuadGPU m_FullscreenQuad;
-        bool m_HasFullscreenQuad = false;
+        IRenderDevice* m_Device = nullptr;
+        BufferHandle m_VertexBuffer;
+        BufferHandle m_IndexBuffer;
+        BufferHandle m_SettingsBuffer;
+        SamplerHandle m_Sampler;
+        ShaderHandle m_VertexShader;
+        ShaderHandle m_FragmentShader;
+        PipelineHandle m_Pipeline;
+        uint64_t m_ShaderRevision = 0;
     };
 } // namespace Hybrid

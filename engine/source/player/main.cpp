@@ -16,13 +16,16 @@ namespace
         std::filesystem::path project;
         std::string scene;
         bool headless = false;
+        Hybrid::GraphicsBackend render_backend = Hybrid::GraphicsBackend::OpenGL;
+        bool allow_render_fallback = false;
         uint64_t max_frames = 0;
     };
 
     void printUsage()
     {
         std::cerr << "Usage: HybridPlayer --project <file.hyproj> [--scene <logical-path>] "
-                     "[--headless] [--max-frames <N>]\n";
+                     "[--headless] [--render-api <opengl|metal|vulkan>] "
+                     "[--allow-render-fallback] [--max-frames <N>]\n";
     }
 
     bool parseUnsigned(const std::string& value, uint64_t& output)
@@ -40,7 +43,21 @@ namespace
         for (int index = 1; index < argc; ++index)
         {
             const std::string argument = argv[index];
-            if (argument == "--project" || argument == "--scene" || argument == "--max-frames")
+            constexpr const char* render_api_prefix = "--render-api=";
+            if (argument.rfind(render_api_prefix, 0) == 0)
+            {
+                const std::string value = argument.substr(std::char_traits<char>::length(render_api_prefix));
+                const auto backend = Hybrid::ParseGraphicsBackend(value);
+                if (!backend)
+                {
+                    error = "invalid --render-api value: " + value;
+                    return false;
+                }
+                options.render_backend = *backend;
+                continue;
+            }
+            if (argument == "--project" || argument == "--scene" ||
+                argument == "--max-frames" || argument == "--render-api")
             {
                 if (++index >= argc)
                 {
@@ -52,6 +69,16 @@ namespace
                     options.project = value;
                 else if (argument == "--scene")
                     options.scene = value;
+                else if (argument == "--render-api")
+                {
+                    const auto backend = Hybrid::ParseGraphicsBackend(value);
+                    if (!backend)
+                    {
+                        error = "invalid --render-api value: " + value;
+                        return false;
+                    }
+                    options.render_backend = *backend;
+                }
                 else if (!parseUnsigned(value, options.max_frames))
                 {
                     error = "invalid --max-frames value: " + value;
@@ -61,6 +88,10 @@ namespace
             else if (argument == "--headless")
             {
                 options.headless = true;
+            }
+            else if (argument == "--allow-render-fallback")
+            {
+                options.allow_render_fallback = true;
             }
             else
             {
@@ -93,6 +124,8 @@ int main(int argc, char** argv)
     Hybrid::EngineConfig config{};
     config.project_path = options.project;
     config.headless = options.headless;
+    config.render_backend = options.render_backend;
+    config.allow_render_fallback = options.allow_render_fallback;
     if (!engine.initialize(config))
     {
         std::cerr << "HybridPlayer: failed to initialize project: "

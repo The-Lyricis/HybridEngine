@@ -6,12 +6,13 @@
 
 namespace Hybrid
 {
-    class WindowSystem;
+    class IWindow;
     class RenderSystem;
     class SceneManager;
     class Scene;
     class RuntimeResourceSystem;
     class EditorResourceSystem;
+    class EditorTextureService;
     class IEditorPlatformServices;
     class InputLayer;
     class JobSystem;
@@ -23,11 +24,12 @@ namespace Hybrid
     // Service locator-style bundle injected into editor layers.
     struct EngineServices
     {
-        WindowSystem* window = nullptr;                  // Native window and platform IO.
+        IWindow* window = nullptr;                       // Platform-neutral window service.
         RenderSystem* render = nullptr;                  // Render system API.
         SceneManager* scene = nullptr;                   // Scene lifecycle/selection source.
         RuntimeResourceSystem* resources = nullptr;      // Runtime asset services.
         EditorResourceSystem* editor_resources = nullptr;// Editor import/persistence services.
+        EditorTextureService* editor_textures = nullptr; // Backend-neutral editor image service.
         IEditorPlatformServices* platform = nullptr;     // Editor platform-dependent dialogs and shell actions.
         InputLayer* input = nullptr;                     // Per-frame input state.
         FrameContext* frame_context = nullptr;           // Shared frame payload for renderer.

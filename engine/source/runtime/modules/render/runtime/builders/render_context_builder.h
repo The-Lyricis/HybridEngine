@@ -5,6 +5,8 @@
 namespace Hybrid
 {
     class Framebuffer;
+    class IRenderDevice;
+    class RenderGraphResourceRegistry;
     class Shader;
 
     struct ResolvedRenderTargets
@@ -14,6 +16,7 @@ namespace Hybrid
         std::shared_ptr<Framebuffer> selection_framebuffer;
         std::shared_ptr<Framebuffer> shadow_framebuffer;
         std::array<std::shared_ptr<Framebuffer>, kMaxDirectionalShadowCascades>* shadow_cascade_framebuffers = nullptr;
+        RenderGraphResourceRegistry* graph_resources = nullptr;
     };
 
     struct RenderContextBuildInput
@@ -22,7 +25,8 @@ namespace Hybrid
         const RenderPacket* packet = nullptr;
         const RenderSelectionState* editor_selection = nullptr;
         RenderFlags flags = RenderFlags::None;
-        void* window_handle = nullptr;
+        IRenderDevice* device = nullptr;
+        BufferHandle frame_uniform_buffer;
         ResolvedRenderTargets targets;
         const SelectionOverlayStyle* selection_overlay_style = nullptr;
         ShaderLibrary* shader_library = nullptr;

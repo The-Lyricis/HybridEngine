@@ -1,6 +1,7 @@
 #include "scene_view_interaction.h"
 
 #include "editor/core/editor_drag_drop.h"
+#include "editor/core/editor_input.h"
 
 #include "runtime/core/base/macro.h"
 
@@ -64,7 +65,7 @@ namespace Hybrid
         ctx.picking.request = true;
         ctx.picking.x = px;
         ctx.picking.y = py;
-        ctx.picking.toggle = ImGui::GetIO().KeyCtrl;
+        ctx.picking.toggle = EditorInput::selectionToggleModifier();
         HBD_CORE_DEBUG("{} pick_requested x={} y={} toggle={}",
                        log_tag,
                        px,

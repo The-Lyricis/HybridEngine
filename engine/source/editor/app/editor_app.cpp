@@ -8,15 +8,13 @@
 #include "editor/core/engine_services.h"
 #include "editor/framework/layers/editor_layer.h"
 #include "editor/framework/layers/imgui_layer.h"
-#if defined(_WIN32)
-#include "editor/platform/windows/editor_platform_services_win32.h"
-#elif defined(__APPLE__)
-#include "editor/platform/macos/editor_platform_services_macos.h"
-#endif
 #include "editor/services/asset/editor_resource_system.h"
+#include "editor/services/platform/editor_platform_services.h"
 #include "editor/services/project/project_history.h"
 #include "editor/services/project/project_instance_lock.h"
 #include "editor/services/runtime/editor_session_controller.h"
+#include "editor/services/render/editor_texture_service.h"
+#include "editor/services/render/imgui_render_backend.h"
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/project/project_creator.h"
 #include "runtime/modules/project/project_paths.h"
@@ -40,6 +38,9 @@ namespace Hybrid
             std::filesystem::path project_path;
             std::filesystem::path new_project_root;
             std::string new_project_name;
+            GraphicsBackend render_backend = GraphicsBackend::OpenGL;
+            bool allow_render_fallback = false;
+            std::string argument_error;
         };
 
         EditorLaunchRequest parseLaunchRequest(int argc, char** argv)
@@ -50,6 +51,20 @@ namespace Hybrid
                 const std::string arg = argv[i] ? argv[i] : "";
                 if (arg.empty())
                     continue;
+
+                constexpr const char* render_api_prefix = "--render-api=";
+                if (arg.rfind(render_api_prefix, 0) == 0)
+                {
+                    const std::string value = arg.substr(std::char_traits<char>::length(render_api_prefix));
+                    const auto backend = ParseGraphicsBackend(value);
+                    if (!backend)
+                    {
+                        request.argument_error = "invalid --render-api value: " + value;
+                        break;
+                    }
+                    request.render_backend = *backend;
+                    continue;
+                }
 
                 if (arg == "--project" || arg == "-p")
                 {
@@ -69,6 +84,30 @@ namespace Hybrid
                 {
                     if (i + 1 < argc && argv[i + 1] != nullptr)
                         request.new_project_name = argv[++i];
+                    continue;
+                }
+
+                if (arg == "--render-api")
+                {
+                    if (i + 1 >= argc || argv[i + 1] == nullptr)
+                    {
+                        request.argument_error = "missing value after --render-api";
+                        break;
+                    }
+                    const std::string value = argv[++i];
+                    const auto backend = ParseGraphicsBackend(value);
+                    if (!backend)
+                    {
+                        request.argument_error = "invalid --render-api value: " + value;
+                        break;
+                    }
+                    request.render_backend = *backend;
+                    continue;
+                }
+
+                if (arg == "--allow-render-fallback")
+                {
+                    request.allow_render_fallback = true;
                     continue;
                 }
 
@@ -177,14 +216,18 @@ namespace Hybrid
     int EditorApp::run(int argc, char** argv)
     {
         constexpr const char* kEditorAppLogTag = "[EditorApp]";
-#if defined(_WIN32)
-        auto platform_services = std::make_unique<EditorPlatformServicesWin32>();
-#elif defined(__APPLE__)
-        auto platform_services = std::make_unique<EditorPlatformServicesMacOS>();
-#else
-#error HybridEditor has no platform services implementation for this platform
-#endif
+        auto platform_services = CreateEditorPlatformServices();
+        if (!platform_services)
+        {
+            HBD_CORE_ERROR("{} startup_failed reason=platform_services_unavailable", kEditorAppLogTag);
+            return 1;
+        }
         const EditorLaunchRequest launch_request = parseLaunchRequest(argc, argv);
+        if (!launch_request.argument_error.empty())
+        {
+            HBD_CORE_ERROR("{} launch_argument_failed reason={}", kEditorAppLogTag, launch_request.argument_error);
+            return 1;
+        }
         ProjectLaunchDecision launch_decision{};
         std::string project_error;
         if (!decideProjectLaunch(launch_request, *platform_services, launch_decision, project_error))
@@ -214,11 +257,16 @@ namespace Hybrid
         }
 
         HybridEngine engine;
-        if (!engine.initialize(launch_decision.resolved_project_file))
+        EngineConfig engine_config{};
+        engine_config.project_path = launch_decision.resolved_project_file;
+        engine_config.render_backend = launch_request.render_backend;
+        engine_config.allow_render_fallback = launch_request.allow_render_fallback;
+        if (!engine.initialize(engine_config))
         {
             project_lock.release();
             return 1;
         }
+        platform_services->configureApplicationAppearance();
         HBD_CORE_INFO("{} engine_initialized", kEditorAppLogTag);
         if (!launch_decision.resolved_project_file.empty())
         {
@@ -246,6 +294,17 @@ namespace Hybrid
             engine.shutdown();
             return 1;
         }
+        auto imgui_backend = std::shared_ptr<IImGuiRenderBackend>(
+            CreateImGuiRenderBackend(engine.getWindowSystem().graphicsBackend()));
+        if (!imgui_backend)
+        {
+            HBD_CORE_ERROR("{} imgui_backend_unavailable backend={}",
+                           kEditorAppLogTag, ToString(engine.getWindowSystem().graphicsBackend()));
+            editor_resources->shutdown();
+            engine.shutdown();
+            return 1;
+        }
+        auto editor_textures = std::make_shared<EditorTextureService>(imgui_backend);
 
         EditorSessionController session(engine);
         EngineServices services{};
@@ -254,6 +313,7 @@ namespace Hybrid
         services.scene = &engine.getSceneManager();
         services.resources = &engine.getResourceSystem();
         services.editor_resources = editor_resources.get();
+        services.editor_textures = editor_textures.get();
         services.platform = platform_services.get();
         services.input = &engine.getInputLayer();
         services.frame_context = &engine.getFrameContext();
@@ -268,7 +328,7 @@ namespace Hybrid
                 return session.setEditorScene(std::move(scene));
             };
 
-        engine.pushOverlay(std::make_unique<ImGuiLayer>(engine.getWindowSystem().getNativeWindow()));
+        engine.pushOverlay(std::make_unique<ImGuiLayer>(engine.getWindowSystem(), imgui_backend));
         auto editor_layer = std::make_unique<EditorLayer>(std::move(services));
         auto* editor_layer_ptr = editor_layer.get();
 

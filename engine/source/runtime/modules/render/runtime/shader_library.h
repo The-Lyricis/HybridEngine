@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <cstdint>
 
 namespace Hybrid
 {
@@ -12,6 +13,13 @@ namespace Hybrid
     class ShaderLibrary
     {
     public:
+        struct ShaderSourceBundle
+        {
+            std::string vertex;
+            std::string fragment;
+            uint64_t revision = 0;
+        };
+
         struct ShaderEntry
         {
             std::string name;
@@ -21,6 +29,7 @@ namespace Hybrid
             std::filesystem::file_time_type vertex_write_time{};
             std::filesystem::file_time_type fragment_write_time{};
             bool loaded = false;
+            ShaderSourceBundle sources;
         };
 
     public:
@@ -30,6 +39,7 @@ namespace Hybrid
                   const std::filesystem::path& fragment_path);
         bool contains(const std::string& name) const;
         std::shared_ptr<Shader> get(const std::string& name) const;
+        bool getSources(const std::string& name, ShaderSourceBundle& out_sources) const;
         bool reload(const std::string& name);
         void reloadChanged();
         void clear();

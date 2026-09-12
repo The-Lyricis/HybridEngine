@@ -1,16 +1,20 @@
 #pragma once
 
-#include "runtime/core/event/layer.h"
+#include <memory>
 
-struct GLFWwindow;
+#include "runtime/core/event/layer.h"
+#include "runtime/core/platform/window.h"
 
 namespace Hybrid
 {
+    class IImGuiRenderBackend;
+
     // Owns ImGui frame lifecycle (CreateContext/NewFrame/Render/Shutdown).
     class ImGuiLayer final : public Layer
     {
     public:
-        explicit ImGuiLayer(GLFWwindow* window);
+        ImGuiLayer(IWindow& window, std::shared_ptr<IImGuiRenderBackend> backend);
+        ~ImGuiLayer() override;
 
         void onBeginFrame() override;
         void onAttach() override;
@@ -20,7 +24,8 @@ namespace Hybrid
         void onEndFrame() override;
 
     private:
-        GLFWwindow* m_window = nullptr; // Host window for ImGui backend.
+        IWindow* m_window = nullptr;
+        std::shared_ptr<IImGuiRenderBackend> m_backend;
         bool m_initialized = false;     // Backend/context initialization state.
     };
 } // namespace Hybrid

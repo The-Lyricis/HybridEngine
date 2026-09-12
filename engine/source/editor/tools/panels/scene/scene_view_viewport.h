@@ -1,10 +1,9 @@
 #pragma once
 
-#include <cstdint>
-
 #include <imgui.h>
 
 #include "editor/core/context/editor_context.h"
+#include "editor/services/render/editor_image_handle.h"
 
 namespace Hybrid
 {
@@ -22,7 +21,7 @@ namespace Hybrid
     };
 
     SceneViewViewportResult DrawSceneViewViewport(EditorContext& ctx,
-                                                  uint32_t color_texture_id,
+                                                  EditorImageHandle image,
                                                   bool toolbar_interacted,
                                                   SceneViewViewportState& state,
                                                   const char* log_tag);

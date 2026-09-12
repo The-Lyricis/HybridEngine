@@ -1,4 +1,5 @@
 #pragma once
+#include "runtime/core/event/application_event.h"
 #include "runtime/core/event/event.h"
 #include "runtime/core/event/input_event.h"
 #include "runtime/modules/input/input_state.h"
@@ -43,6 +44,10 @@ namespace Hybrid
                 });
             dispatcher.dispatch<KeyTypedEvent>([this](KeyTypedEvent& ev) {
                 m_state.onText(static_cast<char32_t>(ev.getKeyCode()));
+                return false;
+                });
+            dispatcher.dispatch<WindowLostFocusEvent>([this](WindowLostFocusEvent&) {
+                m_state.onFocusLost();
                 return false;
                 });
         }

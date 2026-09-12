@@ -2,6 +2,7 @@
 
 #include "editor/core/context/editor_context.h"
 #include "editor/core/editor_drag_drop.h"
+#include "editor/core/editor_input.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -977,7 +978,8 @@ namespace Hybrid
             if (tree_double_clicked)
                 (void)openEntry(ctx, entry);
 
-            if (ImGui::BeginPopupContextItem())
+            const std::string popup_id = "##ProjectTreeItemContext_" + entry.physical.generic_string();
+            if (EditorInput::beginItemContextPopup(popup_id.c_str()))
             {
                 drawCommonContextMenu(ctx, &entry);
                 ImGui::EndPopup();
@@ -1064,7 +1066,8 @@ namespace Hybrid
                 break;
             }
 
-            if (ImGui::BeginPopupContextItem())
+            const std::string popup_id = "##ProjectContentItemContext_" + relStr;
+            if (EditorInput::beginItemContextPopup(popup_id.c_str()))
             {
                 drawCommonContextMenu(ctx, &e);
                 ImGui::EndPopup();
@@ -1199,5 +1202,3 @@ namespace Hybrid
         ImGui::End();
     }
 } // namespace Hybrid
-
-

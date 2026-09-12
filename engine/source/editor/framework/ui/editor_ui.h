@@ -11,13 +11,13 @@
 #include <functional>
 
 #include "editor/core/context/editor_dialogs.h"
+#include "editor/services/render/editor_image_handle.h"
 #include "editor/tools/panels/i_editor_panel.h"
-
-struct GLFWwindow;
 
 namespace Hybrid
 {
     class Scene;
+    class EditorTextureService;
     struct EditorContext;
 
     class HierarchyPanel;
@@ -35,11 +35,11 @@ namespace Hybrid
         EditorUI();
         ~EditorUI();
 
-        void initialize(GLFWwindow* window);
+        void initialize(EditorTextureService& textures);
         void shutdown();
 
         void drawPanels();
-        void drawViewports(uint32_t sceneColorTexID, uint32_t gameColorTexID);
+        void drawViewports(EditorImageHandle scene_image, EditorImageHandle game_image);
         void updateViewportState();
 
         void setActiveScene(Scene* scene);
@@ -59,12 +59,12 @@ namespace Hybrid
         IEditorPanel* getPanel(EditorPanelId id) const;
         void drawPanelToggleMenuItem(EditorPanelId id);
         const char* getPanelWindowName(EditorPanelId id) const;
-        void renderViewportPanel(EditorPanelId id, uint32_t colorTexID);
+        void renderViewportPanel(EditorPanelId id, EditorImageHandle image);
         void updateViewportPanelState(EditorPanelId id);
 
     private:
-        GLFWwindow* m_window = nullptr;
         bool m_initialized = false;
+        EditorTextureService* m_textures = nullptr;
 
         ImGuiID m_DockSpaceID = 0;
         bool m_DefaultLayoutBuilt = false;

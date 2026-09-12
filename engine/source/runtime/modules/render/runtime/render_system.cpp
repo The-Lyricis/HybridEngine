@@ -1,10 +1,5 @@
 #include "render_system.h"
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
-
-#include <glad/gl.h>
-
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
@@ -165,6 +160,19 @@ namespace Hybrid
         // Returns false if no valid camera found.
     }
 
+    RenderSystem::RenderSystem(std::unique_ptr<IRenderDevice> device,
+                               std::unique_ptr<ISwapchain> swapchain)
+        : m_RenderDevice(std::move(device)),
+          m_Swapchain(std::move(swapchain)),
+          m_RenderPipeline(std::make_unique<RenderPipeline>())
+    {
+    }
+
+    RenderSystem::~RenderSystem()
+    {
+        shutdown();
+    }
+
     void RenderSystem::setAssetManager(std::shared_ptr<AssetManager> mgr)
     {
         m_AssetManager = std::move(mgr);
@@ -174,10 +182,17 @@ namespace Hybrid
         m_DefaultCubemapTexture.reset();
     }
 
-    void RenderSystem::initialize(void *glfwWindowHandle)
+    void RenderSystem::initialize(uint32_t framebuffer_width, uint32_t framebuffer_height)
     {
         if (m_Initialized)
             return;
+        if (!m_RenderPipeline)
+            m_RenderPipeline = std::make_unique<RenderPipeline>();
+        if (!m_RenderDevice)
+        {
+            HBD_CORE_ERROR("{} initialize_failed reason=render_device_missing", kRenderSystemLogTag);
+            return;
+        }
 
         Renderer::initialize();
         if (!loadBuiltinShaders())
@@ -187,12 +202,8 @@ namespace Hybrid
             return;
         }
 
-        GLFWwindow *window = static_cast<GLFWwindow *>(glfwWindowHandle);
-        int w = 0, h = 0;
-        glfwGetFramebufferSize(window, &w, &h);
-
-        const uint32_t width = static_cast<uint32_t>(std::max(1, w));
-        const uint32_t height = static_cast<uint32_t>(std::max(1, h));
+        const uint32_t width = std::max(1u, framebuffer_width);
+        const uint32_t height = std::max(1u, framebuffer_height);
         const uint32_t shadow_cascade_count =
             std::clamp(m_DirectionalShadowSettings.cascade_count, 1u, kMaxDirectionalShadowCascades);
         for (uint32_t cascade_index = 0; cascade_index < shadow_cascade_count; ++cascade_index)
@@ -219,11 +230,12 @@ namespace Hybrid
     void RenderSystem::shutdown()
     {
         m_MaterialSystem.shutdown();
+        m_ScenePass.shutdown();
         m_GizmoPass = GizmoPass{};
         m_SkyboxPass = SkyboxPass{};
-        m_PostProcessPass = PostProcessPass{};
-        m_SelectionOverlayPass = SelectionOverlayPass{};
-        m_MeshCache.clear();
+        m_PostProcessPass.shutdown();
+        m_SelectionOverlayPass.shutdown();
+        clearMeshCache();
         m_CubemapCache.clear();
         m_DefaultCubemapTexture.reset();
         m_TextureUploader.reset();
@@ -233,6 +245,9 @@ namespace Hybrid
             framebuffer.reset();
         m_FrameUBO.reset();
         m_LightUBO.reset();
+        if (m_RenderDevice && m_RhiFrameUniformBuffer)
+            (void)m_RenderDevice->destroyBuffer(m_RhiFrameUniformBuffer);
+        m_RhiFrameUniformBuffer = {};
         m_SceneShader.reset();
         m_SkyboxShader.reset();
         m_ShadowShader.reset();
@@ -242,6 +257,11 @@ namespace Hybrid
         m_Scene.reset();
         Renderer::shutdown();
         m_Initialized = false;
+        // Feature implementations may own RHI resources. Destroy them while the
+        // device is still alive instead of relying on RenderSystem destruction.
+        m_RenderPipeline.reset();
+        m_Swapchain.reset();
+        m_RenderDevice.reset();
     }
 
     void RenderSystem::update(float dt)
@@ -261,6 +281,24 @@ namespace Hybrid
         m_ShadowShader = m_ShaderLibrary.get("ShadowDepth");
         m_ColliderDebugShader = m_ShaderLibrary.get("ColliderDebug");
         configureShaderBindings();
+    }
+
+    bool RenderSystem::setRenderPipeline(std::unique_ptr<IRenderPipeline> pipeline)
+    {
+        if (!pipeline)
+            return false;
+        m_RenderPipeline = std::move(pipeline);
+        return true;
+    }
+
+    bool RenderSystem::registerRenderFeature(std::shared_ptr<IRenderFeature> feature)
+    {
+        return m_RenderPipeline && m_RenderPipeline->registerFeature(std::move(feature));
+    }
+
+    bool RenderSystem::unregisterRenderFeature(const std::string& name)
+    {
+        return m_RenderPipeline && m_RenderPipeline->unregisterFeature(name);
     }
 
     MeshGPU *RenderSystem::getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh> &mesh)
@@ -288,10 +326,61 @@ namespace Hybrid
         };
         mgpu.vao->setVertexBuffer(mgpu.vb, layout);
         mgpu.vao->setIndexBuffer(mgpu.ib);
+
+        if (m_RenderDevice)
+        {
+            BufferDesc vertex_desc{};
+            vertex_desc.size = verts.size() * sizeof(MeshVertex);
+            vertex_desc.usage = RhiBufferUsage::Vertex;
+            vertex_desc.memory = RhiMemoryUsage::GPUOnly;
+            vertex_desc.debug_name = "MeshGPU.Vertex";
+            const auto vertex_result = m_RenderDevice->createBuffer(vertex_desc, verts.data(), vertex_desc.size);
+            if (!vertex_result)
+            {
+                HBD_CORE_ERROR("{} rhi_mesh_vertex_create_failed asset={} reason={}",
+                               kRenderSystemLogTag, id.value, vertex_result.error.message);
+                return nullptr;
+            }
+            mgpu.rhi_vertex_buffer = vertex_result.value;
+
+            BufferDesc index_desc{};
+            index_desc.size = inds.size() * sizeof(uint32_t);
+            index_desc.usage = RhiBufferUsage::Index;
+            index_desc.memory = RhiMemoryUsage::GPUOnly;
+            index_desc.debug_name = "MeshGPU.Index";
+            const auto index_result = m_RenderDevice->createBuffer(index_desc, inds.data(), index_desc.size);
+            if (!index_result)
+            {
+                (void)m_RenderDevice->destroyBuffer(mgpu.rhi_vertex_buffer);
+                HBD_CORE_ERROR("{} rhi_mesh_index_create_failed asset={} reason={}",
+                               kRenderSystemLogTag, id.value, index_result.error.message);
+                return nullptr;
+            }
+            mgpu.rhi_index_buffer = index_result.value;
+        }
         mgpu.submeshes = mesh->getSubmeshes();
 
         auto [it, inserted] = m_MeshCache.emplace(id, std::move(mgpu));
         return &it->second;
+    }
+
+    void RenderSystem::destroyMeshGPU(MeshGPU& mesh_gpu)
+    {
+        if (!m_RenderDevice)
+            return;
+        if (mesh_gpu.rhi_index_buffer)
+            (void)m_RenderDevice->destroyBuffer(mesh_gpu.rhi_index_buffer);
+        if (mesh_gpu.rhi_vertex_buffer)
+            (void)m_RenderDevice->destroyBuffer(mesh_gpu.rhi_vertex_buffer);
+        mesh_gpu.rhi_index_buffer = {};
+        mesh_gpu.rhi_vertex_buffer = {};
+    }
+
+    void RenderSystem::clearMeshCache()
+    {
+        for (auto& [id, mesh_gpu] : m_MeshCache)
+            destroyMeshGPU(mesh_gpu);
+        m_MeshCache.clear();
     }
 
     bool RenderSystem::loadBuiltinShaders()
@@ -372,6 +461,20 @@ namespace Hybrid
                                sizeof(RU::LightUBOData));
             }
         }
+        if (!m_RhiFrameUniformBuffer && m_RenderDevice)
+        {
+            BufferDesc desc{};
+            desc.size = sizeof(RU::FrameUBOData);
+            desc.usage = RhiBufferUsage::Uniform;
+            desc.memory = RhiMemoryUsage::CPUToGPU;
+            desc.debug_name = "RenderSystem.FrameBlock";
+            const auto result = m_RenderDevice->createBuffer(desc);
+            if (!result)
+                HBD_CORE_ERROR("{} rhi_ubo_create_failed block={} reason={}",
+                               kRenderSystemLogTag, RU::kFrameBlockName, result.error.message);
+            else
+                m_RhiFrameUniformBuffer = result.value;
+        }
     }
 
     void RenderSystem::configureShaderBindings()
@@ -436,6 +539,13 @@ namespace Hybrid
 
         m_FrameUBO->setData(&data, sizeof(RU::FrameUBOData));
         m_FrameUBO->bindBase(RU::kFrameUBOBinding);
+        if (m_RenderDevice && m_RhiFrameUniformBuffer)
+        {
+            const RhiStatus status = m_RenderDevice->updateBuffer(m_RhiFrameUniformBuffer, 0, &data, sizeof(data));
+            if (!status)
+                HBD_CORE_ERROR("{} rhi_ubo_upload_failed block={} reason={}",
+                               kRenderSystemLogTag, RU::kFrameBlockName, status.error.message);
+        }
     }
 
     void RenderSystem::updateLightUBO(const RenderPacket& packet)
@@ -465,7 +575,14 @@ namespace Hybrid
     {
         if (!framebuffer)
         {
-            framebuffer = Framebuffer::Create(spec);
+            const auto result = Framebuffer::Create(spec, *m_RenderDevice);
+            if (!result)
+            {
+                HBD_CORE_ERROR("{} framebuffer_create_failed reason={}",
+                               kRenderSystemLogTag, result.error.message);
+                return;
+            }
+            framebuffer = result.value;
         }
         else
         {
@@ -491,8 +608,19 @@ namespace Hybrid
     {
         if (!m_Initialized)
             return;
-        (void)width;
-        (void)height;
+        if (m_Swapchain)
+        {
+            const RhiStatus status = m_Swapchain->resize(width, height);
+            if (!status)
+                HBD_CORE_WARN("{} swapchain_resize_failed reason={}", kRenderSystemLogTag, status.error.message);
+        }
+    }
+
+    RhiStatus RenderSystem::present()
+    {
+        if (!m_Initialized || !m_Swapchain)
+            return RhiStatus::Failure(RhiErrorCode::InvalidState, "render system swapchain is unavailable");
+        return m_Swapchain->present();
     }
 
     void RenderSystem::invalidateAsset(AssetID id, AssetType type)
@@ -503,7 +631,11 @@ namespace Hybrid
         switch (type)
         {
         case AssetType::Mesh:
-            m_MeshCache.erase(id);
+            if (const auto found = m_MeshCache.find(id); found != m_MeshCache.end())
+            {
+                destroyMeshGPU(found->second);
+                m_MeshCache.erase(found);
+            }
             break;
         case AssetType::Material:
             m_MaterialSystem.invalidateMaterial(id);
@@ -721,7 +853,8 @@ namespace Hybrid
             context_input.packet = &packet;
             context_input.editor_selection = editor_selection;
             context_input.flags = current_flags;
-            context_input.window_handle = current_frame.window_handle;
+            context_input.device = m_RenderDevice.get();
+            context_input.frame_uniform_buffer = m_RhiFrameUniformBuffer;
             context_input.targets = targets;
             context_input.selection_overlay_style = &m_SelectionOverlayStyle;
             context_input.shader_library = &m_ShaderLibrary;
@@ -745,17 +878,14 @@ namespace Hybrid
             m_PostProcessPass.setSettings(post_process_settings);
 
             const auto render_begin = std::chrono::steady_clock::now();
-            m_RenderPipeline.execute(context, make_pipeline_callbacks());
+            if (m_RenderPipeline)
+                m_RenderPipeline->execute(context, make_pipeline_callbacks());
             const auto render_end = std::chrono::steady_clock::now();
             updateStatsFromPacket(packet, std::chrono::duration<float, std::milli>(render_end - render_begin).count());
         };
 
-        void* window_handle = frame_context.window_handle;
-        if (!window_handle)
-            return;
-
         if (!m_Initialized)
-            initialize(window_handle);
+            return;
 
         if (flags == RenderFlags::None)
             return;
@@ -787,26 +917,56 @@ namespace Hybrid
             FrameContext frame{};
             frame.dt = request.dt;
             frame.scene = request.scene;
-            frame.window_handle = request.window_handle;
             frame.input = request.input;
             frame.viewport_size = view.size;
 
             const RenderViewId view_id = resolveViewId(view);
             ViewRenderTargets& targets = acquireViewTargets(view_id, view);
+            targets.graph_resources.clearExternalResources();
+            if (targets.main)
+            {
+                targets.graph_resources.importExternalResource(
+                    "SceneColor", targets.main->getColorAttachmentView(RenderTargets::kSceneColorAttachment));
+                targets.graph_resources.importExternalResource(
+                    "SceneEntityID", targets.main->getColorAttachmentView(RenderTargets::kSceneEntityIDAttachment));
+                targets.graph_resources.importExternalResource("SceneDepth", targets.main->getDepthAttachmentView());
+            }
+            if (targets.selection)
+            {
+                targets.graph_resources.importExternalResource(
+                    "SelectionMask", targets.selection->getColorAttachmentView(RenderTargets::kSelectionMaskAttachment));
+                targets.graph_resources.importExternalResource("SelectionDepth", targets.selection->getDepthAttachmentView());
+            }
+            if (m_ShadowCascadeFBs[0])
+                targets.graph_resources.importExternalResource("ShadowDepth", m_ShadowCascadeFBs[0]->getDepthAttachmentView());
+            if (m_RenderPipeline && m_RenderDevice)
+            {
+                const RhiStatus materialize = targets.graph_resources.prepare(
+                    *m_RenderDevice, m_RenderPipeline->getCompiledGraph(),
+                    std::max(1u, static_cast<uint32_t>(view.size.x)),
+                    std::max(1u, static_cast<uint32_t>(view.size.y)));
+                if (!materialize)
+                {
+                    HBD_CORE_ERROR("{} graph_resource_materialization_failed view={} reason={}",
+                                   kRenderSystemLogTag, view.name, materialize.error.message);
+                    continue;
+                }
+            }
             ResolvedRenderTargets resolved{};
             resolved.framebuffer = targets.main;
             resolved.scene_framebuffer = targets.main;
             resolved.selection_framebuffer = targets.selection;
             resolved.shadow_framebuffer = m_ShadowCascadeFBs[0];
             resolved.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
+            resolved.graph_resources = &targets.graph_resources;
             renderFrameInternal(frame, view, resolved);
 
             RenderViewResult view_result{};
             view_result.name = view.name;
             view_result.id = view_id;
             view_result.color_texture = targets.main
-                ? targets.main->getColorAttachmentRendererID(RenderTargets::kSceneColorAttachment)
-                : 0;
+                ? targets.main->getColorAttachmentView(RenderTargets::kSceneColorAttachment)
+                : TextureViewHandle{};
             if (view.picking && HasFlag(view.flags, RenderFlags::PickingID))
             {
                 if (targets.main &&

@@ -2,10 +2,6 @@
 
 #ifdef _WIN32
 
-#define GLFW_INCLUDE_NONE
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
 #include <shellapi.h>
 #include <objbase.h>
 #include <shobjidl.h>
@@ -82,7 +78,7 @@ namespace Hybrid
     }
 
     std::optional<std::filesystem::path> ShowSaveFileDialogWin32(
-        GLFWwindow* window,
+        NativeWindowHandle window,
         const SaveFileDialogDesc& desc)
     {
         ScopedComInit com_init;
@@ -125,7 +121,7 @@ namespace Hybrid
                 dialog->SetFolder(folder);
         }
 
-        HWND hwnd = window ? glfwGetWin32Window(window) : nullptr;
+        HWND hwnd = window.kind == NativeWindowKind::Win32 ? static_cast<HWND>(window.window) : nullptr;
         hr = dialog->Show(hwnd);
         if (folder)
             folder->Release();
@@ -160,7 +156,7 @@ namespace Hybrid
     }
 
     std::vector<std::filesystem::path> ShowOpenFileDialogWin32(
-        GLFWwindow* window,
+        NativeWindowHandle window,
         const OpenFileDialogDesc& desc)
     {
         ScopedComInit com_init;
@@ -203,7 +199,7 @@ namespace Hybrid
                 dialog->SetFolder(folder);
         }
 
-        HWND hwnd = window ? glfwGetWin32Window(window) : nullptr;
+        HWND hwnd = window.kind == NativeWindowKind::Win32 ? static_cast<HWND>(window.window) : nullptr;
         hr = dialog->Show(hwnd);
         if (folder)
             folder->Release();
@@ -267,7 +263,7 @@ namespace Hybrid
     }
 
     std::optional<std::filesystem::path> ShowSelectFolderDialogWin32(
-        GLFWwindow* window,
+        NativeWindowHandle window,
         const SelectFolderDialogDesc& desc)
     {
         ScopedComInit com_init;
@@ -294,7 +290,7 @@ namespace Hybrid
                 dialog->SetFolder(folder);
         }
 
-        HWND hwnd = window ? glfwGetWin32Window(window) : nullptr;
+        HWND hwnd = window.kind == NativeWindowKind::Win32 ? static_cast<HWND>(window.window) : nullptr;
         hr = dialog->Show(hwnd);
         if (folder)
             folder->Release();
@@ -355,21 +351,21 @@ namespace Hybrid
 namespace Hybrid
 {
     std::optional<std::filesystem::path> ShowSaveFileDialogWin32(
-        GLFWwindow*,
+        NativeWindowHandle,
         const SaveFileDialogDesc&)
     {
         return std::nullopt;
     }
 
     std::vector<std::filesystem::path> ShowOpenFileDialogWin32(
-        GLFWwindow*,
+        NativeWindowHandle,
         const OpenFileDialogDesc&)
     {
         return {};
     }
 
     std::optional<std::filesystem::path> ShowSelectFolderDialogWin32(
-        GLFWwindow*,
+        NativeWindowHandle,
         const SelectFolderDialogDesc&)
     {
         return std::nullopt;

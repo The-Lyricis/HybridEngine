@@ -37,7 +37,7 @@ namespace Hybrid
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetStyle().ItemSpacing.y);
 
         const SceneViewViewportResult viewport =
-            DrawSceneViewViewport(ctx, m_colorTextureID, toolbar.interacted, m_viewport_state, kSceneViewPanelLogTag);
+            DrawSceneViewViewport(ctx, m_image, toolbar.interacted, m_viewport_state, kSceneViewPanelLogTag);
 
         HandleSceneViewDragDrop(ctx, kSceneViewPanelLogTag);
 

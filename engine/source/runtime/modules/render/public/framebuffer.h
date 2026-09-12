@@ -4,7 +4,11 @@
 #include <memory>
 #include <vector>
 
+#include "runtime/modules/render/rhi/rhi_types.h"
+
 namespace Hybrid {
+
+    class IRenderDevice;
 
     enum class FramebufferTextureFormat
     {
@@ -55,14 +59,15 @@ namespace Hybrid {
         virtual void bindColorAttachmentTexture(uint32_t index, uint32_t slot) const = 0;
         virtual void bindDepthAttachmentTexture(uint32_t slot) const = 0;
 
-        virtual uint32_t getColorAttachmentRendererID(uint32_t index = 0) const = 0;
+        virtual TextureViewHandle getColorAttachmentView(uint32_t index = 0) const = 0;
         virtual uint32_t getColorAttachmentCount() const = 0;
-        virtual uint32_t getDepthAttachmentRendererID() const = 0;
+        virtual TextureViewHandle getDepthAttachmentView() const = 0;
 
         virtual uint32_t getWidth() const = 0;
         virtual uint32_t getHeight() const = 0;
 
-        static std::shared_ptr<Framebuffer> Create(const FramebufferSpec& spec);
+        static RhiResult<std::shared_ptr<Framebuffer>> Create(const FramebufferSpec& spec,
+                                                              IRenderDevice& device);
 
 
     };

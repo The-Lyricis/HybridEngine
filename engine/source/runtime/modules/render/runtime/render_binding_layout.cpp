@@ -154,24 +154,9 @@ namespace Hybrid
                     RenderBindings::kPostProcessSceneColorSlot,
                 },
                 {
-                    RenderBindings::kPostProcessToneMappingUniform,
-                    RenderBindingType::UniformInt,
-                    0,
-                },
-                {
-                    RenderBindings::kPostProcessGammaCorrectionUniform,
-                    RenderBindingType::UniformInt,
-                    0,
-                },
-                {
-                    RenderBindings::kPostProcessExposureUniform,
-                    RenderBindingType::UniformFloat,
-                    0,
-                },
-                {
-                    RenderBindings::kPostProcessGammaUniform,
-                    RenderBindingType::UniformFloat,
-                    0,
+                    RenderBindings::kPostProcessSettingsBlockName,
+                    RenderBindingType::UniformBlock,
+                    RenderBindings::kPostProcessSettingsBinding,
                 },
             },
         };

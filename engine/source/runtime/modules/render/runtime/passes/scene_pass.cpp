@@ -1,184 +1,338 @@
 #include "scene_pass.h"
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <string>
+#include <vector>
 
-#include "runtime/modules/render/public/framebuffer.h"
-#include "runtime/modules/render/public/render_command.h"
-#include "runtime/modules/render/public/renderer.h"
-#include "runtime/modules/render/public/shader.h"
-#include "runtime/modules/render/runtime/pipeline/pipeline_state.h"
-#include "runtime/modules/render/runtime/render_binding_layout.h"
+#include <glm/vec4.hpp>
+
+#include "runtime/core/base/macro.h"
+#include "runtime/modules/asset/mesh.h"
+#include "runtime/modules/render/rhi/render_device.h"
+#include "runtime/modules/render/runtime/material_system.h"
+#include "runtime/modules/render/runtime/mesh_gpu.h"
+#include "runtime/modules/render/runtime/pipeline/render_graph_resources.h"
 #include "runtime/modules/render/runtime/render_bindings.h"
-#include "runtime/modules/render/runtime/render_targets.h"
+#include "runtime/modules/render/runtime/render_shaders.h"
+#include "runtime/modules/render/runtime/shader_library.h"
 
 namespace Hybrid
 {
     namespace
     {
-        struct SceneDrawParameterBlock
+        constexpr const char* kLogTag = "[ScenePass]";
+
+        struct alignas(16) SceneDrawGPU
         {
             glm::mat4 model{1.0f};
             glm::vec4 tint{1.0f};
-            uint32_t entity_id = 0;
+            glm::uvec4 ids{0u};
         };
+        static_assert(sizeof(SceneDrawGPU) == 96);
 
-        struct SceneShadowParameterBlock
+        struct alignas(16) SceneMaterialGPU
         {
-            int shadows_enabled = 0;
-            int cascade_count = 0;
-            std::array<glm::mat4, kMaxDirectionalShadowCascades> light_view_projections{};
-            std::array<float, kMaxDirectionalShadowCascades> cascade_splits{};
-            float strength = 1.0f;
-            float bias_constant = 0.0005f;
-            float bias_slope = 0.0015f;
+            glm::vec4 base_color{1.0f};
+            glm::vec4 surface{0.0f, 1.0f, 1.0f, 0.5f};
+            glm::vec4 emissive{0.0f};
+            glm::ivec4 flags{0};
         };
+        static_assert(sizeof(SceneMaterialGPU) == 64);
 
-        uint32_t encodeEntityID(uint32_t entity_id)
+        std::vector<uint8_t> shaderCode(const std::string& source)
         {
-            return entity_id + 1u;
+            return {source.begin(), source.end()};
         }
 
-        SceneDrawParameterBlock BuildSceneDrawParameterBlock(const RenderDrawItem& item)
+        SceneMaterialGPU buildMaterial(const MaterialSystem::MaterialGPU* material)
         {
-            SceneDrawParameterBlock block{};
-            block.model = item.model;
-            block.tint = item.tint;
-            block.entity_id = encodeEntityID(item.entityID);
-            return block;
+            SceneMaterialGPU data{};
+            if (!material)
+                return data;
+            const auto& params = material->instance.parameters;
+            data.base_color = params.base_color_factor;
+            data.surface = {params.metallic_factor, params.roughness_factor,
+                            params.occlusion_strength, params.alpha_cutoff};
+            data.emissive = {params.emissive_factor, 0.0f};
+            data.flags.x = params.alpha_mode;
+            data.flags.y = material->instance.material_template.double_sided ? 1 : 0;
+            return data;
+        }
+    } // namespace
+
+    ScenePass::~ScenePass() { shutdown(); }
+
+    void ScenePass::releasePipelines()
+    {
+        if (!m_Device)
+            return;
+        if (m_OpaquePipeline) (void)m_Device->destroyPipeline(m_OpaquePipeline);
+        if (m_TransparentPipeline) (void)m_Device->destroyPipeline(m_TransparentPipeline);
+        if (m_VertexShader) (void)m_Device->destroyShaderModule(m_VertexShader);
+        if (m_FragmentShader) (void)m_Device->destroyShaderModule(m_FragmentShader);
+        m_OpaquePipeline = {};
+        m_TransparentPipeline = {};
+        m_VertexShader = {};
+        m_FragmentShader = {};
+        m_ShaderRevision = 0;
+    }
+
+    void ScenePass::shutdown()
+    {
+        if (!m_Device)
+            return;
+        releasePipelines();
+        for (DrawResources& resources : m_DrawResources)
+        {
+            if (resources.material_buffer) (void)m_Device->destroyBuffer(resources.material_buffer);
+            if (resources.draw_buffer) (void)m_Device->destroyBuffer(resources.draw_buffer);
+        }
+        m_DrawResources.clear();
+        m_Device = nullptr;
+    }
+
+    bool ScenePass::ensurePipelines(IRenderDevice& device, ShaderLibrary& shaders)
+    {
+        if (m_Device && m_Device != &device)
+            shutdown();
+        m_Device = &device;
+
+        ShaderLibrary::ShaderSourceBundle sources{};
+        if (!shaders.getSources(std::string(RenderShaders::kScene.name), sources))
+        {
+            HBD_CORE_ERROR("{} shader_sources_unavailable", kLogTag);
+            return false;
+        }
+        if (m_OpaquePipeline && m_TransparentPipeline && m_ShaderRevision == sources.revision)
+            return true;
+
+        ShaderModuleDesc vertex_desc{};
+        vertex_desc.stage = RhiShaderStage::Vertex;
+        vertex_desc.code = shaderCode(sources.vertex);
+        vertex_desc.debug_name = "Scene.Vertex";
+        const auto vertex = device.createShaderModule(vertex_desc);
+        if (!vertex)
+        {
+            HBD_CORE_ERROR("{} vertex_shader_create_failed reason={}", kLogTag, vertex.error.message);
+            return false;
         }
 
-        SceneShadowParameterBlock BuildSceneShadowParameterBlock(const RenderShadowData& shadow,
-                                                                 bool has_shadow_cascade,
-                                                                 bool has_shadow_textures)
+        ShaderModuleDesc fragment_desc{};
+        fragment_desc.stage = RhiShaderStage::Fragment;
+        fragment_desc.code = shaderCode(sources.fragment);
+        fragment_desc.debug_name = "Scene.Fragment";
+        const auto fragment = device.createShaderModule(fragment_desc);
+        if (!fragment)
         {
-            SceneShadowParameterBlock block{};
-            block.shadows_enabled = (has_shadow_cascade && has_shadow_textures) ? 1 : 0;
-            block.cascade_count = has_shadow_cascade ? static_cast<int>(shadow.cascadeCount) : 0;
-            block.strength = shadow.strength;
-            block.bias_constant = shadow.biasConstant;
-            block.bias_slope = shadow.biasSlope;
+            (void)device.destroyShaderModule(vertex.value);
+            HBD_CORE_ERROR("{} fragment_shader_create_failed reason={}", kLogTag, fragment.error.message);
+            return false;
+        }
 
-            for (uint32_t cascade_index = 0; cascade_index < kMaxDirectionalShadowCascades; ++cascade_index)
+        GraphicsPipelineDesc pipeline_desc{};
+        pipeline_desc.vertex_shader = vertex.value;
+        pipeline_desc.fragment_shader = fragment.value;
+        pipeline_desc.vertex_stride = sizeof(MeshVertex);
+        pipeline_desc.vertex_attributes = {
+            {0, static_cast<uint32_t>(offsetof(MeshVertex, position)), 3},
+            {1, static_cast<uint32_t>(offsetof(MeshVertex, normal)), 3},
+            {2, static_cast<uint32_t>(offsetof(MeshVertex, uv)), 2},
+            {3, static_cast<uint32_t>(offsetof(MeshVertex, tangent)), 4},
+        };
+        pipeline_desc.uniform_buffer_bindings = {
+            {{RenderBindings::kFrameSet, RenderBindings::kFrameBinding}, "FrameBlock"},
+            {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneMaterialBinding},
+             RenderBindings::kSceneMaterialBlockName},
+            {{RenderBindings::kSceneDrawSet, RenderBindings::kSceneDrawBinding},
+             RenderBindings::kSceneDrawBlockName},
+        };
+        pipeline_desc.topology = RhiPrimitiveTopology::Triangles;
+        pipeline_desc.cull_mode = RhiCullMode::Back;
+        pipeline_desc.depth_compare = RhiCompareFunction::Less;
+        pipeline_desc.depth_test = true;
+        pipeline_desc.depth_write = true;
+        pipeline_desc.blend_enabled = false;
+        pipeline_desc.color_format = RhiFormat::RGBA8Unorm;
+        pipeline_desc.depth_format = RhiFormat::Depth32Float;
+        pipeline_desc.debug_name = "Scene.OpaquePipeline";
+        const auto opaque = device.createGraphicsPipeline(pipeline_desc);
+        if (!opaque)
+        {
+            (void)device.destroyShaderModule(vertex.value);
+            (void)device.destroyShaderModule(fragment.value);
+            HBD_CORE_ERROR("{} opaque_pipeline_create_failed reason={}", kLogTag, opaque.error.message);
+            return false;
+        }
+
+        pipeline_desc.depth_write = false;
+        pipeline_desc.blend_enabled = true;
+        pipeline_desc.debug_name = "Scene.TransparentPipeline";
+        const auto transparent = device.createGraphicsPipeline(pipeline_desc);
+        if (!transparent)
+        {
+            (void)device.destroyPipeline(opaque.value);
+            (void)device.destroyShaderModule(vertex.value);
+            (void)device.destroyShaderModule(fragment.value);
+            HBD_CORE_ERROR("{} transparent_pipeline_create_failed reason={}", kLogTag, transparent.error.message);
+            return false;
+        }
+
+        releasePipelines();
+        m_VertexShader = vertex.value;
+        m_FragmentShader = fragment.value;
+        m_OpaquePipeline = opaque.value;
+        m_TransparentPipeline = transparent.value;
+        m_ShaderRevision = sources.revision;
+        HBD_CORE_INFO("{} pipelines_ready shader_revision={}", kLogTag, m_ShaderRevision);
+        return true;
+    }
+
+    bool ScenePass::ensureDrawResources(IRenderDevice& device, size_t count)
+    {
+        while (m_DrawResources.size() < count)
+        {
+            DrawResources resources{};
+            BufferDesc draw_desc{};
+            draw_desc.size = sizeof(SceneDrawGPU);
+            draw_desc.usage = RhiBufferUsage::Uniform;
+            draw_desc.memory = RhiMemoryUsage::CPUToGPU;
+            draw_desc.debug_name = "Scene.DrawBlock";
+            const auto draw = device.createBuffer(draw_desc);
+            if (!draw)
             {
-                const bool valid = cascade_index < shadow.cascadeCount && shadow.cascades[cascade_index].valid;
-                block.light_view_projections[cascade_index] =
-                    valid ? shadow.cascades[cascade_index].lightViewProjection : glm::mat4(1.0f);
-                block.cascade_splits[cascade_index] = valid ? shadow.cascades[cascade_index].splitFar : 0.0f;
+                HBD_CORE_ERROR("{} draw_buffer_create_failed reason={}", kLogTag, draw.error.message);
+                return false;
             }
+            resources.draw_buffer = draw.value;
 
-            return block;
-        }
-
-        void ApplySceneDrawParameters(Shader& shader, const SceneDrawParameterBlock& block)
-        {
-            const RenderBindingLayoutDesc& layout = GetSceneDrawBindingLayout();
-            if (const RenderBindingDesc* binding = FindRenderBinding(layout, RenderBindings::kSceneModelUniform))
-                shader.setMat4(std::string(binding->name), block.model);
-            if (const RenderBindingDesc* binding = FindRenderBinding(layout, RenderBindings::kSceneTintColorUniform))
-                shader.setVec4(std::string(binding->name), block.tint);
-            if (const RenderBindingDesc* binding = FindRenderBinding(layout, RenderBindings::kSceneEntityIDUniform))
-                shader.setUInt(std::string(binding->name), block.entity_id);
-        }
-
-        void ApplySceneShadowParameters(Shader& shader, const SceneShadowParameterBlock& block)
-        {
-            const RenderBindingLayoutDesc& layout = GetSceneShadowBindingLayout();
-            if (const RenderBindingDesc* binding = FindRenderBinding(layout, RenderBindings::kSceneShadowCascadeCountUniform))
-                shader.setInt(std::string(binding->name), block.cascade_count);
-            if (const RenderBindingDesc* binding = FindRenderBinding(layout, RenderBindings::kSceneShadowsEnabledUniform))
-                shader.setInt(std::string(binding->name), block.shadows_enabled);
-            if (const RenderBindingDesc* binding = FindRenderBinding(layout, RenderBindings::kSceneShadowStrengthUniform))
-                shader.setFloat(std::string(binding->name), block.strength);
-            if (const RenderBindingDesc* binding = FindRenderBinding(layout, RenderBindings::kSceneShadowBiasConstUniform))
-                shader.setFloat(std::string(binding->name), block.bias_constant);
-            if (const RenderBindingDesc* binding = FindRenderBinding(layout, RenderBindings::kSceneShadowBiasSlopeUniform))
-                shader.setFloat(std::string(binding->name), block.bias_slope);
-
-            if (const RenderBindingDesc* binding = FindRenderBinding(layout, RenderBindings::kSceneLightViewProjectionsUniform))
+            BufferDesc material_desc{};
+            material_desc.size = sizeof(SceneMaterialGPU);
+            material_desc.usage = RhiBufferUsage::Uniform;
+            material_desc.memory = RhiMemoryUsage::CPUToGPU;
+            material_desc.debug_name = "Scene.MaterialBlock";
+            const auto material = device.createBuffer(material_desc);
+            if (!material)
             {
-                const uint32_t array_count = std::min(binding->array_count, static_cast<uint32_t>(block.light_view_projections.size()));
-                for (uint32_t cascade_index = 0; cascade_index < array_count; ++cascade_index)
-                {
-                    shader.setMat4(std::string(binding->name) + "[" + std::to_string(cascade_index) + "]",
-                                   block.light_view_projections[cascade_index]);
-                }
+                (void)device.destroyBuffer(resources.draw_buffer);
+                HBD_CORE_ERROR("{} material_buffer_create_failed reason={}", kLogTag, material.error.message);
+                return false;
             }
-
-            if (const RenderBindingDesc* binding = FindRenderBinding(layout, RenderBindings::kSceneShadowCascadeSplitsUniform))
-            {
-                const uint32_t array_count = std::min(binding->array_count, static_cast<uint32_t>(block.cascade_splits.size()));
-                for (uint32_t cascade_index = 0; cascade_index < array_count; ++cascade_index)
-                {
-                    shader.setFloat(std::string(binding->name) + "[" + std::to_string(cascade_index) + "]",
-                                    block.cascade_splits[cascade_index]);
-                }
-            }
+            resources.material_buffer = material.value;
+            m_DrawResources.push_back(resources);
         }
+        return true;
     }
 
     void ScenePass::execute(RenderContext& context)
     {
-        const RenderPacket& packet = *context.packet;
-        const std::shared_ptr<Framebuffer>& framebuffer = context.framebuffer;
-        const std::shared_ptr<Shader>& scene_shader = context.scene_shader;
-
-        if (!framebuffer)
+        if (!context.packet || !context.device || !context.graph_resources ||
+            !context.shader_library || !context.frame_uniform_buffer)
             return;
 
-        framebuffer->bind();
-        framebuffer->setDrawColorAttachments({
-            RenderTargets::kSceneColorAttachment,
-            RenderTargets::kSceneEntityIDAttachment
-        });
-        RenderCommand::setViewport(0, 0, framebuffer->getWidth(), framebuffer->getHeight());
-        Renderer::beginFrame(packet.frame.clearColor);
-        framebuffer->clearColorAttachmentUInt(RenderTargets::kSceneEntityIDAttachment, 0);
-
-        if (scene_shader)
+        IRenderDevice& device = *context.device;
+        const auto scene_color = context.graph_resources->texture("SceneColor");
+        const auto entity_id = context.graph_resources->texture("SceneEntityID");
+        const auto scene_depth = context.graph_resources->texture("SceneDepth");
+        if (!scene_color || !entity_id || !scene_depth)
         {
-            scene_shader->bind();
-            const bool has_shadow_cascade = packet.shadow.enabled && packet.shadow.cascadeCount > 0 &&
-                                            packet.shadow.cascades[0].valid;
-            ApplySceneShadowParameters(*scene_shader,
-                                       BuildSceneShadowParameterBlock(packet.shadow,
-                                                                     has_shadow_cascade,
-                                                                     context.shadow_cascade_framebuffers != nullptr));
-            if (has_shadow_cascade && context.shadow_cascade_framebuffers)
-            {
-                for (uint32_t cascade_index = 0; cascade_index < packet.shadow.cascadeCount; ++cascade_index)
-                {
-                    const std::shared_ptr<Framebuffer>& shadow_fb = (*context.shadow_cascade_framebuffers)[cascade_index];
-                    if (shadow_fb)
-                        shadow_fb->bindDepthAttachmentTexture(RenderBindings::kSceneShadowMapSlot + cascade_index);
-                }
-            }
-
-            auto draw_queue = [&](const std::vector<RenderDrawItem>& items)
-            {
-                for (const auto& item : items)
-                {
-                    if (!item.meshGPU || !item.materialGPU || item.indexCount == 0)
-                        continue;
-
-                    ApplySceneDrawParameters(*scene_shader, BuildSceneDrawParameterBlock(item));
-                    item.materialGPU->bind(*scene_shader);
-
-                    item.meshGPU->vao->bind();
-                    RenderCommand::drawIndexed(item.indexCount, item.indexOffset);
-                }
-            };
-
-            ApplyPipelineState(PipelineStates::OpaqueDepth());
-            draw_queue(packet.opaque_items);
-
-            if (!packet.transparent_items.empty())
-            {
-                ScopedPipelineState transparent_state(PipelineStates::TransparentDepthRead());
-                draw_queue(packet.transparent_items);
-            }
+            HBD_CORE_ERROR("{} graph_resources_unavailable", kLogTag);
+            return;
         }
+        const auto output_desc = device.textureDesc(scene_color.value);
+        if (!output_desc || !ensurePipelines(device, *context.shader_library))
+            return;
 
-        Renderer::endFrame();
-        framebuffer->unbind();
+        const RenderPacket& packet = *context.packet;
+        const size_t draw_count = packet.opaque_items.size() + packet.transparent_items.size();
+        if (!ensureDrawResources(device, draw_count))
+            return;
+
+        size_t resource_index = 0;
+        const auto upload = [&](const std::vector<RenderDrawItem>& items)
+        {
+            for (const RenderDrawItem& item : items)
+            {
+                DrawResources& resources = m_DrawResources[resource_index++];
+                SceneDrawGPU draw{};
+                draw.model = item.model;
+                draw.tint = item.tint;
+                draw.ids.x = item.entityID + 1u;
+                const SceneMaterialGPU material = buildMaterial(item.materialGPU);
+                const RhiStatus draw_status = device.updateBuffer(resources.draw_buffer, 0, &draw, sizeof(draw));
+                const RhiStatus material_status = device.updateBuffer(resources.material_buffer, 0, &material, sizeof(material));
+                if (!draw_status || !material_status)
+                    HBD_CORE_ERROR("{} parameter_upload_failed", kLogTag);
+            }
+        };
+        upload(packet.opaque_items);
+        upload(packet.transparent_items);
+
+        auto commands = device.createCommandList();
+        const auto check = [](const RhiStatus& status, const char* stage)
+        {
+            if (status) return true;
+            HBD_CORE_ERROR("{} command_failed stage={} reason={}", kLogTag, stage, status.error.message);
+            return false;
+        };
+        if (!commands || !check(commands->begin(), "begin"))
+            return;
+
+        RenderPassDesc pass{};
+        ColorAttachmentDesc color{};
+        color.texture = scene_color.value;
+        color.clear_color[0] = packet.frame.clearColor.r;
+        color.clear_color[1] = packet.frame.clearColor.g;
+        color.clear_color[2] = packet.frame.clearColor.b;
+        color.clear_color[3] = packet.frame.clearColor.a;
+        pass.colors.push_back(color);
+        ColorAttachmentDesc ids{};
+        ids.texture = entity_id.value;
+        pass.colors.push_back(ids);
+        pass.has_depth = true;
+        pass.depth.texture = scene_depth.value;
+        pass.depth.clear_depth = 1.0f;
+        pass.debug_name = "Scene";
+        if (!check(commands->beginRenderPass(pass), "begin_render_pass") ||
+            !check(commands->setViewport({0.0f, 0.0f,
+                                          static_cast<float>(output_desc.value.width),
+                                          static_cast<float>(output_desc.value.height)}), "viewport"))
+            return;
+
+        resource_index = 0;
+        const auto drawItems = [&](const std::vector<RenderDrawItem>& items, PipelineHandle pipeline)
+        {
+            if (!check(commands->bindPipeline(pipeline), "pipeline") ||
+                !check(commands->bindUniformBuffer(context.frame_uniform_buffer,
+                                                   {RenderBindings::kFrameSet,
+                                                    RenderBindings::kFrameBinding}), "frame_block"))
+                return false;
+            for (const RenderDrawItem& item : items)
+            {
+                DrawResources& resources = m_DrawResources[resource_index++];
+                if (!item.meshGPU || !item.meshGPU->rhi_vertex_buffer ||
+                    !item.meshGPU->rhi_index_buffer || item.indexCount == 0)
+                    continue;
+                if (!check(commands->bindUniformBuffer(resources.material_buffer,
+                                                       {RenderBindings::kSceneMaterialSet,
+                                                        RenderBindings::kSceneMaterialBinding}), "material_block") ||
+                    !check(commands->bindUniformBuffer(resources.draw_buffer,
+                                                       {RenderBindings::kSceneDrawSet,
+                                                        RenderBindings::kSceneDrawBinding}), "draw_block") ||
+                    !check(commands->bindVertexBuffer(item.meshGPU->rhi_vertex_buffer), "vertex_buffer") ||
+                    !check(commands->bindIndexBuffer(item.meshGPU->rhi_index_buffer), "index_buffer") ||
+                    !check(commands->drawIndexed(item.indexCount, item.indexOffset), "draw_indexed"))
+                    return false;
+            }
+            return true;
+        };
+
+        if (!drawItems(packet.opaque_items, m_OpaquePipeline) ||
+            !drawItems(packet.transparent_items, m_TransparentPipeline) ||
+            !check(commands->endRenderPass(), "end_render_pass") ||
+            !check(commands->end(), "end") ||
+            !check(device.submit(*commands), "submit"))
+            return;
     }
 } // namespace Hybrid

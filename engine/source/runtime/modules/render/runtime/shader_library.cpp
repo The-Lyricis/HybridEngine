@@ -81,6 +81,17 @@ namespace Hybrid
         return it->second.shader;
     }
 
+    bool ShaderLibrary::getSources(const std::string& name,
+                                   ShaderSourceBundle& out_sources) const
+    {
+        const auto it = m_entries.find(name);
+        if (it == m_entries.end() || !it->second.loaded ||
+            it->second.sources.vertex.empty() || it->second.sources.fragment.empty())
+            return false;
+        out_sources = it->second.sources;
+        return true;
+    }
+
     bool ShaderLibrary::reload(const std::string& name)
     {
         auto it = m_entries.find(name);
@@ -137,6 +148,11 @@ namespace Hybrid
                           pathOrPlaceholder(entry.fragment_path));
 
         entry.shader = std::move(shader);
+        entry.sources.vertex = std::move(vertex_source);
+        entry.sources.fragment = std::move(fragment_source);
+        ++entry.sources.revision;
+        if (entry.sources.revision == 0)
+            entry.sources.revision = 1;
         entry.vertex_write_time = vertex_time;
         entry.fragment_write_time = fragment_time;
         entry.loaded = true;

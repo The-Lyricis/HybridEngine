@@ -4,6 +4,14 @@
 
 namespace Hybrid::RenderBindings
 {
+    inline constexpr uint32_t kFrameSet = 0;
+    inline constexpr uint32_t kFrameBinding = 0;
+    inline constexpr uint32_t kSceneMaterialSet = 2;
+    inline constexpr uint32_t kSceneMaterialBinding = 0;
+    inline constexpr uint32_t kSceneDrawSet = 3;
+    inline constexpr uint32_t kSceneDrawBinding = 0;
+    inline constexpr const char* kSceneMaterialBlockName = "MaterialBlock";
+    inline constexpr const char* kSceneDrawBlockName = "DrawBlock";
     inline constexpr uint32_t kSceneAlbedoSlot = 0;
     inline constexpr uint32_t kSceneNormalSlot = 1;
     inline constexpr uint32_t kSceneMRSlot = 2;
@@ -50,6 +58,10 @@ namespace Hybrid::RenderBindings
     inline constexpr const char* kSelectionOverlaySceneDepthUniform = "u_SceneDepthTex";
     inline constexpr const char* kSelectionOverlayMaskUniform = "u_SelectedMaskTex";
     inline constexpr const char* kSelectionOverlaySelectedDepthUniform = "u_SelectedDepthTex";
+    inline constexpr uint32_t kSelectionOverlayTextureSet = 2;
+    inline constexpr uint32_t kSelectionOverlaySettingsSet = 3;
+    inline constexpr uint32_t kSelectionOverlaySettingsBinding = 0;
+    inline constexpr const char* kSelectionOverlaySettingsBlockName = "SelectionOverlaySettings";
     inline constexpr const char* kSelectionOverlayTexelWidthUniform = "u_TexelWidth";
     inline constexpr const char* kSelectionOverlayTexelHeightUniform = "u_TexelHeight";
     inline constexpr const char* kSelectionOverlayVisibleColorUniform = "u_VisibleOutlineColor";
@@ -58,7 +70,11 @@ namespace Hybrid::RenderBindings
     inline constexpr const char* kSelectionOverlayDepthEpsilonUniform = "u_DepthEpsilon";
 
     inline constexpr uint32_t kPostProcessSceneColorSlot = 0;
+    inline constexpr uint32_t kPostProcessTextureSet = 2;
+    inline constexpr uint32_t kPostProcessSettingsSet = 3;
+    inline constexpr uint32_t kPostProcessSettingsBinding = 0;
     inline constexpr const char* kPostProcessSceneColorUniform = "u_SceneColorTex";
+    inline constexpr const char* kPostProcessSettingsBlockName = "PostProcessSettings";
     inline constexpr const char* kPostProcessToneMappingUniform = "u_EnableToneMapping";
     inline constexpr const char* kPostProcessGammaCorrectionUniform = "u_EnableGammaCorrection";
     inline constexpr const char* kPostProcessExposureUniform = "u_Exposure";

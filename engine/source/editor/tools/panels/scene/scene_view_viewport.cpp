@@ -2,17 +2,19 @@
 
 #include <imgui.h>
 
+#include "editor/services/render/editor_texture_service.h"
 #include "runtime/core/base/macro.h"
 
 namespace Hybrid
 {
     SceneViewViewportResult DrawSceneViewViewport(EditorContext& ctx,
-                                                  uint32_t color_texture_id,
+                                                  EditorImageHandle image,
                                                   bool toolbar_interacted,
                                                   SceneViewViewportState& state,
                                                   const char* log_tag)
     {
-        if (color_texture_id == 0)
+        const ImTextureID image_id = ctx.textures ? ctx.textures->imageId(image) : ImTextureID{};
+        if (!image_id)
         {
             if (!state.missing_texture_logged)
             {
@@ -22,7 +24,8 @@ namespace Hybrid
         }
         else if (state.missing_texture_logged)
         {
-            HBD_CORE_INFO("{} viewport_texture_ready texture_id={}", log_tag, color_texture_id);
+            HBD_CORE_INFO("{} viewport_texture_ready image_index={} generation={}",
+                          log_tag, image.index, image.generation);
             state.missing_texture_logged = false;
         }
 
@@ -36,7 +39,7 @@ namespace Hybrid
             result.canvas_size.y = 1.0f;
 
         ImGui::SetCursorScreenPos(canvas_min);
-        ImGui::Image((ImTextureID)(intptr_t)color_texture_id, result.canvas_size, ImVec2(0, 1), ImVec2(1, 0));
+        ImGui::Image(image_id, result.canvas_size, ImVec2(0, 1), ImVec2(1, 0));
 
         result.viewport_min = ImGui::GetItemRectMin();
         result.viewport_max = ImGui::GetItemRectMax();

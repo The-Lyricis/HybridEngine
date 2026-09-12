@@ -9,6 +9,8 @@
 #include "runtime/core/base/macro.h"
 #include "runtime/core/base/math_util.h"
 #include "runtime/core/log/log_system.h"
+#include "runtime/modules/render/public/renderer_api.h"
+#include "runtime/modules/render/rhi/render_backend_factory.h"
 
 #include <filesystem>
 #include "runtime/modules/project/project_creator.h"
@@ -59,6 +61,7 @@ namespace Hybrid
         m_Running = true;
         m_Minimized = false;
         m_Headless = config.headless;
+        m_RenderBackend = config.render_backend;
         m_FrameClock.configure({config.fixed_update_hz, 4});
         m_FixedUpdateEnabled = false;
         m_SceneUpdateEnabled = true;
@@ -138,18 +141,58 @@ namespace Hybrid
             return false;
         }
 
-        GLFWwindow *window = nullptr;
         if (!m_Headless)
         {
+            if (!RendererAPI::isSupported(m_RenderBackend))
+            {
+                if (!config.allow_render_fallback)
+                {
+                    HBD_CORE_ERROR("{} initialize_failed step=render_backend requested={} reason=unsupported",
+                                   kEngineLogTag,
+                                   ToString(m_RenderBackend));
+                    shutdown();
+                    return false;
+                }
+                HBD_CORE_WARN("{} render_backend_fallback requested={} selected=opengl",
+                              kEngineLogTag,
+                              ToString(m_RenderBackend));
+                m_RenderBackend = GraphicsBackend::OpenGL;
+            }
+            if (!RendererAPI::setAPI(m_RenderBackend))
+            {
+                HBD_CORE_ERROR("{} initialize_failed step=render_backend selected={}",
+                               kEngineLogTag,
+                               ToString(m_RenderBackend));
+                shutdown();
+                return false;
+            }
             try
             {
-                m_Window = std::make_shared<WindowSystem>();
-                m_Window->initialize(1280, 720, "Hybrid Engine", config.window_visible);
-                window = m_Window->getNativeWindow();
-                m_GraphicsContext = GraphicsContext::Create(window);
-                if (!window || !m_GraphicsContext)
-                    throw std::runtime_error("window or graphics context creation failed");
+                m_Window = CreatePlatformWindow();
+                if (!m_Window)
+                    throw std::runtime_error("platform window factory returned null");
+                WindowDesc window_desc{};
+                window_desc.width = 1280;
+                window_desc.height = 720;
+                window_desc.title = "Hybrid Engine";
+                window_desc.visible = config.window_visible;
+                window_desc.graphics_backend = m_RenderBackend;
+                std::string window_error;
+                if (!m_Window->initialize(window_desc, window_error))
+                    throw std::runtime_error(window_error);
+                m_GraphicsContext = GraphicsContext::Create(*m_Window);
+                if (!m_GraphicsContext)
+                    throw std::runtime_error("graphics context creation failed");
                 m_GraphicsContext->init();
+                RenderDeviceDesc render_device_desc{};
+                render_device_desc.backend = m_RenderBackend;
+                render_device_desc.validation_enabled = true;
+                auto render_backend = CreateRenderBackend(render_device_desc, *m_Window);
+                if (!render_backend)
+                    throw std::runtime_error(render_backend.error.message);
+                m_RenderSystem = std::make_unique<RenderSystem>(
+                    std::move(render_backend.value.device),
+                    std::move(render_backend.value.swapchain));
             }
             catch (const std::exception& error)
             {
@@ -171,13 +214,12 @@ namespace Hybrid
         }
 
         if (!m_Headless)
-            m_RenderSystem.setAssetManager(m_RuntimeResourceSystem->getManager());
+            m_RenderSystem->setAssetManager(m_RuntimeResourceSystem->getManager());
 
         // ===== Event / Layers =====
         if (m_Window)
         {
-            auto surface_io = m_Window->getSurfaceIO();
-            surface_io->registerOnEventFunc([this](Event &e) { onEvent(e); });
+            m_Window->setEventCallback([this](Event& e) { onEvent(e); });
         }
 
         m_InputLayer = std::make_unique<InputLayer>();
@@ -185,8 +227,9 @@ namespace Hybrid
         // ===== Render =====
         if (!m_Headless)
         {
-            m_RenderSystem.initialize(window);
-            if (!m_RenderSystem.isInitialized())
+            const FramebufferSize size = m_Window->framebufferSize();
+            m_RenderSystem->initialize(size.width, size.height);
+            if (!m_RenderSystem->isInitialized())
             {
                 HBD_CORE_ERROR("{} initialize_failed step=render_system", kEngineLogTag);
                 shutdown();
@@ -197,7 +240,6 @@ namespace Hybrid
         // ===== Scene =====
         auto scene = std::make_shared<Scene>();
         scene->setName("Untitled");
-        m_FrameContext.window_handle = window;
 
         if (!setActiveScene(scene))
         {
@@ -207,15 +249,11 @@ namespace Hybrid
             shutdown();
             return false;
         }
-        m_FrameContext.window_handle = window;
 
-        int fbw = 1, fbh = 1;
-        if (window)
-            glfwGetFramebufferSize(window, &fbw, &fbh);
-        m_FrameContext.viewport_size.x = static_cast<float>(std::max(1, fbw));
-        m_FrameContext.viewport_size.y = static_cast<float>(std::max(1, fbh));
+        const FramebufferSize framebuffer_size = m_Window ? m_Window->framebufferSize() : FramebufferSize{1, 1};
+        m_FrameContext.viewport_size.x = static_cast<float>(std::max(1u, framebuffer_size.width));
+        m_FrameContext.viewport_size.y = static_cast<float>(std::max(1u, framebuffer_size.height));
         m_RenderFrameRequest.scene = scene;
-        m_RenderFrameRequest.window_handle = window;
         RenderViewRequest default_view{};
         default_view.name = "Game";
         default_view.kind = RenderViewKind::Game;
@@ -251,7 +289,7 @@ namespace Hybrid
         m_LastPickResult = kInvalidEntityID;
         m_SceneManager.setActiveScene(m_ActiveScene);
         if (!m_Headless)
-            m_RenderSystem.setScene(m_ActiveScene);
+            m_RenderSystem->setScene(m_ActiveScene);
         m_FrameContext.scene = m_ActiveScene;
         m_RenderFrameRequest.scene = m_ActiveScene;
         return m_SceneManager.getActiveScene() == m_ActiveScene;
@@ -282,7 +320,7 @@ namespace Hybrid
                 }
                 m_InputLayer->onEndFrame();
                 if (m_GraphicsContext)
-                    m_GraphicsContext->swapBuffers();
+                    (void)m_RenderSystem->present();
                 ++frame_count;
                 if (max_frames != 0 && frame_count >= max_frames)
                     m_Running = false;
@@ -300,16 +338,14 @@ namespace Hybrid
             m_FrameContext.input = &m_InputLayer->getState();
             m_FrameContext.scene = m_ActiveScene;
             if (!m_Headless)
-                m_RenderSystem.update(dt);
+                m_RenderSystem->update(dt);
 
             glm::vec2 viewport_size = m_FrameContext.viewport_size;
             if (viewport_size.x <= 0.0f || viewport_size.y <= 0.0f)
             {
-                int fbw = 0, fbh = 0;
-                if (m_Window)
-                    glfwGetFramebufferSize(m_Window->getNativeWindow(), &fbw, &fbh);
-                viewport_size.x = static_cast<float>(std::max(1, fbw));
-                viewport_size.y = static_cast<float>(std::max(1, fbh));
+                const FramebufferSize size = m_Window ? m_Window->framebufferSize() : FramebufferSize{1, 1};
+                viewport_size.x = static_cast<float>(std::max(1u, size.width));
+                viewport_size.y = static_cast<float>(std::max(1u, size.height));
                 m_FrameContext.viewport_size = viewport_size;
             }
 
@@ -317,7 +353,6 @@ namespace Hybrid
             {
                 m_RenderFrameRequest.scene = m_FrameContext.scene;
                 m_RenderFrameRequest.dt = dt;
-                m_RenderFrameRequest.window_handle = m_FrameContext.window_handle;
                 m_RenderFrameRequest.input = m_FrameContext.input;
                 if (m_RenderFrameRequest.views.empty())
                     m_RenderFrameRequest.views.push_back({"Game", RenderViewKind::Game, viewport_size, m_RenderFlags});
@@ -325,7 +360,7 @@ namespace Hybrid
                          m_RenderFrameRequest.views.front().id == 1 &&
                          m_RenderFrameRequest.views.front().kind == RenderViewKind::Game)
                     m_RenderFrameRequest.views.front().size = viewport_size;
-                m_RenderFrameResult = m_RenderSystem.renderFrame(m_RenderFrameRequest);
+                m_RenderFrameResult = m_RenderSystem->renderFrame(m_RenderFrameRequest);
             }
 
             for (const auto& layer : m_LayerStack)
@@ -352,8 +387,8 @@ namespace Hybrid
             }
             m_InputLayer->onEndFrame();
 
-            if (m_GraphicsContext)
-                m_GraphicsContext->swapBuffers();
+            if (m_RenderSystem)
+                (void)m_RenderSystem->present();
             ++frame_count;
             if (max_frames != 0 && frame_count >= max_frames)
                 m_Running = false;
@@ -400,8 +435,15 @@ namespace Hybrid
              }
 
              m_Minimized = false;
-             m_RenderSystem.onWindowResize(static_cast<uint32_t>(ev.getWidth()), static_cast<uint32_t>(ev.getHeight()));
-             m_FrameContext.viewport_size = {static_cast<float>(ev.getWidth()), static_cast<float>(ev.getHeight())};
+             const FramebufferSize size = m_Window ? m_Window->framebufferSize()
+                                                   : FramebufferSize{static_cast<uint32_t>(ev.getWidth()),
+                                                                     static_cast<uint32_t>(ev.getHeight())};
+             const uint32_t framebuffer_width = std::max(1u, size.width);
+             const uint32_t framebuffer_height = std::max(1u, size.height);
+             if (m_RenderSystem)
+                 m_RenderSystem->onWindowResize(framebuffer_width, framebuffer_height);
+             m_FrameContext.viewport_size = {static_cast<float>(framebuffer_width),
+                                             static_cast<float>(framebuffer_height)};
              HBD_CORE_DEBUG("{} window_resized width={} height={}",
                             kEngineLogTag,
                             ev.getWidth(),
@@ -466,7 +508,11 @@ namespace Hybrid
             m_JobSystem->waitIdle();
 
         m_PhysicsSystem.shutdown();
-        m_RenderSystem.shutdown();
+        if (m_RenderSystem)
+        {
+            m_RenderSystem->shutdown();
+            m_RenderSystem.reset();
+        }
         m_ActiveScene.reset();
         m_SceneManager.setActiveScene(nullptr);
         m_RenderFrameRequest = {};
@@ -485,7 +531,7 @@ namespace Hybrid
 
         if (m_Window)
         {
-            m_Window->cleanup();
+            m_Window->shutdown();
             m_Window.reset();
         }
 

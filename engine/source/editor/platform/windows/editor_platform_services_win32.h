@@ -13,13 +13,13 @@ namespace Hybrid
                                  const std::vector<std::string>& args) const override;
 
         std::optional<std::filesystem::path>
-        showSaveFileDialog(GLFWwindow* parent, const SaveFileDialogDesc& desc) override;
+        showSaveFileDialog(NativeWindowHandle parent, const SaveFileDialogDesc& desc) override;
 
         std::vector<std::filesystem::path>
-        showOpenFileDialog(GLFWwindow* parent, const OpenFileDialogDesc& desc) override;
+        showOpenFileDialog(NativeWindowHandle parent, const OpenFileDialogDesc& desc) override;
 
         std::optional<std::filesystem::path>
-        showSelectFolderDialog(GLFWwindow* parent, const SelectFolderDialogDesc& desc) override;
+        showSelectFolderDialog(NativeWindowHandle parent, const SelectFolderDialogDesc& desc) override;
 
         bool revealInFileBrowser(const std::filesystem::path& path) override;
     };

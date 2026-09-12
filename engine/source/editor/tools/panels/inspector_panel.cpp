@@ -6,6 +6,7 @@
 #include "editor/core/snapshot/entity_snapshot.h"
 #include "editor/core/property/property_drawer.h"
 #include "editor/core/scene_document.h"
+#include "editor/services/render/editor_texture_service.h"
 
 #include "runtime/core/base/macro.h"
 #include "runtime/modules/scene/scene.h"
@@ -15,12 +16,11 @@
 #include "runtime/modules/scene/components/point_light_component.h"
 #include "runtime/modules/scene/components/rigidbody_component.h"
 
-#include <glad/gl.h>
 #include <imgui.h>
 #include <entt/entt.hpp>
-#include <stb_image.h>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <string>
 
 namespace Hybrid
@@ -32,45 +32,6 @@ namespace Hybrid
         uint32_t entityHandleValue(entt::entity entity)
         {
             return entt::to_integral(entity);
-        }
-
-        static GLuint LoadTextureRGBA8(const std::string& path)
-        {
-            int w = 0, h = 0, comp = 0;
-            stbi_set_flip_vertically_on_load(0);
-            unsigned char* data = stbi_load(path.c_str(), &w, &h, &comp, 4);
-            if (!data || w <= 0 || h <= 0)
-            {
-                if (data)
-                    stbi_image_free(data);
-                return 0;
-            }
-
-            GLuint tex = 0;
-            glGenTextures(1, &tex);
-            glBindTexture(GL_TEXTURE_2D, tex);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-            glBindTexture(GL_TEXTURE_2D, 0);
-
-            stbi_image_free(data);
-            return tex;
-        }
-
-        static GLuint GetTrashIconTexture()
-        {
-            static GLuint s_trash_icon = 0;
-            static bool s_loaded = false;
-            if (!s_loaded)
-            {
-                s_loaded = true;
-                const std::string base = std::string(HYBRID_EDITOR_RESOURCES_DIR) + "/icons/";
-                s_trash_icon = LoadTextureRGBA8(base + "icon_component_trash.png");
-            }
-            return s_trash_icon;
         }
 
         struct ComponentHeaderResult
@@ -156,7 +117,8 @@ namespace Hybrid
             std::string m_name;
         };
 
-        static ComponentHeaderResult DrawComponentHeader(const ComponentDesc& desc,
+        static ComponentHeaderResult DrawComponentHeader(EditorContext& ctx,
+                                                         const ComponentDesc& desc,
                                                          void* component_ptr,
                                                          bool can_remove)
         {
@@ -221,13 +183,17 @@ namespace Hybrid
                 if (ImGui::Button("##RemoveComponent", remove_button_size))
                     result.remove_clicked = true;
 
-                if (const GLuint trash_icon = GetTrashIconTexture(); trash_icon != 0)
+                const EditorImageHandle trash_icon = ctx.textures
+                    ? ctx.textures->loadRgba8(std::filesystem::path(HYBRID_EDITOR_RESOURCES_DIR) /
+                                              "icons/icon_component_trash.png")
+                    : EditorImageHandle{};
+                if (trash_icon)
                 {
                     const ImVec2 icon_pos(
                         remove_button_pos.x + (remove_button_size.x - icon_size) * 0.5f,
                         remove_button_pos.y + (remove_button_size.y - icon_size) * 0.5f);
                     draw_list->AddImage(
-                        (ImTextureID)(intptr_t)trash_icon,
+                        ctx.textures->imageId(trash_icon),
                         icon_pos,
                         ImVec2(icon_pos.x + icon_size, icon_pos.y + icon_size));
                 }
@@ -329,7 +295,7 @@ namespace Hybrid
                 HasAny(desc.flags, ComponentFlags::Removable) &&
                 desc.remove != nullptr;
 
-            const ComponentHeaderResult header = DrawComponentHeader(desc, component_ptr, can_remove);
+            const ComponentHeaderResult header = DrawComponentHeader(ctx, desc, component_ptr, can_remove);
             if (header.enabled_changed)
             {
                 if (ctx.commands.submit_editor_command && ctx.document.activeDocument() && !(ctx.mode.is_play_mode && ctx.mode.is_play_mode()))

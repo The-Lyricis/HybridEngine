@@ -99,8 +99,33 @@ namespace Hybrid
         }
     }
 
+    void EditorPlatformServicesMacOS::configureApplicationAppearance()
+    {
+        @autoreleasepool
+        {
+            NSBundle* bundle = [NSBundle mainBundle];
+            NSString* icon_file = [bundle objectForInfoDictionaryKey:@"CFBundleIconFile"];
+            if (![icon_file isKindOfClass:[NSString class]] || [icon_file length] == 0)
+                return;
+
+            NSString* icon_name = [icon_file stringByDeletingPathExtension];
+            NSString* icon_extension = [icon_file pathExtension];
+            if ([icon_extension length] == 0)
+                icon_extension = @"icns";
+            NSURL* icon_url = [bundle URLForResource:icon_name withExtension:icon_extension];
+            if (!icon_url)
+                return;
+
+            NSImage* icon = [[NSImage alloc] initWithContentsOfURL:icon_url];
+            if (!icon)
+                return;
+            [[NSApplication sharedApplication] setApplicationIconImage:icon];
+            [icon release];
+        }
+    }
+
     std::optional<std::filesystem::path> EditorPlatformServicesMacOS::showSaveFileDialog(
-        GLFWwindow*, const SaveFileDialogDesc& desc)
+        NativeWindowHandle, const SaveFileDialogDesc& desc)
     {
         @autoreleasepool
         {
@@ -119,7 +144,7 @@ namespace Hybrid
     }
 
     std::vector<std::filesystem::path> EditorPlatformServicesMacOS::showOpenFileDialog(
-        GLFWwindow*, const OpenFileDialogDesc& desc)
+        NativeWindowHandle, const OpenFileDialogDesc& desc)
     {
         @autoreleasepool
         {
@@ -135,7 +160,7 @@ namespace Hybrid
     }
 
     std::optional<std::filesystem::path> EditorPlatformServicesMacOS::showSelectFolderDialog(
-        GLFWwindow*, const SelectFolderDialogDesc& desc)
+        NativeWindowHandle, const SelectFolderDialogDesc& desc)
     {
         @autoreleasepool
         {
@@ -157,5 +182,10 @@ namespace Hybrid
             [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[url]];
             return true;
         }
+    }
+
+    std::unique_ptr<IEditorPlatformServices> CreateEditorPlatformServices()
+    {
+        return std::make_unique<EditorPlatformServicesMacOS>();
     }
 }

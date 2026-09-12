@@ -5,9 +5,6 @@
 #include <entt/entity/entity.hpp>
 #include <glm/glm.hpp>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
-
 #include "editor/core/context/editor_context.h"
 #include "editor/core/commands/entity_commands.h"
 #include "editor/core/snapshot/entity_snapshot.h"
@@ -18,13 +15,17 @@
 #include "editor/services/platform/editor_platform_services.h"
 #include "editor/services/project/project_history.h"
 #include "editor/services/project/project_instance_lock.h"
+#include "editor/services/render/editor_texture_service.h"
 #include "runtime/core/base/intersection.h"
 #include "runtime/core/base/macro.h"
+#include "runtime/core/event/application_event.h"
+#include "runtime/core/platform/window.h"
 #include "runtime/modules/asset/asset_registry.h"
 #include "runtime/modules/asset/asset_type.h"
 #include "runtime/modules/asset/mesh.h"
 #include "runtime/modules/asset/runtime_resource_system.h"
 #include "runtime/modules/input/input_layer.h"
+#include "runtime/modules/input/input_codes.h"
 #include "runtime/modules/project/project_context.h"
 #include "runtime/modules/project/project_file.h"
 #include "runtime/modules/project/project_paths.h"
@@ -35,7 +36,6 @@
 #include "runtime/modules/scene/components.h"
 #include "runtime/modules/scene/scene.h"
 #include "runtime/modules/scene/scene_manager.h"
-#include "runtime/modules/window/window_system.h"
 
 namespace Hybrid
 {
@@ -80,7 +80,12 @@ namespace Hybrid
             return;
         }
 
-        m_editor_ui.initialize(m_services.window->getNativeWindow());
+        if (!m_services.editor_textures)
+        {
+            HBD_CORE_ERROR("{} attach_failed reason=missing_editor_texture_service", kEditorLayerLogTag);
+            return;
+        }
+        m_editor_ui.initialize(*m_services.editor_textures);
         m_asset_hot_reload_controller.initialize([this](const std::string& message) {
             m_editor_ui.context().setStatusMessage(message);
         });
@@ -102,6 +107,12 @@ namespace Hybrid
         if (!m_initialized)
             return;
 
+        if (m_services.window && m_camera_capture_active)
+        {
+            m_services.window->setCursorMode(CursorMode::Normal);
+            m_camera_capture_active = false;
+        }
+
         if (m_active_scene_view_document)
             (void)m_scene_io.saveSceneViewState(*m_active_scene_view_document, m_editor_camera.dumpState());
 
@@ -121,10 +132,25 @@ namespace Hybrid
         m_asset_hot_reload_controller.shutdown();
         m_scene_io.shutdown();
         m_editor_ui.shutdown();
+        if (m_services.editor_textures)
+            m_services.editor_textures->shutdown();
         m_active_scene_view_document.reset();
         m_document_transition_pending = false;
         m_initialized = false;
         HBD_CORE_INFO("{} detach_completed", kEditorLayerLogTag);
+    }
+
+    void EditorLayer::onEvent(Event& event)
+    {
+        EventDispatcher dispatcher(event);
+        dispatcher.dispatch<WindowLostFocusEvent>([this](WindowLostFocusEvent&) {
+            if (m_services.window && m_camera_capture_active)
+            {
+                m_services.window->setCursorMode(CursorMode::Normal);
+                m_camera_capture_active = false;
+            }
+            return false;
+        });
     }
 
     EditorCommandContext EditorLayer::makeCommandContext()
@@ -566,7 +592,7 @@ namespace Hybrid
         const ProjectContext& project = ProjectService::Get();
         dialog_desc.initial_dir = project.project_file.empty() ? project.root : project.project_file.parent_path();
 
-        const auto selected_paths = m_services.platform->showOpenFileDialog(m_services.window ? m_services.window->getNativeWindow() : nullptr,
+        const auto selected_paths = m_services.platform->showOpenFileDialog(m_services.window ? m_services.window->nativeHandle() : NativeWindowHandle{},
                                                                             dialog_desc);
         if (selected_paths.empty())
             return false;
@@ -747,19 +773,21 @@ namespace Hybrid
         ctx.gizmo.proj = m_services.render->getLastProj();
 
         m_editor_ui.drawPanels();
-        uint32_t scene_texture = 0;
-        uint32_t game_texture = 0;
+        EditorImageHandle scene_image;
+        EditorImageHandle game_image;
         if (m_services.render_result)
         {
             for (const RenderViewResult& result : m_services.render_result->views)
             {
                 if (result.id == kEditorSceneViewId)
-                    scene_texture = result.color_texture;
+                    scene_image = m_services.editor_textures->registerTextureView(
+                        m_services.render->device(), result.color_texture);
                 else if (result.id == kEditorGameViewId)
-                    game_texture = result.color_texture;
+                    game_image = m_services.editor_textures->registerTextureView(
+                        m_services.render->device(), result.color_texture);
             }
         }
-        m_editor_ui.drawViewports(scene_texture, game_texture);
+        m_editor_ui.drawViewports(scene_image, game_image);
     }
 
     void EditorLayer::updateFrameContext()
@@ -1459,30 +1487,44 @@ namespace Hybrid
         if (ctx.scene_viewport.size.x > 1.0f && ctx.scene_viewport.size.y > 1.0f)
             m_editor_camera.setViewportSize(ctx.scene_viewport.size.x, ctx.scene_viewport.size.y);
 
-        const bool camera_input_active = ctx.scene_viewport.image_hovered;
         const InputState& input = m_services.input->getState();
+
+        if (!m_camera_capture_active && ctx.scene_viewport.image_hovered &&
+            input.wasMousePressed(InputMouseButton::Right) &&
+            input.isMouseDown(InputMouseButton::Right))
+        {
+            m_camera_capture_active = true;
+            m_services.window->setCursorMode(CursorMode::Captured);
+        }
+        else if (m_camera_capture_active && !input.isMouseDown(InputMouseButton::Right))
+        {
+            m_camera_capture_active = false;
+            m_services.window->setCursorMode(CursorMode::Normal);
+        }
+
+        const bool camera_input_active = ctx.scene_viewport.image_hovered || m_camera_capture_active;
 
         const float mdx = camera_input_active ? input.getMouseDeltaX() : 0.0f;
         const float mdy = camera_input_active ? input.getMouseDeltaY() : 0.0f;
         const float scroll_y = camera_input_active ? input.getScrollDeltaY() : 0.0f;
 
-        const bool lmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
-        const bool mmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_MIDDLE);
-        const bool rmb_down = camera_input_active && input.isMouseDown(GLFW_MOUSE_BUTTON_RIGHT);
+        const bool lmb_down = camera_input_active && input.isMouseDown(InputMouseButton::Left);
+        const bool mmb_down = camera_input_active && input.isMouseDown(InputMouseButton::Middle);
+        const bool rmb_down = camera_input_active && input.isMouseDown(InputMouseButton::Right);
         const bool mmb_for_camera = mmb_down || (ctx.gizmo.select_tool && lmb_down);
 
-        const bool key_w = camera_input_active && input.isKeyDown(GLFW_KEY_W);
-        const bool key_a = camera_input_active && input.isKeyDown(GLFW_KEY_A);
-        const bool key_s = camera_input_active && input.isKeyDown(GLFW_KEY_S);
-        const bool key_d = camera_input_active && input.isKeyDown(GLFW_KEY_D);
-        const bool key_q = camera_input_active && input.isKeyDown(GLFW_KEY_Q);
-        const bool key_e = camera_input_active && input.isKeyDown(GLFW_KEY_E);
+        const bool key_w = camera_input_active && input.isKeyDown(InputKey::W);
+        const bool key_a = camera_input_active && input.isKeyDown(InputKey::A);
+        const bool key_s = camera_input_active && input.isKeyDown(InputKey::S);
+        const bool key_d = camera_input_active && input.isKeyDown(InputKey::D);
+        const bool key_q = camera_input_active && input.isKeyDown(InputKey::Q);
+        const bool key_e = camera_input_active && input.isKeyDown(InputKey::E);
         const bool key_shift = camera_input_active &&
-            (input.isKeyDown(GLFW_KEY_LEFT_SHIFT) || input.isKeyDown(GLFW_KEY_RIGHT_SHIFT));
+            (input.isKeyDown(InputKey::LeftShift) || input.isKeyDown(InputKey::RightShift));
         const bool key_ctrl = camera_input_active &&
-            (input.isKeyDown(GLFW_KEY_LEFT_CONTROL) || input.isKeyDown(GLFW_KEY_RIGHT_CONTROL));
+            (input.isKeyDown(InputKey::LeftControl) || input.isKeyDown(InputKey::RightControl));
         const bool key_alt = camera_input_active &&
-            (input.isKeyDown(GLFW_KEY_LEFT_ALT) || input.isKeyDown(GLFW_KEY_RIGHT_ALT));
+            (input.isKeyDown(InputKey::LeftAlt) || input.isKeyDown(InputKey::RightAlt));
 
         ctx.gizmo.suppress_tool_shortcuts = camera_input_active && rmb_down && !key_alt;
 

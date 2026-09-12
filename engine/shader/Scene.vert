@@ -4,8 +4,6 @@ layout(location=1) in vec3 aNormal;
 layout(location=2) in vec2 aUV;
 layout(location=3) in vec4 aTangent;
 
-uniform mat4 u_Model;
-
 layout(std140) uniform FrameBlock
 {
     mat4 u_View;
@@ -15,20 +13,20 @@ layout(std140) uniform FrameBlock
     vec4 u_Viewport;
 };
 
-out vec3 vWorldPos;
-out vec3 vNormal;
+layout(std140) uniform DrawBlock
+{
+    mat4 u_Model;
+    vec4 u_TintColor;
+    uvec4 u_DrawIds;
+};
+
+out vec3 vWorldNormal;
 out vec2 vUV;
-out vec4 vTangent;
 
-void main() {
-    mat3 normalMat = transpose(inverse(mat3(u_Model)));
-
-    vWorldPos = vec3(u_Model * vec4(aPos, 1.0));
-    vNormal   = normalize(normalMat * aNormal);
-
-    vec3 T = normalize(normalMat * aTangent.xyz);
-    vTangent = vec4(T, aTangent.w);
-
+void main()
+{
+    mat3 normalMatrix = transpose(inverse(mat3(u_Model)));
+    vWorldNormal = normalize(normalMatrix * aNormal);
     vUV = aUV;
-    gl_Position = u_ViewProjection * vec4(vWorldPos, 1.0);
+    gl_Position = u_ViewProjection * u_Model * vec4(aPos, 1.0);
 }

@@ -20,6 +20,10 @@ file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx"
 )
 
+set(HYBRID_IMGUI_OPENGL_SOURCE
+    "${CMAKE_CURRENT_SOURCE_DIR}/render/imgui/opengl/imgui_render_backend_opengl.cpp")
+list(REMOVE_ITEM EDITOR_SOURCES ${HYBRID_IMGUI_OPENGL_SOURCE})
+
 if(APPLE)
     file(GLOB_RECURSE EDITOR_OBJCXX_SOURCES CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/*.mm"
@@ -42,11 +46,20 @@ endif()
 # ------------------------------------------------------------
 set(APP_ICON_RC  "${EDITOR_RESOURCES_SOURCE_DIR}/win/app_icon.rc")
 set(APP_ICON_ICO "${EDITOR_RESOURCES_SOURCE_DIR}/win/app_icon.ico")
+set(APP_ICON_ICNS "${EDITOR_RESOURCES_SOURCE_DIR}/macos/HybridEditor.icns")
 
 if(WIN32 AND EXISTS "${APP_ICON_RC}" AND EXISTS "${APP_ICON_ICO}")
     set(EDITOR_RESOURCES "${APP_ICON_RC}")
 else()
     set(EDITOR_RESOURCES "")
+endif()
+
+# macOS bundles do not inherit a process icon from GLFW. The .icns file must
+# both be listed as a target source and explicitly placed in Contents/Resources.
+if(APPLE AND EXISTS "${APP_ICON_ICNS}")
+    list(APPEND EDITOR_RESOURCES "${APP_ICON_ICNS}")
+    set_source_files_properties("${APP_ICON_ICNS}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
 endif()
 
 set(EDITOR_ALL_FILES
@@ -63,6 +76,17 @@ endif()
 
 add_executable(${TARGET_NAME} ${EDITOR_ALL_FILES})
 
+add_library(HybridImGui_OpenGL STATIC ${HYBRID_IMGUI_OPENGL_SOURCE})
+set_target_properties(HybridImGui_OpenGL PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    FOLDER "Engine/Editor")
+target_include_directories(HybridImGui_OpenGL PUBLIC
+    $<BUILD_INTERFACE:${ENGINE_ROOT_DIR}/source>)
+target_link_libraries(HybridImGui_OpenGL
+    PUBLIC HybridEngine imgui
+    PRIVATE glad glfw)
+
 target_compile_definitions(${TARGET_NAME} PRIVATE
     HYBRID_ROOT_DIR="${BINARY_ROOT_DIR}"
     HYBRID_EDITOR_RESOURCES_DIR="${BINARY_ROOT_DIR}/resources/editor"
@@ -78,7 +102,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 target_compile_options(${TARGET_NAME} PRIVATE "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/WX->")
 
 target_link_libraries(${TARGET_NAME} PRIVATE
-    HybridEngine imgui glad stb tinyobjloader nlohmann_json::nlohmann_json)
+    HybridEngine HybridImGui_OpenGL imgui stb tinyobjloader nlohmann_json::nlohmann_json)
 
 if(WIN32)
     target_link_libraries(${TARGET_NAME} PRIVATE Ole32 Shell32)
@@ -89,6 +113,7 @@ elseif(APPLE)
         MACOSX_BUNDLE TRUE
         RUNTIME_OUTPUT_DIRECTORY "${BINARY_ROOT_DIR}"
         MACOSX_BUNDLE_BUNDLE_NAME "Hybrid Editor"
+        MACOSX_BUNDLE_ICON_FILE "HybridEditor.icns"
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.hybridengine.editor"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"

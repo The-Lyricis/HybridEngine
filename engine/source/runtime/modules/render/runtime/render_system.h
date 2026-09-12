@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <array>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -33,6 +34,7 @@
 #include "runtime/modules/render/runtime/passes/selection_mask_pass.h"
 #include "runtime/modules/render/runtime/render_packet.h"
 #include "runtime/modules/render/runtime/pipeline/render_pipeline.h"
+#include "runtime/modules/render/runtime/pipeline/render_graph_resources.h"
 #include "runtime/modules/render/runtime/render_flags.h"
 #include "runtime/modules/render/runtime/render_frame_request.h"
 #include "runtime/modules/render/runtime/shader_library.h"
@@ -40,6 +42,7 @@
 #include "runtime/modules/render/public/framebuffer.h"
 #include "runtime/modules/render/public/texture.h"
 #include "runtime/modules/render/public/texture_uploader.h"
+#include "runtime/modules/render/rhi/render_device.h"
 
 namespace Hybrid
 {
@@ -76,10 +79,11 @@ namespace Hybrid
     class RenderSystem
     {
     public:
-        RenderSystem() = default;
-        ~RenderSystem() { shutdown(); }
+        RenderSystem(std::unique_ptr<IRenderDevice> device,
+                     std::unique_ptr<ISwapchain> swapchain);
+        ~RenderSystem();
 
-        void initialize(void* glfwWindowHandle);
+        void initialize(uint32_t framebuffer_width, uint32_t framebuffer_height);
         void shutdown();
         bool isInitialized() const { return m_Initialized; }
         void update(float dt);
@@ -87,13 +91,22 @@ namespace Hybrid
         void setScene(std::shared_ptr<Scene> scene) { m_Scene = std::move(scene); }
 
         void onWindowResize(uint32_t width, uint32_t height);
+        RhiStatus present();
         void invalidateAsset(AssetID id, AssetType type);
+        // Rendering extensions must use graph resources and RHI handles; native
+        // backend objects are intentionally not part of this contract.
+        bool setRenderPipeline(std::unique_ptr<IRenderPipeline> pipeline);
+        bool registerRenderFeature(std::shared_ptr<IRenderFeature> feature);
+        bool unregisterRenderFeature(const std::string& name);
+        const IRenderPipeline* renderPipeline() const { return m_RenderPipeline.get(); }
 
         // Per-frame multi-view render entry.
         RenderFrameResult renderFrame(const RenderFrameRequest& request);
         const glm::mat4& getLastView() const { return m_LastView; }
         const glm::mat4& getLastProj() const { return m_LastProj; }
         const RenderStats& getStats() const { return m_Stats; }
+        IRenderDevice& device() const { return *m_RenderDevice; }
+        ISwapchain* swapchain() const { return m_Swapchain.get(); }
 
     private:
         void ensureFramebuffer(std::shared_ptr<Framebuffer>& framebuffer, const FramebufferSpec& spec);
@@ -101,6 +114,7 @@ namespace Hybrid
         {
             std::shared_ptr<Framebuffer> main;
             std::shared_ptr<Framebuffer> selection;
+            RenderGraphResourceRegistry graph_resources;
             uint64_t last_used_frame = 0;
         };
         ViewRenderTargets& acquireViewTargets(RenderViewId id, const RenderViewRequest& view);
@@ -119,11 +133,15 @@ namespace Hybrid
                                        const RenderViewRequest* view_request,
                                        bool cache_editor_camera_state = true);
         MeshGPU* getOrCreateMeshGPU(AssetID id, const std::shared_ptr<Mesh>& mesh);
+        void destroyMeshGPU(MeshGPU& mesh_gpu);
+        void clearMeshCache();
         void renderFrameInternal(const FrameContext& frame_context,
                                  const RenderViewRequest& view,
                                  const ResolvedRenderTargets& targets);
 
     private:
+        std::unique_ptr<IRenderDevice> m_RenderDevice;
+        std::unique_ptr<ISwapchain> m_Swapchain;
         std::shared_ptr<Scene> m_Scene; // Fallback scene source when frame context has no scene.
 
         std::unordered_map<RenderViewId, ViewRenderTargets> m_ViewTargets;
@@ -131,6 +149,9 @@ namespace Hybrid
         std::array<std::shared_ptr<Framebuffer>, kMaxDirectionalShadowCascades> m_ShadowCascadeFBs{};
         std::shared_ptr<UniformBuffer> m_FrameUBO;
         std::shared_ptr<UniformBuffer> m_LightUBO;
+        // Transitional shared data: legacy passes retain m_FrameUBO while RHI
+        // passes consume this handle. It is removed with the final legacy pass.
+        BufferHandle m_RhiFrameUniformBuffer;
         SelectionOverlayStyle m_SelectionOverlayStyle;
         std::shared_ptr<Shader> m_SceneShader;
         std::shared_ptr<Shader> m_SkyboxShader;
@@ -138,7 +159,7 @@ namespace Hybrid
         std::shared_ptr<Shader> m_ColliderDebugShader;
         ShaderLibrary m_ShaderLibrary;
         MaterialSystem m_MaterialSystem;
-        RenderPipeline m_RenderPipeline;
+        std::unique_ptr<IRenderPipeline> m_RenderPipeline;
         ScenePass m_ScenePass;
         SkyboxPass m_SkyboxPass;
         PickingPass m_PickingPass;
