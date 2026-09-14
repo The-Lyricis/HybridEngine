@@ -123,6 +123,7 @@ namespace Hybrid
         void configureShaderBindings();
         void updateFrameUBO(const RenderPacket& packet, const glm::vec2& viewport_size);
         void updateLightUBO(const RenderPacket& packet);
+        void updateShadowUBO(const RenderPacket& packet);
         void updateStatsFromPacket(const RenderPacket& packet, float render_cpu_time_ms);
         TexturePtr getOrCreateCubemapTexture(AssetID id);
         TexturePtr getDefaultCubemapTexture();
@@ -152,6 +153,8 @@ namespace Hybrid
         // Transitional shared data: legacy passes retain m_FrameUBO while RHI
         // passes consume this handle. It is removed with the final legacy pass.
         BufferHandle m_RhiFrameUniformBuffer;
+        BufferHandle m_RhiLightUniformBuffer;
+        BufferHandle m_RhiShadowUniformBuffer;
         SelectionOverlayStyle m_SelectionOverlayStyle;
         std::shared_ptr<Shader> m_SceneShader;
         std::shared_ptr<Shader> m_SkyboxShader;

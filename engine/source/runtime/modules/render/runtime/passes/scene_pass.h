@@ -38,6 +38,7 @@ namespace Hybrid
         ShaderHandle m_FragmentShader;
         PipelineHandle m_OpaquePipeline;
         PipelineHandle m_TransparentPipeline;
+        SamplerHandle m_ShadowSampler;
         std::vector<DrawResources> m_DrawResources;
         uint64_t m_ShaderRevision = 0;
     };

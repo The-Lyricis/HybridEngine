@@ -24,6 +24,8 @@ namespace Hybrid
         RenderFlags flags = RenderFlags::None;
         IRenderDevice* device = nullptr;
         BufferHandle frame_uniform_buffer;
+        BufferHandle light_uniform_buffer;
+        BufferHandle shadow_uniform_buffer;
         ResolvedRenderTargets targets;
         const SelectionOverlayStyle* selection_overlay_style = nullptr;
         ShaderLibrary* shader_library = nullptr;

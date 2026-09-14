@@ -212,7 +212,8 @@ namespace Hybrid
         for (uint32_t cascade_index = shadow_cascade_count; cascade_index < kMaxDirectionalShadowCascades; ++cascade_index)
             m_ShadowCascadeFBs[cascade_index].reset();
         ensureGlobalUniformBuffers();
-        if (!m_FrameUBO || !m_LightUBO)
+        if (!m_FrameUBO || !m_LightUBO || !m_RhiFrameUniformBuffer ||
+            !m_RhiLightUniformBuffer || !m_RhiShadowUniformBuffer)
         {
             HBD_CORE_ERROR("{} initialize_failed reason=ubo_creation_failed",
                            kRenderSystemLogTag);
@@ -251,6 +252,12 @@ namespace Hybrid
         if (m_RenderDevice && m_RhiFrameUniformBuffer)
             (void)m_RenderDevice->destroyBuffer(m_RhiFrameUniformBuffer);
         m_RhiFrameUniformBuffer = {};
+        if (m_RenderDevice && m_RhiLightUniformBuffer)
+            (void)m_RenderDevice->destroyBuffer(m_RhiLightUniformBuffer);
+        m_RhiLightUniformBuffer = {};
+        if (m_RenderDevice && m_RhiShadowUniformBuffer)
+            (void)m_RenderDevice->destroyBuffer(m_RhiShadowUniformBuffer);
+        m_RhiShadowUniformBuffer = {};
         m_SceneShader.reset();
         m_SkyboxShader.reset();
         m_ShadowShader.reset();
@@ -478,6 +485,34 @@ namespace Hybrid
             else
                 m_RhiFrameUniformBuffer = result.value;
         }
+        if (!m_RhiLightUniformBuffer && m_RenderDevice)
+        {
+            BufferDesc desc{};
+            desc.size = sizeof(RU::LightUBOData);
+            desc.usage = RhiBufferUsage::Uniform;
+            desc.memory = RhiMemoryUsage::CPUToGPU;
+            desc.debug_name = "RenderSystem.LightBlock";
+            const auto result = m_RenderDevice->createBuffer(desc);
+            if (!result)
+                HBD_CORE_ERROR("{} rhi_ubo_create_failed block={} reason={}",
+                               kRenderSystemLogTag, RU::kLightBlockName, result.error.message);
+            else
+                m_RhiLightUniformBuffer = result.value;
+        }
+        if (!m_RhiShadowUniformBuffer && m_RenderDevice)
+        {
+            BufferDesc desc{};
+            desc.size = sizeof(RU::ShadowUBOData);
+            desc.usage = RhiBufferUsage::Uniform;
+            desc.memory = RhiMemoryUsage::CPUToGPU;
+            desc.debug_name = "RenderSystem.ShadowBlock";
+            const auto result = m_RenderDevice->createBuffer(desc);
+            if (!result)
+                HBD_CORE_ERROR("{} rhi_ubo_create_failed block={} reason={}",
+                               kRenderSystemLogTag, RenderBindings::kSceneShadowBlockName, result.error.message);
+            else
+                m_RhiShadowUniformBuffer = result.value;
+        }
     }
 
     void RenderSystem::configureShaderBindings()
@@ -572,6 +607,34 @@ namespace Hybrid
 
         m_LightUBO->setData(&data, sizeof(RU::LightUBOData));
         m_LightUBO->bindBase(RU::kLightUBOBinding);
+        if (m_RenderDevice && m_RhiLightUniformBuffer)
+        {
+            const RhiStatus status = m_RenderDevice->updateBuffer(m_RhiLightUniformBuffer, 0, &data, sizeof(data));
+            if (!status)
+                HBD_CORE_ERROR("{} rhi_ubo_upload_failed block={} reason={}",
+                               kRenderSystemLogTag, RU::kLightBlockName, status.error.message);
+        }
+    }
+
+    void RenderSystem::updateShadowUBO(const RenderPacket& packet)
+    {
+        if (!m_RenderDevice || !m_RhiShadowUniformBuffer) return;
+        RU::ShadowUBOData data{};
+        if (packet.shadow.enabled)
+        {
+            const uint32_t count = std::min(packet.shadow.cascadeCount, kMaxDirectionalShadowCascades);
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                data.lightViewProjections[i] = packet.shadow.cascades[i].lightViewProjection;
+                data.cascadeSplits[i] = packet.shadow.cascades[i].splitFar;
+            }
+            data.parameters = {packet.shadow.strength, packet.shadow.biasConstant,
+                               packet.shadow.biasSlope, static_cast<float>(count)};
+        }
+        const RhiStatus status = m_RenderDevice->updateBuffer(m_RhiShadowUniformBuffer, 0, &data, sizeof(data));
+        if (!status)
+            HBD_CORE_ERROR("{} rhi_ubo_upload_failed block={} reason={}",
+                           kRenderSystemLogTag, RenderBindings::kSceneShadowBlockName, status.error.message);
     }
 
     void RenderSystem::ensureFramebuffer(std::shared_ptr<Framebuffer>& framebuffer, const FramebufferSpec& spec)
@@ -858,6 +921,8 @@ namespace Hybrid
             context_input.flags = current_flags;
             context_input.device = m_RenderDevice.get();
             context_input.frame_uniform_buffer = m_RhiFrameUniformBuffer;
+            context_input.light_uniform_buffer = m_RhiLightUniformBuffer;
+            context_input.shadow_uniform_buffer = m_RhiShadowUniformBuffer;
             context_input.targets = targets;
             context_input.selection_overlay_style = &m_SelectionOverlayStyle;
             context_input.shader_library = &m_ShaderLibrary;
@@ -867,6 +932,7 @@ namespace Hybrid
             RenderContext context = m_RenderContextBuilder.build(context_input);
             updateFrameUBO(packet, current_frame.viewport_size);
             updateLightUBO(packet);
+            updateShadowUBO(packet);
 
             PostProcessPass::Settings post_process_settings{};
             if (post_process)

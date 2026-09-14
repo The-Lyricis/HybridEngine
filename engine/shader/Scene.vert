@@ -22,6 +22,8 @@ layout(std140) uniform DrawBlock
 
 out vec3 vWorldNormal;
 out vec4 vWorldTangent;
+out vec3 vWorldPosition;
+out float vViewDepth;
 out vec2 vUV;
 
 void main()
@@ -29,6 +31,9 @@ void main()
     mat3 normalMatrix = transpose(inverse(mat3(u_Model)));
     vWorldNormal = normalize(normalMatrix * aNormal);
     vWorldTangent = vec4(normalize(mat3(u_Model) * aTangent.xyz), aTangent.w);
+    vec4 worldPosition = u_Model * vec4(aPos, 1.0);
+    vWorldPosition = worldPosition.xyz;
+    vViewDepth = -(u_View * worldPosition).z;
     vUV = aUV;
-    gl_Position = u_ViewProjection * u_Model * vec4(aPos, 1.0);
+    gl_Position = u_ViewProjection * worldPosition;
 }

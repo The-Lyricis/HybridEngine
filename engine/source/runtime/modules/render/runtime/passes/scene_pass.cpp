@@ -1,6 +1,7 @@
 #include "scene_pass.h"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -54,6 +55,8 @@ namespace Hybrid
         if (!m_Device)
             return;
         releasePipelines();
+        if (m_ShadowSampler) (void)m_Device->destroySampler(m_ShadowSampler);
+        m_ShadowSampler = {};
         for (DrawResources& resources : m_DrawResources)
         {
             if (resources.material_buffer) (void)m_Device->destroyBuffer(resources.material_buffer);
@@ -113,6 +116,10 @@ namespace Hybrid
         };
         pipeline_desc.uniform_buffer_bindings = {
             {{RenderBindings::kFrameSet, RenderBindings::kFrameBinding}, "FrameBlock"},
+            {{RenderBindings::kSceneLightSet, RenderBindings::kSceneLightBinding},
+             RenderBindings::kSceneLightBlockName},
+            {{RenderBindings::kSceneLightSet, RenderBindings::kSceneShadowBinding},
+             RenderBindings::kSceneShadowBlockName},
             {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneMaterialBinding},
              RenderBindings::kSceneMaterialBlockName},
             {{RenderBindings::kSceneDrawSet, RenderBindings::kSceneDrawBinding},
@@ -124,6 +131,10 @@ namespace Hybrid
             {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneMRBinding}, RenderBindings::kSceneMetallicRoughnessTextureUniform},
             {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneAOBinding}, RenderBindings::kSceneOcclusionTextureUniform},
             {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneEmissiveBinding}, RenderBindings::kSceneEmissiveTextureUniform},
+            {{RenderBindings::kSceneLightSet, RenderBindings::kSceneShadowTextureFirstBinding}, "u_ShadowMap0"},
+            {{RenderBindings::kSceneLightSet, RenderBindings::kSceneShadowTextureFirstBinding + 1}, "u_ShadowMap1"},
+            {{RenderBindings::kSceneLightSet, RenderBindings::kSceneShadowTextureFirstBinding + 2}, "u_ShadowMap2"},
+            {{RenderBindings::kSceneLightSet, RenderBindings::kSceneShadowTextureFirstBinding + 3}, "u_ShadowMap3"},
         };
         pipeline_desc.topology = RhiPrimitiveTopology::Triangles;
         pipeline_desc.cull_mode = RhiCullMode::Back;
@@ -205,7 +216,8 @@ namespace Hybrid
     void ScenePass::execute(RenderContext& context)
     {
         if (!context.packet || !context.device || !context.graph_resources ||
-            !context.shader_library || !context.frame_uniform_buffer)
+            !context.shader_library || !context.frame_uniform_buffer ||
+            !context.light_uniform_buffer || !context.shadow_uniform_buffer)
             return;
 
         IRenderDevice& device = *context.device;
@@ -222,6 +234,38 @@ namespace Hybrid
             return;
 
         const RenderPacket& packet = *context.packet;
+        if (!m_ShadowSampler)
+        {
+            SamplerDesc sampler_desc{};
+            sampler_desc.linear_filter = false;
+            sampler_desc.clamp_to_edge = true;
+            sampler_desc.debug_name = "Scene.ShadowSampler";
+            const auto sampler = device.createSampler(sampler_desc);
+            if (!sampler)
+            {
+                HBD_CORE_ERROR("{} shadow_sampler_create_failed reason={}", kLogTag, sampler.error.message);
+                return;
+            }
+            m_ShadowSampler = sampler.value;
+        }
+        std::array<TextureViewHandle, 4> shadow_views{};
+        if (packet.shadow.enabled)
+        {
+            constexpr std::array<const char*, 4> names{
+                "ShadowDepth", "ShadowDepth1", "ShadowDepth2", "ShadowDepth3"
+            };
+            const auto first = context.graph_resources->texture(names[0]);
+            if (!first)
+            {
+                HBD_CORE_ERROR("{} shadow_depth_unavailable reason={}", kLogTag, first.error.message);
+                return;
+            }
+            for (size_t i = 0; i < shadow_views.size(); ++i)
+            {
+                const auto view = context.graph_resources->texture(names[i]);
+                shadow_views[i] = view ? view.value : first.value;
+            }
+        }
         const size_t draw_count = packet.opaque_items.size() + packet.transparent_items.size();
         if (!ensureDrawResources(device, draw_count))
             return;
@@ -283,8 +327,20 @@ namespace Hybrid
             if (!check(commands->bindPipeline(pipeline), "pipeline") ||
                 !check(commands->bindUniformBuffer(context.frame_uniform_buffer,
                                                    {RenderBindings::kFrameSet,
-                                                    RenderBindings::kFrameBinding}), "frame_block"))
+                                                    RenderBindings::kFrameBinding}), "frame_block") ||
+                !check(commands->bindUniformBuffer(context.light_uniform_buffer,
+                                                   {RenderBindings::kSceneLightSet,
+                                                    RenderBindings::kSceneLightBinding}), "light_block") ||
+                !check(commands->bindUniformBuffer(context.shadow_uniform_buffer,
+                                                   {RenderBindings::kSceneLightSet,
+                                                    RenderBindings::kSceneShadowBinding}), "shadow_block"))
                 return false;
+            if (packet.shadow.enabled)
+                for (uint32_t i = 0; i < shadow_views.size(); ++i)
+                    if (!check(commands->bindTexture(shadow_views[i], m_ShadowSampler,
+                                                     {RenderBindings::kSceneLightSet,
+                                                      RenderBindings::kSceneShadowTextureFirstBinding + i}),
+                               "shadow_texture")) return false;
             for (const RenderDrawItem& item : items)
             {
                 DrawResources& resources = m_DrawResources[resource_index++];

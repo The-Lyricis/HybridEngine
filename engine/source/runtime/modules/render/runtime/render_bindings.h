@@ -9,6 +9,12 @@ namespace Hybrid::RenderBindings
     inline constexpr uint32_t kShadowViewSet = 1;
     inline constexpr uint32_t kShadowViewBinding = 0;
     inline constexpr const char* kShadowViewBlockName = "ShadowViewBlock";
+    inline constexpr uint32_t kSceneLightSet = 1;
+    inline constexpr uint32_t kSceneLightBinding = 0;
+    inline constexpr uint32_t kSceneShadowBinding = 1;
+    inline constexpr uint32_t kSceneShadowTextureFirstBinding = 2;
+    inline constexpr const char* kSceneLightBlockName = "LightBlock";
+    inline constexpr const char* kSceneShadowBlockName = "ShadowBlock";
     inline constexpr uint32_t kSceneMaterialSet = 2;
     inline constexpr uint32_t kSceneMaterialBinding = 0;
     inline constexpr uint32_t kSceneBaseColorBinding = 1;

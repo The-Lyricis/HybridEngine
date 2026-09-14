@@ -32,7 +32,8 @@ int main()
         std::cerr << "active scene was not created\n";
         return 1;
     }
-    scene->createEntity("LifecycleDirectionalLight").AddComponent<Hybrid::DirectionalLightComponent>();
+    auto light_entity = scene->createEntity("LifecycleDirectionalLight");
+    light_entity.AddComponent<Hybrid::DirectionalLightComponent>();
     const Hybrid::AssetID cube_id = engine.getResourceSystem().getBuiltinMeshID(Hybrid::BuiltinMesh::Cube);
     if (!cube_id.value)
     {
@@ -143,6 +144,38 @@ int main()
     if (!has_red_material_pixel)
     {
         std::cerr << "RHI material texture was not visible in the scene image\n";
+        return 1;
+    }
+    light_entity.GetComponent<Hybrid::DirectionalLightComponent>().Intensity = 0.0f;
+    request.scene = scene;
+    const auto unlit_result = engine.getRenderSystem().renderFrame(request);
+    if (unlit_result.views.empty() || !unlit_result.views[0].color_texture)
+    {
+        std::cerr << "unlit RHI scene render failed\n";
+        return 1;
+    }
+    std::vector<uint8_t> unlit_pixels(scene_pixels.size());
+    auto unlit_readback = engine.getRenderSystem().device().createCommandList();
+    if (!unlit_readback || !unlit_readback->begin() ||
+        !unlit_readback->readbackTexture(unlit_result.views[0].color_texture,
+                                         unlit_pixels.data(), unlit_pixels.size()) ||
+        !unlit_readback->end() || !engine.getRenderSystem().device().submit(*unlit_readback))
+    {
+        std::cerr << "unlit RHI scene readback failed\n";
+        return 1;
+    }
+    bool lighting_changed_pixels = false;
+    for (size_t i = 0; i < scene_pixels.size(); i += 4)
+    {
+        if (scene_pixels[i] > unlit_pixels[i] + 5)
+        {
+            lighting_changed_pixels = true;
+            break;
+        }
+    }
+    if (!lighting_changed_pixels)
+    {
+        std::cerr << "directional LightBlock did not affect the RHI scene image\n";
         return 1;
     }
     engine.shutdown();

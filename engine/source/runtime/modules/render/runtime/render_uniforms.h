@@ -44,8 +44,17 @@ namespace Hybrid::RenderUniforms
         glm::ivec4 counts{0};
     };
 
+    struct alignas(16) ShadowUBOData
+    {
+        std::array<glm::mat4, 4> lightViewProjections{};
+        glm::vec4 cascadeSplits{0.0f};
+        // strength, constant bias, slope bias, active cascade count
+        glm::vec4 parameters{0.0f};
+    };
+
     static_assert(sizeof(FrameUBOData) == 224, "FrameBlock std140 layout mismatch");
     static_assert(sizeof(DirLightUBOData) == 32, "DirLight std140 layout mismatch");
     static_assert(sizeof(PointLightUBOData) == 32, "PointLight std140 layout mismatch");
     static_assert(sizeof(LightUBOData) == 560, "LightBlock std140 layout mismatch");
+    static_assert(sizeof(ShadowUBOData) == 288, "ShadowBlock std140 layout mismatch");
 } // namespace Hybrid::RenderUniforms

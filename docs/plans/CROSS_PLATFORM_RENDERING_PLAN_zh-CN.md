@@ -99,6 +99,7 @@ Pass 不得按字符串查找 Uniform。当前 OpenGL RHI 中的名字仅是迁�
 - ScenePass 的 Frame/Draw/Material UBO、MRT、深度、Opaque/Transparent Pipeline 和 Entity ID。
 - 材质系统以 RHI Texture/View/Sampler 缓存基础色、法线、金属粗糙度、AO、Emissive 贴图；RGB8 上传时转换为 RGBA8。
 - Scene、SelectionMask、Shadow 共用基础色贴图与 Alpha Mask 规则，Scene 使用完整五类材质贴图绑定。
+- ScenePass 的 RHI LightBlock、ShadowBlock、方向光/点光 GGX 直接光照和四级阴影图 PCF 采样。
 - Mesh 的 RHI Vertex/Index Buffer 创建、失效和销毁。
 - ImGui 渲染桥、EditorTextureService、EditorImageHandle 的 OpenGL 实现。
 - macOS 输入/窗口适配和 `.app` 图标。
@@ -106,7 +107,7 @@ Pass 不得按字符串查找 Uniform。当前 OpenGL RHI 中的名字仅是迁�
 
 ### 当前已知功能缺口
 
-- 新 ScenePass 已接回五类材质纹理，但仍缺完整 PBR、LightBlock 和级联阴影采样。
+- 新 ScenePass 已接回五类材质纹理、直接光照和级联阴影，但仍缺环境光照/IBL、双面材质 Pipeline 与固定图像回归基准。
 - Skybox、Gizmo 仍有旧渲染接口，Grid 目前还是空 Pass。
 - Render Target 仍通过旧 Framebuffer 适配外部图资源。
 - ShaderLibrary 仍会创建旧 OpenGL Shader 对象。
@@ -193,4 +194,4 @@ M2 不要求 Metal 完整场景，macOS 默认仍为 OpenGL。
 
 ## 10. 下一执行项
 
-当前立即执行 M1.1 后半段：为 ScenePass 接入 LightBlock 与级联阴影采样，补齐 PBR 与双面材质 Pipeline；随后迁移 Skybox、Grid、Gizmo，最后清除旧 Render Target/Shader 接口。
+当前立即执行 M1.2：补齐双面材质 Pipeline 与固定图像回归基准，然后迁移 Skybox、Grid、Gizmo；最后清除旧 Render Target/Shader 接口。

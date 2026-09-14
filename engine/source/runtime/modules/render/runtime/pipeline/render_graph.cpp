@@ -227,6 +227,9 @@ namespace Hybrid
 
         builder.addPass("Scene", RenderPassType::Scene, RenderFlags::Scene | RenderFlags::PickingID | RenderFlags::SelectionHighlight)
             .read(RenderResourceId::ShadowDepth)
+            .read("ShadowDepth1")
+            .read("ShadowDepth2")
+            .read("ShadowDepth3")
             .write(RenderResourceId::SceneColor)
             .write(RenderResourceId::SceneEntityID)
             .write(RenderResourceId::SceneDepth);

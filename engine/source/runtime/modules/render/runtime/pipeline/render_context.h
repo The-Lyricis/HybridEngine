@@ -28,6 +28,8 @@ namespace Hybrid
         // Shared RHI frame data. New RHI passes bind this instead of reaching
         // into the legacy OpenGL UniformBuffer implementation.
         BufferHandle frame_uniform_buffer;
+        BufferHandle light_uniform_buffer;
+        BufferHandle shadow_uniform_buffer;
         RenderGraphResourceRegistry* graph_resources = nullptr;
         std::shared_ptr<Framebuffer> framebuffer;
         std::shared_ptr<Framebuffer> scene_framebuffer;

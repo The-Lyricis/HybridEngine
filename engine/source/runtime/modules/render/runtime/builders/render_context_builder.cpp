@@ -11,6 +11,8 @@ namespace Hybrid
         context.flags = input.flags;
         context.device = input.device;
         context.frame_uniform_buffer = input.frame_uniform_buffer;
+        context.light_uniform_buffer = input.light_uniform_buffer;
+        context.shadow_uniform_buffer = input.shadow_uniform_buffer;
         context.framebuffer = input.targets.framebuffer;
         context.scene_framebuffer = input.targets.scene_framebuffer;
         context.graph_resources = input.targets.graph_resources;
