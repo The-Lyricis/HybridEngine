@@ -1,5 +1,7 @@
 #include <iostream>
 
+#include "runtime/modules/scene/scene.h"
+#include "runtime/modules/scene/components/directional_light_component.h"
 #include "runtime/runtime/engine.h"
 
 int main()
@@ -15,6 +17,14 @@ int main()
         return 1;
     }
 
+    auto scene = engine.getSceneManager().getActiveScene();
+    if (!scene)
+    {
+        std::cerr << "active scene was not created\n";
+        return 1;
+    }
+    scene->createEntity("LifecycleDirectionalLight").AddComponent<Hybrid::DirectionalLightComponent>();
+
     auto& request = engine.getRenderFrameRequest();
     request.views.clear();
     Hybrid::RenderViewRequest scene_view{};
@@ -22,7 +32,9 @@ int main()
     scene_view.name = "LifecycleScene";
     scene_view.size = {96.0f, 64.0f};
     scene_view.camera_source = Hybrid::RenderCameraSource::ExplicitMatrices;
-    scene_view.flags = Hybrid::RenderFlags::Scene | Hybrid::RenderFlags::PostProcess;
+    scene_view.flags = Hybrid::RenderFlags::Scene | Hybrid::RenderFlags::Shadow |
+                       Hybrid::RenderFlags::SelectionHighlight | Hybrid::RenderFlags::PostProcess;
+    scene_view.selection.selected_entities.push_back(1);
     scene_view.post_process.enabled = true;
     scene_view.post_process.enable_tone_mapping = true;
     scene_view.post_process.enable_gamma_correction = true;

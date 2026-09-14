@@ -211,13 +211,19 @@ namespace Hybrid
         builder.addResource({ "SelectionMask", RenderResourceId::SelectionMask, RenderGraphResourceKind::Texture2D, RenderGraphResourceFormat::R8, RenderGraphResourceLifetime::External });
         builder.addResource({ "SelectionDepth", RenderResourceId::SelectionDepth, RenderGraphResourceKind::DepthTexture, RenderGraphResourceFormat::Depth32F, RenderGraphResourceLifetime::External });
         builder.addResource({ "ShadowDepth", RenderResourceId::ShadowDepth, RenderGraphResourceKind::DepthTexture, RenderGraphResourceFormat::Depth32F, RenderGraphResourceLifetime::External });
+        builder.addResource({ "ShadowDepth1", RenderResourceId::Count, RenderGraphResourceKind::DepthTexture, RenderGraphResourceFormat::Depth32F, RenderGraphResourceLifetime::External });
+        builder.addResource({ "ShadowDepth2", RenderResourceId::Count, RenderGraphResourceKind::DepthTexture, RenderGraphResourceFormat::Depth32F, RenderGraphResourceLifetime::External });
+        builder.addResource({ "ShadowDepth3", RenderResourceId::Count, RenderGraphResourceKind::DepthTexture, RenderGraphResourceFormat::Depth32F, RenderGraphResourceLifetime::External });
         builder.addTextureResource("PostProcessInput", RenderGraphResourceFormat::RGBA8,
                                    RenderGraphResourceLifetime::Transient);
         builder.addTextureResource("SelectionOverlayInput", RenderGraphResourceFormat::RGBA8,
                                    RenderGraphResourceLifetime::Transient);
 
         builder.addPass("Shadow", RenderPassType::Shadow, RenderFlags::Shadow)
-            .write(RenderResourceId::ShadowDepth);
+            .write(RenderResourceId::ShadowDepth)
+            .write("ShadowDepth1")
+            .write("ShadowDepth2")
+            .write("ShadowDepth3");
 
         builder.addPass("Scene", RenderPassType::Scene, RenderFlags::Scene | RenderFlags::PickingID | RenderFlags::SelectionHighlight)
             .read(RenderResourceId::ShadowDepth)

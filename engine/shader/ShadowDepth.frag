@@ -2,18 +2,25 @@
 
 in vec2 vUV;
 
-uniform vec4 u_BaseColorFactor;
-uniform vec4 u_TintColor;
-uniform sampler2D u_BaseColorTexture;
-uniform int u_AlphaMode;
-uniform float u_AlphaCutoff;
+layout(std140) uniform DrawBlock
+{
+    mat4 u_Model;
+    vec4 u_TintColor;
+    uvec4 u_DrawIds;
+};
+
+layout(std140) uniform MaterialBlock
+{
+    vec4 u_BaseColorFactor;
+    vec4 u_Surface;
+    vec4 u_Emissive;
+    ivec4 u_MaterialFlags;
+};
 
 void main()
 {
-    vec4 albedo_sample = texture(u_BaseColorTexture, vUV);
-    vec4 albedo_tint = u_BaseColorFactor * u_TintColor;
-    float alpha = albedo_tint.a * albedo_sample.a;
+    float alpha = (u_BaseColorFactor * u_TintColor).a;
 
-    if (u_AlphaMode == 1 && alpha < u_AlphaCutoff)
+    if (u_MaterialFlags.x == 1 && alpha < u_Surface.w)
         discard;
 }

@@ -13,6 +13,7 @@
 #include "runtime/modules/render/rhi/render_device.h"
 #include "runtime/modules/render/runtime/material_system.h"
 #include "runtime/modules/render/runtime/mesh_gpu.h"
+#include "runtime/modules/render/runtime/rhi_scene_blocks.h"
 #include "runtime/modules/render/runtime/pipeline/render_graph_resources.h"
 #include "runtime/modules/render/runtime/render_bindings.h"
 #include "runtime/modules/render/runtime/render_shaders.h"
@@ -24,42 +25,11 @@ namespace Hybrid
     {
         constexpr const char* kLogTag = "[ScenePass]";
 
-        struct alignas(16) SceneDrawGPU
-        {
-            glm::mat4 model{1.0f};
-            glm::vec4 tint{1.0f};
-            glm::uvec4 ids{0u};
-        };
-        static_assert(sizeof(SceneDrawGPU) == 96);
-
-        struct alignas(16) SceneMaterialGPU
-        {
-            glm::vec4 base_color{1.0f};
-            glm::vec4 surface{0.0f, 1.0f, 1.0f, 0.5f};
-            glm::vec4 emissive{0.0f};
-            glm::ivec4 flags{0};
-        };
-        static_assert(sizeof(SceneMaterialGPU) == 64);
-
         std::vector<uint8_t> shaderCode(const std::string& source)
         {
             return {source.begin(), source.end()};
         }
 
-        SceneMaterialGPU buildMaterial(const MaterialSystem::MaterialGPU* material)
-        {
-            SceneMaterialGPU data{};
-            if (!material)
-                return data;
-            const auto& params = material->instance.parameters;
-            data.base_color = params.base_color_factor;
-            data.surface = {params.metallic_factor, params.roughness_factor,
-                            params.occlusion_strength, params.alpha_cutoff};
-            data.emissive = {params.emissive_factor, 0.0f};
-            data.flags.x = params.alpha_mode;
-            data.flags.y = material->instance.material_template.double_sided ? 1 : 0;
-            return data;
-        }
     } // namespace
 
     ScenePass::~ScenePass() { shutdown(); }
@@ -259,7 +229,7 @@ namespace Hybrid
                 draw.model = item.model;
                 draw.tint = item.tint;
                 draw.ids.x = item.entityID + 1u;
-                const SceneMaterialGPU material = buildMaterial(item.materialGPU);
+                const SceneMaterialGPU material = BuildSceneMaterialGPU(item.materialGPU);
                 const RhiStatus draw_status = device.updateBuffer(resources.draw_buffer, 0, &draw, sizeof(draw));
                 const RhiStatus material_status = device.updateBuffer(resources.material_buffer, 0, &material, sizeof(material));
                 if (!draw_status || !material_status)

@@ -94,7 +94,8 @@ Pass 不得按字符串查找 Uniform。当前 OpenGL RHI 中的名字仅是迁�
 - Null RHI、OpenGL RHI、OpenGL Swapchain 与后端工厂。
 - RenderGraph、动态命名资源、Blackboard、Feature 注入点和临时纹理物化。
 - RenderSystem 持有设备、Swapchain 和每视图图资源池。
-- PostProcess、Selection Overlay 和 ScenePass 的 RHI Command List 路径。
+- PostProcess、Selection Overlay、ScenePass、SelectionMask 和 ShadowPass 的 RHI Command List 路径。
+- SelectionMask 与 ShadowPass 共享 Scene Draw/Material UBO 定义；Shadow 的四级深度资源通过 RenderGraph 导入。
 - ScenePass 的 Frame/Draw/Material UBO、MRT、深度、Opaque/Transparent Pipeline 和 Entity ID。
 - Mesh 的 RHI Vertex/Index Buffer 创建、失效和销毁。
 - ImGui 渲染桥、EditorTextureService、EditorImageHandle 的 OpenGL 实现。
@@ -104,7 +105,7 @@ Pass 不得按字符串查找 Uniform。当前 OpenGL RHI 中的名字仅是迁�
 ### 当前已知功能缺口
 
 - 新 ScenePass 尚未接回材质纹理、完整 PBR、LightBlock 和级联阴影。
-- SelectionMask、Shadow、Skybox、Grid、Gizmo 仍有旧渲染接口。
+- SelectionMask、Shadow 已移除旧渲染调用，但尚未接回贴图 Alpha Mask；Skybox、Gizmo 仍有旧渲染接口，Grid 目前还是空 Pass。
 - Render Target 仍通过旧 Framebuffer 适配外部图资源。
 - ShaderLibrary 仍会创建旧 OpenGL Shader 对象。
 - RenderGraph 尚未实现资源别名、屏障和 Render Pass 合并。
@@ -190,5 +191,4 @@ M2 不要求 Metal 完整场景，macOS 默认仍为 OpenGL。
 
 ## 10. 下一执行项
 
-当前立即执行 M1.1：为 ScenePass 增加 RHI Texture/Sampler 资源和完整 MaterialBlock，然后接入 LightBlock 与级联阴影。完成后迁移 SelectionMask 和 ShadowPass，共享相同 Mesh、Draw 与 Material 契约。
-
+当前立即执行 M1.1：为 ScenePass 增加 RHI Texture/Sampler 资源和完整 MaterialBlock，恢复材质贴图与 Alpha Mask；SelectionMask 和 ShadowPass 复用这些绑定。随后接入 LightBlock 与级联阴影，再迁移 Skybox、Grid、Gizmo，最后清除旧 Render Target/Shader 接口。

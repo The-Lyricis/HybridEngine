@@ -12,7 +12,12 @@ layout(std140) uniform FrameBlock
     vec4 u_Viewport;
 };
 
-uniform mat4 u_Model;
+layout(std140) uniform DrawBlock
+{
+    mat4 u_Model;
+    vec4 u_TintColor;
+    uvec4 u_DrawIds;
+};
 
 out vec2 vUV;
 

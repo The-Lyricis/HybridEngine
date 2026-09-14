@@ -231,6 +231,8 @@ namespace Hybrid
     {
         m_MaterialSystem.shutdown();
         m_ScenePass.shutdown();
+        m_SelectionMaskPass.shutdown();
+        m_ShadowPass.shutdown();
         m_GizmoPass = GizmoPass{};
         m_SkyboxPass = SkyboxPass{};
         m_PostProcessPass.shutdown();
@@ -858,9 +860,7 @@ namespace Hybrid
             context_input.targets = targets;
             context_input.selection_overlay_style = &m_SelectionOverlayStyle;
             context_input.shader_library = &m_ShaderLibrary;
-            context_input.scene_shader = m_SceneShader;
             context_input.skybox_shader = m_SkyboxShader;
-            context_input.shadow_shader = m_ShadowShader;
             context_input.collider_debug_shader = m_ColliderDebugShader;
 
             RenderContext context = m_RenderContextBuilder.build(context_input);
@@ -937,8 +937,13 @@ namespace Hybrid
                     "SelectionMask", targets.selection->getColorAttachmentView(RenderTargets::kSelectionMaskAttachment));
                 targets.graph_resources.importExternalResource("SelectionDepth", targets.selection->getDepthAttachmentView());
             }
-            if (m_ShadowCascadeFBs[0])
-                targets.graph_resources.importExternalResource("ShadowDepth", m_ShadowCascadeFBs[0]->getDepthAttachmentView());
+            constexpr std::array<const char*, kMaxDirectionalShadowCascades> shadow_names{
+                "ShadowDepth", "ShadowDepth1", "ShadowDepth2", "ShadowDepth3"
+            };
+            for (uint32_t cascade = 0; cascade < kMaxDirectionalShadowCascades; ++cascade)
+                if (m_ShadowCascadeFBs[cascade])
+                    targets.graph_resources.importExternalResource(
+                        shadow_names[cascade], m_ShadowCascadeFBs[cascade]->getDepthAttachmentView());
             if (m_RenderPipeline && m_RenderDevice)
             {
                 const RhiStatus materialize = targets.graph_resources.prepare(
@@ -955,9 +960,6 @@ namespace Hybrid
             ResolvedRenderTargets resolved{};
             resolved.framebuffer = targets.main;
             resolved.scene_framebuffer = targets.main;
-            resolved.selection_framebuffer = targets.selection;
-            resolved.shadow_framebuffer = m_ShadowCascadeFBs[0];
-            resolved.shadow_cascade_framebuffers = &m_ShadowCascadeFBs;
             resolved.graph_resources = &targets.graph_resources;
             renderFrameInternal(frame, view, resolved);
 

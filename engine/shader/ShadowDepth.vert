@@ -3,8 +3,17 @@
 layout(location = 0) in vec3 aPos;
 layout(location = 2) in vec2 aUV;
 
-uniform mat4 u_Model;
-uniform mat4 u_LightViewProjection;
+layout(std140) uniform ShadowViewBlock
+{
+    mat4 u_LightViewProjection;
+};
+
+layout(std140) uniform DrawBlock
+{
+    mat4 u_Model;
+    vec4 u_TintColor;
+    uvec4 u_DrawIds;
+};
 
 out vec2 vUV;
 
