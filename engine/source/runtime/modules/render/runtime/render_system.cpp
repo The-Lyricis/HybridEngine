@@ -176,7 +176,8 @@ namespace Hybrid
     void RenderSystem::setAssetManager(std::shared_ptr<AssetManager> mgr)
     {
         m_AssetManager = std::move(mgr);
-        m_MaterialSystem.setAssetManager(m_AssetManager);
+        if (m_RenderDevice)
+            m_MaterialSystem.setResources(m_AssetManager, *m_RenderDevice);
         m_TextureUploader = TextureUploader::Create();
         m_CubemapCache.clear();
         m_DefaultCubemapTexture.reset();

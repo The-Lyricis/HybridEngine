@@ -71,6 +71,10 @@ namespace Hybrid
             {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneMaterialBinding}, RenderBindings::kSceneMaterialBlockName},
             {{RenderBindings::kSceneDrawSet, RenderBindings::kSceneDrawBinding}, RenderBindings::kSceneDrawBlockName},
         };
+        desc.texture_bindings = {
+            {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneBaseColorBinding},
+             RenderBindings::kSceneBaseColorTextureUniform},
+        };
         desc.topology = RhiPrimitiveTopology::Triangles; desc.cull_mode = RhiCullMode::Back;
         desc.depth_test = true; desc.depth_write = true; desc.blend_enabled = false;
         desc.color_format = RhiFormat::Unknown; desc.depth_format = RhiFormat::Depth32Float;
@@ -156,8 +160,10 @@ namespace Hybrid
             for (size_t index = 0; index < packet.shadow_caster_items.size(); ++index)
             {
                 const RenderDrawItem& item = packet.shadow_caster_items[index];
-                if (!item.meshGPU || !item.meshGPU->rhi_vertex_buffer || !item.meshGPU->rhi_index_buffer || item.indexCount == 0) continue;
-                if (!check(commands->bindUniformBuffer(m_draw_buffers[index].material, {RenderBindings::kSceneMaterialSet, RenderBindings::kSceneMaterialBinding}), "material") ||
+                if (!item.materialGPU || !item.meshGPU || !item.meshGPU->rhi_vertex_buffer ||
+                    !item.meshGPU->rhi_index_buffer || item.indexCount == 0) continue;
+                if (!item.materialGPU->bindBaseColor(*commands) ||
+                    !check(commands->bindUniformBuffer(m_draw_buffers[index].material, {RenderBindings::kSceneMaterialSet, RenderBindings::kSceneMaterialBinding}), "material") ||
                     !check(commands->bindUniformBuffer(m_draw_buffers[index].draw, {RenderBindings::kSceneDrawSet, RenderBindings::kSceneDrawBinding}), "draw") ||
                     !check(commands->bindVertexBuffer(item.meshGPU->rhi_vertex_buffer), "vertices") ||
                     !check(commands->bindIndexBuffer(item.meshGPU->rhi_index_buffer), "indices") ||

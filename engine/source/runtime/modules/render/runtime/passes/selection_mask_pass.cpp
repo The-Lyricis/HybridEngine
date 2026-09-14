@@ -66,6 +66,10 @@ namespace Hybrid
             {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneMaterialBinding}, RenderBindings::kSceneMaterialBlockName},
             {{RenderBindings::kSceneDrawSet, RenderBindings::kSceneDrawBinding}, RenderBindings::kSceneDrawBlockName},
         };
+        desc.texture_bindings = {
+            {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneBaseColorBinding},
+             RenderBindings::kSceneBaseColorTextureUniform},
+        };
         desc.topology = RhiPrimitiveTopology::Triangles; desc.cull_mode = RhiCullMode::Back;
         desc.depth_test = true; desc.depth_write = true; desc.blend_enabled = false;
         desc.color_format = RhiFormat::R8Unorm; desc.depth_format = RhiFormat::Depth32Float;
@@ -119,7 +123,8 @@ namespace Hybrid
         const auto collect = [&items, &selected](const auto& queue)
         {
             for (const RenderDrawItem& item : queue)
-                if (selected.find(item.entityID) != selected.end() && item.meshGPU && item.meshGPU->rhi_vertex_buffer &&
+                if (selected.find(item.entityID) != selected.end() && item.materialGPU &&
+                    item.meshGPU && item.meshGPU->rhi_vertex_buffer &&
                     item.meshGPU->rhi_index_buffer && item.indexCount > 0) items.push_back(&item);
         };
         collect(context.packet->opaque_items); collect(context.packet->transparent_items);
@@ -149,7 +154,8 @@ namespace Hybrid
             !check(commands->bindUniformBuffer(context.frame_uniform_buffer, {RenderBindings::kFrameSet, RenderBindings::kFrameBinding}), "frame")) return;
         for (size_t index = 0; index < items.size(); ++index)
         {
-            if (!check(commands->bindUniformBuffer(m_draw_buffers[index].material, {RenderBindings::kSceneMaterialSet, RenderBindings::kSceneMaterialBinding}), "material") ||
+            if (!items[index]->materialGPU->bindBaseColor(*commands) ||
+                !check(commands->bindUniformBuffer(m_draw_buffers[index].material, {RenderBindings::kSceneMaterialSet, RenderBindings::kSceneMaterialBinding}), "material") ||
                 !check(commands->bindUniformBuffer(m_draw_buffers[index].draw, {RenderBindings::kSceneDrawSet, RenderBindings::kSceneDrawBinding}), "draw") ||
                 !check(commands->bindVertexBuffer(items[index]->meshGPU->rhi_vertex_buffer), "vertices") ||
                 !check(commands->bindIndexBuffer(items[index]->meshGPU->rhi_index_buffer), "indices") ||

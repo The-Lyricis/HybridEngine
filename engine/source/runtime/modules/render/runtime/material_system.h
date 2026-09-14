@@ -9,12 +9,12 @@
 #include "runtime/modules/asset/asset_manager.h"
 #include "runtime/modules/asset/material.h"
 #include "runtime/modules/asset/texture_image.h"
-#include "runtime/modules/render/public/texture.h"
-#include "runtime/modules/render/public/texture_uploader.h"
+#include "runtime/modules/render/rhi/rhi_handles.h"
 
 namespace Hybrid
 {
-    class Shader;
+    class ICommandList;
+    class IRenderDevice;
 
     class MaterialSystem
     {
@@ -59,21 +59,22 @@ namespace Hybrid
         struct MaterialGPU
         {
             MaterialInstanceDesc instance;
-            TexturePtr albedo;
-            TexturePtr normal;
-            TexturePtr mr;
-            TexturePtr ao;
-            TexturePtr emissive;
+            TextureViewHandle albedo;
+            TextureViewHandle normal;
+            TextureViewHandle mr;
+            TextureViewHandle ao;
+            TextureViewHandle emissive;
+            SamplerHandle sampler;
 
             MaterialAlphaMode alphaMode() const { return instance.material_template.alpha_mode; }
             bool castsShadow() const { return instance.material_template.casts_shadow; }
-            void bind(Shader& shader) const;
+            bool bindBaseColor(ICommandList& commands) const;
+            bool bindTextures(ICommandList& commands) const;
         };
 
     public:
-        void initialize(std::shared_ptr<AssetManager> asset_manager);
+        void setResources(std::shared_ptr<AssetManager> asset_manager, IRenderDevice& device);
         void shutdown();
-        void setAssetManager(std::shared_ptr<AssetManager> asset_manager);
 
         MaterialGPU* getOrCreate(AssetID material_id, const std::shared_ptr<Material>& material);
 
@@ -82,21 +83,26 @@ namespace Hybrid
         void invalidateAll();
 
     private:
-        TexturePtr getOrCreateTexture(AssetID texture_id);
-        void ensureDefaultTextures();
-        TexturePtr createSolidColorTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+        struct TextureResource
+        {
+            TextureHandle texture;
+            TextureViewHandle view;
+        };
+        TextureViewHandle getOrCreateTexture(AssetID texture_id);
+        TextureResource createSolidColorTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+        void destroyTexture(TextureResource& resource);
+        bool ensureDefaultTextures();
 
     private:
         std::shared_ptr<AssetManager> m_AssetManager;
+        IRenderDevice* m_Device = nullptr;
         std::unordered_map<AssetID, std::shared_ptr<MaterialGPU>, AssetID::Hasher> m_MaterialCache;
-        std::unordered_map<AssetID, TexturePtr, AssetID::Hasher> m_TextureCache;
-        std::unique_ptr<TextureUploader> m_TextureUploader;
-
-        TexturePtr m_DefaultAlbedoTex;
-        TexturePtr m_DefaultNormalTex;
-        TexturePtr m_DefaultMRTex;
-        TexturePtr m_DefaultAOTex;
-        TexturePtr m_DefaultEmissiveTex;
-        bool m_Initialized = false;
+        std::unordered_map<AssetID, TextureResource, AssetID::Hasher> m_TextureCache;
+        TextureResource m_DefaultAlbedoTex;
+        TextureResource m_DefaultNormalTex;
+        TextureResource m_DefaultMRTex;
+        TextureResource m_DefaultAOTex;
+        TextureResource m_DefaultEmissiveTex;
+        SamplerHandle m_Sampler;
     };
 } // namespace Hybrid

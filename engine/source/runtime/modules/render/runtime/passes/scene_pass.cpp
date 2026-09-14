@@ -118,6 +118,13 @@ namespace Hybrid
             {{RenderBindings::kSceneDrawSet, RenderBindings::kSceneDrawBinding},
              RenderBindings::kSceneDrawBlockName},
         };
+        pipeline_desc.texture_bindings = {
+            {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneBaseColorBinding}, RenderBindings::kSceneBaseColorTextureUniform},
+            {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneNormalBinding}, RenderBindings::kSceneNormalUniform},
+            {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneMRBinding}, RenderBindings::kSceneMetallicRoughnessTextureUniform},
+            {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneAOBinding}, RenderBindings::kSceneOcclusionTextureUniform},
+            {{RenderBindings::kSceneMaterialSet, RenderBindings::kSceneEmissiveBinding}, RenderBindings::kSceneEmissiveTextureUniform},
+        };
         pipeline_desc.topology = RhiPrimitiveTopology::Triangles;
         pipeline_desc.cull_mode = RhiCullMode::Back;
         pipeline_desc.depth_compare = RhiCompareFunction::Less;
@@ -281,10 +288,11 @@ namespace Hybrid
             for (const RenderDrawItem& item : items)
             {
                 DrawResources& resources = m_DrawResources[resource_index++];
-                if (!item.meshGPU || !item.meshGPU->rhi_vertex_buffer ||
+                if (!item.materialGPU || !item.meshGPU || !item.meshGPU->rhi_vertex_buffer ||
                     !item.meshGPU->rhi_index_buffer || item.indexCount == 0)
                     continue;
-                if (!check(commands->bindUniformBuffer(resources.material_buffer,
+                if (!item.materialGPU->bindTextures(*commands) ||
+                    !check(commands->bindUniformBuffer(resources.material_buffer,
                                                        {RenderBindings::kSceneMaterialSet,
                                                         RenderBindings::kSceneMaterialBinding}), "material_block") ||
                     !check(commands->bindUniformBuffer(resources.draw_buffer,

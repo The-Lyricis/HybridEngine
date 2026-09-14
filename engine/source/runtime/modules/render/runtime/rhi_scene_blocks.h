@@ -37,6 +37,7 @@ namespace Hybrid
         data.emissive = {params.emissive_factor, 0.0f};
         data.flags.x = params.alpha_mode;
         data.flags.y = material->instance.material_template.double_sided ? 1 : 0;
+        data.flags.z = params.has_normal_map;
         return data;
     }
 } // namespace Hybrid

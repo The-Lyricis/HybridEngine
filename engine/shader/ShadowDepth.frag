@@ -1,5 +1,7 @@
 #version 330 core
 
+uniform sampler2D u_BaseColorTexture;
+
 in vec2 vUV;
 
 layout(std140) uniform DrawBlock
@@ -19,7 +21,7 @@ layout(std140) uniform MaterialBlock
 
 void main()
 {
-    float alpha = (u_BaseColorFactor * u_TintColor).a;
+    float alpha = (texture(u_BaseColorTexture, vUV) * u_BaseColorFactor * u_TintColor).a;
 
     if (u_MaterialFlags.x == 1 && alpha < u_Surface.w)
         discard;
